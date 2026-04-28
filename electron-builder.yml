@@ -1,0 +1,12 @@
+appId: com.cofinder.app
+productName: CoFinder
+directories:
+  output: release
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+mac:
+  target:
+    - dmg
+    - zip
