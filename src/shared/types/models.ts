@@ -18,7 +18,10 @@ export interface FileEntry {
   type: EntryType;
 }
 
-export interface LocalFileEntry extends FileEntry {}
+export interface LocalFileEntry extends FileEntry {
+  permissions?: string;
+  isHidden: boolean;
+}
 
 export interface RemoteFileEntry extends FileEntry {
   permissions?: string;

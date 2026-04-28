@@ -1,8 +1,21 @@
 import type { ServerProfile } from "./models";
+import type { LocalFileEntry } from "./models";
+
+export type LocalErrorCode = "NOT_FOUND" | "PERMISSION_DENIED" | "NOT_DIRECTORY" | "OPEN_FAILED" | "UNKNOWN";
+
+export interface LocalErrorPayload {
+  code: LocalErrorCode;
+  message: string;
+}
+
+export interface LocalListDirectoryResponse {
+  path: string;
+  entries: LocalFileEntry[];
+}
 
 export interface IpcApi {
   local: {
-    listDirectory: (request: { path: string }) => Promise<unknown>;
+    listDirectory: (request: { path: string }) => Promise<LocalListDirectoryResponse>;
     openPath: (request: { path: string }) => Promise<void>;
   };
   remote: {

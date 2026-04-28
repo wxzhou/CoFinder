@@ -4,6 +4,7 @@ import { LocalFileService } from "../services/LocalFileService";
 import { RemoteFileService } from "../services/RemoteFileService";
 import { TransferQueueService } from "../services/TransferQueueService";
 import { SettingsService } from "../services/SettingsService";
+import type { LocalErrorPayload } from "../../shared/types/ipc";
 
 const localFileService = new LocalFileService();
 const remoteFileService = new RemoteFileService();
@@ -13,13 +14,21 @@ const settingsService = new SettingsService();
 const profiles = new Map<string, { id: string; alias: string; host: string; port: number; username: string }>();
 
 export function registerIpcHandlers(): void {
-  ipcMain.handle(IPC_CHANNELS.local.listDirectory, (_event, request: { path: string }) =>
-    localFileService.listDirectory(request.path)
-  );
+  ipcMain.handle(IPC_CHANNELS.local.listDirectory, async (_event, request: { path: string }) => {
+    try {
+      return await localFileService.listDirectory(request.path);
+    } catch (error) {
+      throw toIpcError(error);
+    }
+  });
 
-  ipcMain.handle(IPC_CHANNELS.local.openPath, (_event, request: { path: string }) =>
-    localFileService.openPath(request.path)
-  );
+  ipcMain.handle(IPC_CHANNELS.local.openPath, async (_event, request: { path: string }) => {
+    try {
+      await localFileService.openPath(request.path);
+    } catch (error) {
+      throw toIpcError(error);
+    }
+  });
 
   ipcMain.handle(IPC_CHANNELS.remote.connect, (_event, request: { profileId: string }) =>
     remoteFileService.connect(request.profileId)
@@ -63,4 +72,16 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.profiles.delete, (_event, request: { id: string }) => {
     profiles.delete(request.id);
   });
+}
+
+function toIpcError(error: unknown): Error {
+  const payload: LocalErrorPayload = {
+    code: "UNKNOWN",
+    message: "Unexpected local operation failure."
+  };
+  if (typeof error === "object" && error !== null && "code" in error && "message" in error) {
+    payload.code = String(error.code) as LocalErrorPayload["code"];
+    payload.message = String(error.message);
+  }
+  return new Error(JSON.stringify(payload));
 }
