@@ -4,7 +4,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
 
 ## Status
 
-- Current milestone: **M1 completed (local pane)**
+- Current milestone: **M1 completed + M1.5/M1.6 UI foundation polish**
 - Implemented in M0:
   - Electron + Vite + React + TypeScript scaffold
   - main / preload / renderer separation
@@ -17,7 +17,21 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
   - Sorting: name/size/mtime, asc/desc, directories-first
   - Single selection + status bar stats (selected/total count and size)
   - Error handling for not found / permission denied / not a directory / open failed
-  - UI fixes: long filename ellipsis + fixed bottom status bar
+  - Local pane usability fixes: long filename ellipsis + fixed bottom status bar
+- Implemented in M1.5 / M1.6 (UI foundation and queue behavior):
+  - Unified renderer design tokens (color/spacing/radius/control/table/status sizing)
+  - Split-workspace visual cleanup for left/right panes
+  - Local toolbar and path bar polish (compact desktop-like controls)
+  - File list visual polish (lighter separators, tighter row rhythm, subtle hover/selection)
+  - File-kind leading marker in name column (placeholder icon slot)
+  - Directory size display as `—` in local list
+  - Productized right pane empty state (`Not connected` + disabled `Connect...` placeholder)
+  - Transfer Queue UI state model and behavior:
+    - hidden (default when no tasks)
+    - expanded
+    - collapsed
+    - auto-hide pending (10s after all-success/no-failure when not pinned)
+  - Dev-only queue debug seed controls moved out of default product UI
 
 ## Tech Stack
 
@@ -72,8 +86,13 @@ src/
 
 ## Current Scope
 
-- Implemented: left local pane (M1)
-- Not implemented yet: remote pane (M2), multi-tab state (M3), rsync transfer queue (M4)
+- Implemented now:
+  - Local pane functional flow (M1)
+  - UI foundation + Transfer Queue display behavior (M1.5 / M1.6)
+- Not implemented yet:
+  - Remote connection and remote file browsing (M2)
+  - Multi-tab session model (M3)
+  - Real rsync transfer execution pipeline (M4)
 
 ## Roadmap
 
