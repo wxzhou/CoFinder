@@ -1,10 +1,28 @@
 import { useEffect, useMemo, useState } from "react";
-import type { LocalErrorPayload } from "../shared/types/ipc";
-import type { LocalFileEntry, SortDirection, SortKey, TransferStatus } from "../shared/types/models";
+import type {
+  LocalErrorPayload,
+  RemoteConnectRequest
+} from "../shared/types/ipc";
+import type { LocalFileEntry, RemoteFileEntry, SortDirection, SortKey, TransferStatus } from "../shared/types/models";
 
 type LocalHistoryState = {
   backStack: string[];
   forwardStack: string[];
+};
+
+type RemoteConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
+type RemoteHistoryState = {
+  backStack: string[];
+  forwardStack: string[];
+};
+type ConnectFormState = {
+  alias: string;
+  host: string;
+  port: string;
+  username: string;
+  password: string;
+  initialPath: string;
+  saveProfile: boolean;
 };
 
 const HOME_FALLBACK = "";
@@ -31,6 +49,27 @@ export function App() {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [history, setHistory] = useState<LocalHistoryState>({ backStack: [], forwardStack: [] });
+  const [remoteConnectionStatus, setRemoteConnectionStatus] = useState<RemoteConnectionStatus>("disconnected");
+  const [showConnectForm, setShowConnectForm] = useState<boolean>(false);
+  const [remoteConnectionId, setRemoteConnectionId] = useState<string | null>(null);
+  const [remoteHomePath, setRemoteHomePath] = useState<string>("/");
+  const [remoteCurrentPath, setRemoteCurrentPath] = useState<string>("/");
+  const [remotePathInput, setRemotePathInput] = useState<string>("/");
+  const [remoteEntries, setRemoteEntries] = useState<RemoteFileEntry[]>([]);
+  const [remoteSelectedPath, setRemoteSelectedPath] = useState<string | null>(null);
+  const [remoteSortKey, setRemoteSortKey] = useState<SortKey>("name");
+  const [remoteSortDirection, setRemoteSortDirection] = useState<SortDirection>("asc");
+  const [remoteHistory, setRemoteHistory] = useState<RemoteHistoryState>({ backStack: [], forwardStack: [] });
+  const [remoteError, setRemoteError] = useState<string>("");
+  const [connectForm, setConnectForm] = useState<ConnectFormState>({
+    alias: "",
+    host: "",
+    port: "22",
+    username: "",
+    password: "",
+    initialPath: "",
+    saveProfile: false
+  });
   const [queuePanelState, setQueuePanelState] = useState<QueuePanelState>("hidden");
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [mockTasks, setMockTasks] = useState<MockTransferTask[]>([]);
@@ -127,9 +166,28 @@ export function App() {
     return copied;
   }, [entries, sortDirection, sortKey]);
 
+  const sortedRemoteEntries = useMemo(() => {
+    const copied = [...remoteEntries];
+    copied.sort((a, b) => {
+      if (a.type === "directory" && b.type !== "directory") return -1;
+      if (a.type !== "directory" && b.type === "directory") return 1;
+      let value = 0;
+      if (remoteSortKey === "name") value = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      if (remoteSortKey === "size") value = a.size - b.size;
+      if (remoteSortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
+      return remoteSortDirection === "asc" ? value : -value;
+    });
+    return copied;
+  }, [remoteEntries, remoteSortDirection, remoteSortKey]);
+
   const selectedEntries = selectedPath ? entries.filter((entry) => entry.fullPath === selectedPath) : [];
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
   const totalSize = entries.reduce((acc, item) => acc + item.size, 0);
+  const remoteSelectedEntries = remoteSelectedPath
+    ? remoteEntries.filter((entry) => entry.fullPath === remoteSelectedPath)
+    : [];
+  const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
+  const remoteTotalSize = remoteEntries.reduce((acc, item) => acc + item.size, 0);
 
   async function handleRowDoubleClick(entry: LocalFileEntry): Promise<void> {
     if (entry.type === "directory") {
@@ -154,6 +212,15 @@ export function App() {
     setSortDirection("asc");
   }
 
+  function handleRemoteSort(nextKey: SortKey): void {
+    if (remoteSortKey === nextKey) {
+      setRemoteSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setRemoteSortKey(nextKey);
+    setRemoteSortDirection("asc");
+  }
+
   function getParentPath(input: string): string {
     if (!input || input === "/") return "/";
     const parts = input.split("/").filter(Boolean);
@@ -166,6 +233,130 @@ export function App() {
       return queueStats.failedCount > 0 ? `${queueStats.failedCount} failed task(s)` : "No active transfers";
     }
     return `${queueStats.activeCount} active, ${queueStats.queuedCount} queued`;
+  }
+
+  async function connectRemote(): Promise<void> {
+    const host = connectForm.host.trim();
+    const username = connectForm.username.trim();
+    const password = connectForm.password;
+    const port = Number(connectForm.port);
+
+    if (!host) {
+      setRemoteError("Host is required.");
+      return;
+    }
+    if (!username) {
+      setRemoteError("Username is required.");
+      return;
+    }
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      setRemoteError("Port must be between 1 and 65535.");
+      return;
+    }
+    if (!password.trim()) {
+      setRemoteError("Password is required.");
+      return;
+    }
+
+    const payload: RemoteConnectRequest = {
+      alias: connectForm.alias.trim() || undefined,
+      host,
+      port,
+      username,
+      password,
+      defaultRemotePath: connectForm.initialPath.trim() || undefined,
+      saveProfile: connectForm.saveProfile
+    };
+
+    setRemoteConnectionStatus("connecting");
+    setRemoteError("");
+
+    const connectResult = await window.cofinder.remote.connect(payload);
+    if (!connectResult.ok) {
+      setRemoteConnectionStatus("failed");
+      setRemoteError(connectResult.error.message);
+      return;
+    }
+
+    const { connectionId, homePath } = connectResult.data;
+    setRemoteConnectionId(connectionId);
+    setRemoteHomePath(homePath || "/");
+    setRemoteConnectionStatus("connected");
+    setShowConnectForm(false);
+    const initialPath = connectForm.initialPath.trim() || homePath || "/";
+    const listed = await listRemotePath(connectionId, initialPath, "replace");
+    if (!listed) {
+      setRemoteError(`Connected, but failed to list initial path: ${initialPath}. You can retry with another path.`);
+      setRemoteCurrentPath(homePath || "/");
+      setRemotePathInput(initialPath);
+    }
+  }
+
+  async function listRemotePath(
+    connectionId: string,
+    targetPath: string,
+    mode: "push" | "replace" | "back" | "forward" = "push"
+  ): Promise<boolean> {
+    const previousPath = remoteCurrentPath;
+    const result = await window.cofinder.remote.listDirectory({
+      connectionId,
+      path: targetPath
+    });
+    if (!result.ok) {
+      setRemoteError(result.error.message);
+      setRemotePathInput(previousPath || targetPath);
+      return false;
+    }
+
+    const payload = result.data;
+    setRemoteError("");
+    setRemoteEntries(payload.entries);
+    setRemoteCurrentPath(payload.path);
+    setRemotePathInput(payload.path);
+    setRemoteSelectedPath(null);
+
+    setRemoteHistory((prev) => {
+      if (mode === "replace") return prev;
+      if (mode === "back") {
+        return {
+          backStack: prev.backStack.slice(0, -1),
+          forwardStack: previousPath ? [previousPath, ...prev.forwardStack] : prev.forwardStack
+        };
+      }
+      if (mode === "forward") {
+        return {
+          backStack: previousPath ? [...prev.backStack, previousPath] : prev.backStack,
+          forwardStack: prev.forwardStack.slice(1)
+        };
+      }
+      if (!previousPath || previousPath === payload.path) return prev;
+      return {
+        backStack: [...prev.backStack, previousPath],
+        forwardStack: []
+      };
+    });
+    return true;
+  }
+
+  async function handleRemoteDoubleClick(entry: RemoteFileEntry): Promise<void> {
+    if (entry.type === "directory") {
+      if (remoteConnectionId) await listRemotePath(remoteConnectionId, entry.fullPath);
+      return;
+    }
+    setRemoteError("Remote file open/edit will be implemented later.");
+  }
+
+  async function disconnectRemote(): Promise<void> {
+    if (!remoteConnectionId) return;
+    await window.cofinder.remote.disconnect({ connectionId: remoteConnectionId });
+    setRemoteConnectionId(null);
+    setRemoteConnectionStatus("disconnected");
+    setRemoteCurrentPath("/");
+    setRemotePathInput("/");
+    setRemoteEntries([]);
+    setRemoteSelectedPath(null);
+    setRemoteError("");
+    setRemoteHistory({ backStack: [], forwardStack: [] });
   }
 
   function seedMockTransfer(status: TransferStatus): void {
@@ -307,12 +498,228 @@ export function App() {
           </div>
         </section>
         <section className="splitter" />
-        <section className="pane placeholder-pane">
-          <div className="placeholder-title">Not connected</div>
-          <div className="placeholder-body">Choose or create a server connection to browse remote files.</div>
-          <button type="button" className="toolbar-button placeholder-action" disabled title="Will be available in M2">
-            Connect...
-          </button>
+        <section className="pane remote-pane">
+          {remoteConnectionStatus === "disconnected" && !showConnectForm ? (
+            <div className="placeholder-pane">
+              <div className="placeholder-title">Not connected</div>
+              <div className="placeholder-body">Connect to a server to browse remote files.</div>
+              <button type="button" className="toolbar-button placeholder-action" onClick={() => setShowConnectForm(true)}>
+                Connect...
+              </button>
+            </div>
+          ) : null}
+
+          {showConnectForm ? (
+            <form
+              className="connect-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void connectRemote();
+              }}
+            >
+              <div className="connect-grid">
+                <label>
+                  Alias
+                  <input
+                    value={connectForm.alias}
+                    onChange={(event) => setConnectForm((prev) => ({ ...prev, alias: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Host *
+                  <input
+                    required
+                    value={connectForm.host}
+                    onChange={(event) => setConnectForm((prev) => ({ ...prev, host: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Port *
+                  <input
+                    required
+                    value={connectForm.port}
+                    onChange={(event) => setConnectForm((prev) => ({ ...prev, port: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Username *
+                  <input
+                    required
+                    value={connectForm.username}
+                    onChange={(event) => setConnectForm((prev) => ({ ...prev, username: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Password *
+                  <input
+                    required
+                    type="password"
+                    value={connectForm.password}
+                    onChange={(event) => setConnectForm((prev) => ({ ...prev, password: event.target.value }))}
+                  />
+                </label>
+                <label>
+                  Initial path
+                  <input
+                    value={connectForm.initialPath}
+                    onChange={(event) => setConnectForm((prev) => ({ ...prev, initialPath: event.target.value }))}
+                  />
+                </label>
+              </div>
+              <label className="checkbox-row">
+                <input
+                  type="checkbox"
+                  checked={connectForm.saveProfile}
+                  onChange={(event) => setConnectForm((prev) => ({ ...prev, saveProfile: event.target.checked }))}
+                />
+                Save profile (without password)
+              </label>
+              {remoteError ? <div className="error-banner">{remoteError}</div> : null}
+              <div className="connect-actions">
+                <button type="submit" className="toolbar-button">
+                  {remoteConnectionStatus === "connecting" ? "Connecting..." : "Connect"}
+                </button>
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  onClick={() => {
+                    if (remoteConnectionStatus !== "connecting") {
+                      setShowConnectForm(false);
+                      setRemoteError("");
+                    }
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : null}
+
+          {remoteConnectionStatus === "connected" && remoteConnectionId ? (
+            <>
+              <div className="pane-toolbar">
+                <button
+                  type="button"
+                  className="nav-btn"
+                  title="Back"
+                  disabled={remoteHistory.backStack.length === 0}
+                  onClick={() => {
+                    const target = remoteHistory.backStack[remoteHistory.backStack.length - 1];
+                    if (target) void listRemotePath(remoteConnectionId, target, "back");
+                  }}
+                >
+                  ←
+                </button>
+                <button
+                  type="button"
+                  className="nav-btn"
+                  title="Forward"
+                  disabled={remoteHistory.forwardStack.length === 0}
+                  onClick={() => {
+                    const target = remoteHistory.forwardStack[0];
+                    if (target) void listRemotePath(remoteConnectionId, target, "forward");
+                  }}
+                >
+                  →
+                </button>
+                <button
+                  type="button"
+                  className="nav-btn"
+                  title="Up"
+                  onClick={() => void listRemotePath(remoteConnectionId, getParentPath(remoteCurrentPath))}
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  className="nav-btn"
+                  title="Home"
+                  onClick={() => void listRemotePath(remoteConnectionId, remoteHomePath)}
+                >
+                  ⌂
+                </button>
+                <button
+                  type="button"
+                  className="nav-btn"
+                  title="Refresh"
+                  onClick={() => void listRemotePath(remoteConnectionId, remoteCurrentPath, "replace")}
+                >
+                  ↻
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void disconnectRemote()}>
+                  Disconnect
+                </button>
+              </div>
+
+              <form
+                className="path-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void listRemotePath(remoteConnectionId, remotePathInput);
+                }}
+              >
+                <input
+                  value={remotePathInput}
+                  onChange={(event) => setRemotePathInput(event.target.value)}
+                  aria-label="Remote path"
+                />
+              </form>
+
+              {remoteError ? <div className="error-banner">{remoteError}</div> : null}
+
+              <div className="table-wrap">
+                <table className="file-table">
+                  <colgroup>
+                    <col className="col-name" />
+                    <col className="col-size" />
+                    <col className="col-mtime" />
+                    <col className="col-type" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      <th className="name-header" onClick={() => handleRemoteSort("name")}>
+                        name {remoteSortKey === "name" ? sortMark(remoteSortDirection) : ""}
+                      </th>
+                      <th className="size-header" onClick={() => handleRemoteSort("size")}>
+                        size {remoteSortKey === "size" ? sortMark(remoteSortDirection) : ""}
+                      </th>
+                      <th className="mtime-header" onClick={() => handleRemoteSort("mtime")}>
+                        mtime {remoteSortKey === "mtime" ? sortMark(remoteSortDirection) : ""}
+                      </th>
+                      <th className="type-header">type</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sortedRemoteEntries.map((entry) => (
+                      <tr
+                        key={entry.fullPath}
+                        className={remoteSelectedPath === entry.fullPath ? "row-selected" : ""}
+                        onClick={() => setRemoteSelectedPath(entry.fullPath)}
+                        onDoubleClick={() => void handleRemoteDoubleClick(entry)}
+                      >
+                        <td className="name-cell" title={entry.name}>
+                          <span className={`file-kind kind-${entry.type}`} aria-hidden="true">
+                            {entry.type === "directory" ? "▸" : "·"}
+                          </span>
+                          <span className="name-text">{entry.name}</span>
+                        </td>
+                        <td className="size-cell">{entry.type === "directory" ? "—" : formatSize(entry.size)}</td>
+                        <td className="mtime-cell">{formatTime(entry.mtime)}</td>
+                        <td className="type-cell">{entry.type}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="pane-status">
+                <span>Selected: {remoteSelectedEntries.length}</span>
+                <span>Total: {remoteEntries.length}</span>
+                <span>Selected Size: {formatSize(remoteSelectedSize)}</span>
+                <span>Total Size: {formatSize(remoteTotalSize)}</span>
+              </div>
+            </>
+          ) : null}
         </section>
       </main>
 
@@ -455,6 +862,7 @@ function parseLocalError(error: unknown): LocalErrorPayload {
     };
   }
 }
+
 
 function sortMark(direction: SortDirection): string {
   return direction === "asc" ? "^" : "v";

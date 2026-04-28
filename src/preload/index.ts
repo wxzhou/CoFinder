@@ -9,7 +9,8 @@ const api: IpcApi = {
   remote: {
     connect: (request) => ipcRenderer.invoke("remote:connect", request),
     listDirectory: (request) => ipcRenderer.invoke("remote:listDirectory", request),
-    disconnect: (request) => ipcRenderer.invoke("remote:disconnect", request)
+    disconnect: (request) => ipcRenderer.invoke("remote:disconnect", request),
+    getHomeDirectory: (request) => ipcRenderer.invoke("remote:getHomeDirectory", request)
   },
   transfer: {
     enqueueUpload: (request) => ipcRenderer.invoke("transfer:enqueueUpload", request),

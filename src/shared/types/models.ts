@@ -27,6 +27,7 @@ export interface RemoteFileEntry extends FileEntry {
   permissions?: string;
   owner?: string;
   group?: string;
+  isHidden?: boolean;
 }
 
 export interface ServerProfile {
@@ -35,6 +36,18 @@ export interface ServerProfile {
   host: string;
   port: number;
   username: string;
+  defaultRemotePath?: string;
+  authType: "password" | "privateKey";
+}
+
+export interface ConnectionConfig {
+  profileId?: string;
+  host: string;
+  port: number;
+  username: string;
+  password?: string;
+  privateKeyPath?: string;
+  defaultRemotePath?: string;
 }
 
 export interface SortState {

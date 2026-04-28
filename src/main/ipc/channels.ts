@@ -6,7 +6,8 @@ export const IPC_CHANNELS = {
   remote: {
     connect: "remote:connect",
     listDirectory: "remote:listDirectory",
-    disconnect: "remote:disconnect"
+    disconnect: "remote:disconnect",
+    getHomeDirectory: "remote:getHomeDirectory"
   },
   transfer: {
     enqueueUpload: "transfer:enqueueUpload",

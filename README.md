@@ -4,7 +4,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
 
 ## Status
 
-- Current milestone: **M1 completed + M1.5/M1.6 UI foundation polish**
+- Current milestone: **M2 completed (remote connection and remote pane)**
 - Implemented in M0:
   - Electron + Vite + React + TypeScript scaffold
   - main / preload / renderer separation
@@ -32,6 +32,16 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
     - collapsed
     - auto-hide pending (10s after all-success/no-failure when not pinned)
   - Dev-only queue debug seed controls moved out of default product UI
+- Implemented in M2 (remote connection and browsing):
+  - SFTP-based remote connect flow (`remote:connect`) with host/port/username/password form
+  - Remote directory browsing via main-process service (`remote:listDirectory`)
+  - Remote pane navigation: path input, Back/Forward, Up, Home, Refresh
+  - Remote file table sorting (name/size/mtime, directories-first)
+  - Remote status bar (selected/total count and size)
+  - Disconnect action (`remote:disconnect`) and clean reset to Not connected state
+  - IPC response normalization (`ok/data` or `ok=false/error`)
+  - Remote listDirectory reliability fix: treat `sftp.list(path)` success as browsable source of truth
+  - Session-only password usage (no plaintext password persisted in profiles)
 
 ## Tech Stack
 
@@ -40,6 +50,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
 - Vite
 - TypeScript
 - npm
+- ssh2-sftp-client
 
 ## Development
 
@@ -89,14 +100,13 @@ src/
 - Implemented now:
   - Local pane functional flow (M1)
   - UI foundation + Transfer Queue display behavior (M1.5 / M1.6)
+  - Remote connection and remote pane browsing (M2)
 - Not implemented yet:
-  - Remote connection and remote file browsing (M2)
   - Multi-tab session model (M3)
   - Real rsync transfer execution pipeline (M4)
 
 ## Roadmap
 
-- M2: Remote SSH/SFTP connection and remote pane
 - M3: Multi-tab session model with isolated tab state
 - M4: Rsync transfer queue (serial execution, status, logs)
 - M5: Polish, hardening, packaging

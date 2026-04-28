@@ -1,17 +1,29 @@
 import { ipcMain } from "electron";
+import { randomUUID } from "node:crypto";
 import { IPC_CHANNELS } from "./channels";
 import { LocalFileService } from "../services/LocalFileService";
 import { RemoteFileService } from "../services/RemoteFileService";
 import { TransferQueueService } from "../services/TransferQueueService";
 import { SettingsService } from "../services/SettingsService";
-import type { LocalErrorPayload } from "../../shared/types/ipc";
+import { ConnectionManager } from "../services/ConnectionManager";
+import type {
+  IpcFailureResponse,
+  IpcResponse,
+  LocalErrorPayload,
+  RemoteConnectRequest,
+  RemoteConnectResponse,
+  RemoteListDirectoryRequest,
+  RemoteListDirectoryResponse
+} from "../../shared/types/ipc";
+import type { ServerProfile } from "../../shared/types/models";
 
 const localFileService = new LocalFileService();
-const remoteFileService = new RemoteFileService();
+const connectionManager = new ConnectionManager();
+const remoteFileService = new RemoteFileService(connectionManager);
 const transferQueueService = new TransferQueueService();
 const settingsService = new SettingsService();
 
-const profiles = new Map<string, { id: string; alias: string; host: string; port: number; username: string }>();
+const profiles = new Map<string, ServerProfile>();
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.local.listDirectory, async (_event, request: { path: string }) => {
@@ -30,17 +42,66 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.remote.connect, (_event, request: { profileId: string }) =>
-    remoteFileService.connect(request.profileId)
+  ipcMain.handle(
+    IPC_CHANNELS.remote.connect,
+    async (_event, request: RemoteConnectRequest): Promise<IpcResponse<RemoteConnectResponse>> => {
+      try {
+        const data = await remoteFileService.connect({
+          host: request.host,
+          port: request.port,
+          username: request.username,
+          password: request.password,
+          profileId: request.profileId,
+          defaultRemotePath: request.defaultRemotePath
+        });
+        if (request.saveProfile) {
+          const profile: ServerProfile = {
+            id: request.profileId ?? randomUUID(),
+            alias: request.alias?.trim() || request.host,
+            host: request.host,
+            port: request.port,
+            username: request.username,
+            defaultRemotePath: request.defaultRemotePath,
+            authType: "password"
+          };
+          profiles.set(profile.id, profile);
+        }
+        return { ok: true, data };
+      } catch (error) {
+        return toIpcResponseError(error);
+      }
+    }
   );
 
-  ipcMain.handle(IPC_CHANNELS.remote.listDirectory, (_event, request: { tabId: string; path: string }) =>
-    remoteFileService.listDirectory(request.tabId, request.path)
+  ipcMain.handle(
+    IPC_CHANNELS.remote.listDirectory,
+    async (_event, request: RemoteListDirectoryRequest): Promise<IpcResponse<RemoteListDirectoryResponse>> => {
+      try {
+        const data = await remoteFileService.listDirectory(request.connectionId, request.path);
+        return { ok: true, data };
+      } catch (error) {
+        return toIpcResponseError(error);
+      }
+    }
   );
 
-  ipcMain.handle(IPC_CHANNELS.remote.disconnect, (_event, request: { tabId: string }) =>
-    remoteFileService.disconnect(request.tabId)
-  );
+  ipcMain.handle(IPC_CHANNELS.remote.getHomeDirectory, async (_event, request: { connectionId: string }) => {
+    try {
+      const homePath = await remoteFileService.getHomeDirectory(request.connectionId);
+      return { ok: true, data: { homePath } };
+    } catch (error) {
+      return toIpcResponseError(error);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.remote.disconnect, async (_event, request: { connectionId: string }) => {
+    try {
+      await remoteFileService.disconnect(request.connectionId);
+      return { ok: true, data: { disconnected: true as const } };
+    } catch (error) {
+      return toIpcResponseError(error);
+    }
+  });
 
   ipcMain.handle(
     IPC_CHANNELS.transfer.enqueueUpload,
@@ -64,7 +125,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.profiles.list, () => Array.from(profiles.values()));
   ipcMain.handle(
     IPC_CHANNELS.profiles.save,
-    (_event, request: { id: string; alias: string; host: string; port: number; username: string }) => {
+    (_event, request: ServerProfile) => {
       profiles.set(request.id, request);
       return request;
     }
@@ -84,4 +145,25 @@ function toIpcError(error: unknown): Error {
     payload.message = String(error.message);
   }
   return new Error(JSON.stringify(payload));
+}
+
+function toIpcResponseError(error: unknown): IpcFailureResponse {
+  const base: IpcFailureResponse = {
+    ok: false,
+    error: {
+      code: "REMOTE_UNKNOWN_ERROR",
+      message: "Unexpected remote error."
+    }
+  };
+  if (typeof error === "object" && error !== null && "code" in error && "message" in error) {
+    return {
+      ok: false,
+      error: {
+        code: String(error.code) as IpcFailureResponse["error"]["code"],
+        message: String(error.message),
+        detail: "detail" in error ? String(error.detail) : undefined
+      }
+    };
+  }
+  return base;
 }
