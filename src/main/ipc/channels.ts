@@ -1,7 +1,8 @@
 export const IPC_CHANNELS = {
   local: {
     listDirectory: "local:listDirectory",
-    openPath: "local:openPath"
+    openPath: "local:openPath",
+    revealPath: "local:revealPath"
   },
   remote: {
     connect: "remote:connect",
@@ -30,5 +31,8 @@ export const IPC_CHANNELS = {
   },
   credentials: {
     isAvailable: "credentials:isAvailable"
+  },
+  system: {
+    copyText: "system:copyText"
   }
 } as const;

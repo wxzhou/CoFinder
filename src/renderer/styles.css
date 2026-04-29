@@ -223,6 +223,7 @@ body,
   table-layout: fixed;
   border-collapse: collapse;
   font-size: 12px;
+  user-select: none;
 }
 
 .file-table th,
@@ -716,4 +717,38 @@ body,
   margin-top: 6px;
   display: flex;
   gap: var(--space-1);
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 1200;
+  min-width: 180px;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 18%, transparent);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.context-item {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-primary);
+  border-radius: 4px;
+  min-height: 26px;
+  font-size: 12px;
+  text-align: left;
+  padding: 0 8px;
+}
+
+.context-item:hover {
+  background: color-mix(in srgb, var(--bg-hover) 70%, transparent);
+  border-color: color-mix(in srgb, var(--border-subtle) 70%, transparent);
+}
+
+.context-item:disabled {
+  opacity: 0.45;
 }

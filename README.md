@@ -4,7 +4,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
 
 ## Status
 
-- Current milestone: **M4.5 completed (test harness, regression protection, and smoke checklist)**
+- Current milestone: **M4.6.1 completed (multi-select + context menu + Select All hotkey guard)**
 - Implemented in M0:
   - Electron + Vite + React + TypeScript scaffold
   - main / preload / renderer separation
@@ -80,6 +80,15 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
   - Remote path/list regression tests (POSIX normalize, list success source-of-truth, missing path mapping)
   - Manual release smoke checklist added at `docs/smoke-test.md`
   - Optional secret-leak helper script added (`npm run check:secrets`)
+- Implemented in M4.6 (multi-select + basic context menu):
+  - Local/remote pane multi-selection via Cmd-click toggle and Shift-click range
+  - Upload/Download supports multiple selected sources (one transfer task per source)
+  - Lightweight renderer-side context menu for local/remote actions (no destructive ops)
+  - Added minimal IPC + preload APIs for `revealPath` and clipboard `copyText` to support context menu items
+- Implemented in M4.6.1 (Select All hotkey + text selection guard):
+  - Cmd+A / Ctrl+A full select for the active pane only (local or remote)
+  - Input control focus exception: when focus is inside inputs/textareas/contenteditable, Cmd+A remains native text selection
+  - Prevent accidental UI text selection within file table area (`user-select: none`)
 
 ## Tech Stack
 
@@ -143,6 +152,7 @@ src/
   - Site Manager / Login Manager with profile + credential management (M3.5)
   - rsync upload/download transfer queue with serial execution and task controls (M4)
   - Automated unit tests + smoke harness for core M1-M4 logic (M4.5)
+- Multi-select + basic context menu for file panes (M4.6 / M4.6.1)
 - Not implemented yet:
   - Remote file open/edit and sync-back workflow
 

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { IPC_CHANNELS } from "./channels";
 import { LocalFileService } from "../services/LocalFileService";
@@ -53,6 +53,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.local.openPath, async (_event, request: { path: string }) => {
     try {
       await localFileService.openPath(request.path);
+    } catch (error) {
+      throw toIpcError(error);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.local.revealPath, async (_event, request: { path: string }) => {
+    try {
+      await localFileService.revealPath(request.path);
     } catch (error) {
       throw toIpcError(error);
     }
@@ -213,6 +221,10 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC_CHANNELS.credentials.isAvailable, (): IpcResponse<{ available: boolean }> => {
     return { ok: true, data: { available: credentialService.isStorageAvailable() } };
+  });
+
+  ipcMain.handle(IPC_CHANNELS.system.copyText, (_event, request: { text: string }) => {
+    clipboard.writeText(request.text ?? "");
   });
 }
 

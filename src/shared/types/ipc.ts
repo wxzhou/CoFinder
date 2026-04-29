@@ -121,6 +121,7 @@ export interface IpcApi {
   local: {
     listDirectory: (request: { path: string }) => Promise<LocalListDirectoryResponse>;
     openPath: (request: { path: string }) => Promise<void>;
+    revealPath: (request: { path: string }) => Promise<void>;
   };
   remote: {
     connect: (request: RemoteConnectRequest) => Promise<IpcResponse<RemoteConnectResponse>>;
@@ -149,5 +150,8 @@ export interface IpcApi {
   };
   credentials: {
     isAvailable: () => Promise<IpcResponse<{ available: boolean }>>;
+  };
+  system: {
+    copyText: (request: { text: string }) => Promise<void>;
   };
 }

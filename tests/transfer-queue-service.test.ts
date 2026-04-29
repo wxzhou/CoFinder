@@ -80,6 +80,20 @@ describe("TransferQueueService state machine", () => {
     });
   });
 
+  it("enqueues one task per source and keeps tab/source metadata", async () => {
+    const p1 = new FakeProc();
+    const p2 = new FakeProc();
+    const { service } = createService({ procs: [p1, p2] });
+    await service.enqueueUpload({ ...baseUpload, tabId: "tab-meta", localSources: ["/tmp/a.txt", "/tmp/b.txt"] });
+
+    const tasks = service.list();
+    expect(tasks).toHaveLength(2);
+    expect(tasks[0].tabId).toBe("tab-meta");
+    expect(tasks[0].source).toBe("/tmp/a.txt");
+    expect(tasks[1].source).toBe("/tmp/b.txt");
+    expect(tasks[0].destination).toContain("/remote/");
+  });
+
   it("cancels pending task", async () => {
     const p1 = new FakeProc();
     const { service } = createService({ procs: [p1] });

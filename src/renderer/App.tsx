@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
+import { applyRowSelection, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -21,7 +22,8 @@ type LocalPaneState = {
   currentPath: string;
   pathInput: string;
   entries: LocalFileEntry[];
-  selectedPath: string | null;
+  selectedFullPaths: string[];
+  selectionAnchorFullPath: string | null;
   error: string;
   sortKey: SortKey;
   sortDirection: SortDirection;
@@ -40,12 +42,22 @@ type RemotePaneState = {
   currentPath: string;
   pathInput: string;
   entries: RemoteFileEntry[];
-  selectedPath: string | null;
+  selectedFullPaths: string[];
+  selectionAnchorFullPath: string | null;
   sortKey: SortKey;
   sortDirection: SortDirection;
   history: HistoryState;
   error: string;
 };
+
+type ContextMenuState = {
+  pane: "local" | "remote";
+  tabId: string;
+  x: number;
+  y: number;
+};
+
+type ActivePane = "local" | "remote";
 
 type SiteManagerTabState = {
   open: boolean;
@@ -91,6 +103,8 @@ export function App() {
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
   const [queueError, setQueueError] = useState<string>("");
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [activePane, setActivePane] = useState<ActivePane>("local");
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const localPane = activeTab.localPane;
@@ -108,6 +122,62 @@ export function App() {
     void loadTransferTasks();
     return off;
   }, []);
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const onClick = () => setContextMenu(null);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setContextMenu(null);
+    };
+    window.addEventListener("click", onClick);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("click", onClick);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [contextMenu]);
+
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null): boolean => {
+      const el = target as HTMLElement | null;
+      if (!el) return false;
+      const tag = el.tagName?.toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return true;
+      if (el.getAttribute("contenteditable") === "true" || el.isContentEditable) return true;
+      return false;
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isSelectAll = (event.key === "a" || event.key === "A") && (event.metaKey || event.ctrlKey);
+      if (!isSelectAll) return;
+      if (contextMenu) return;
+      if (isEditableTarget(document.activeElement)) return;
+
+      if (activePane === "local") {
+        const selectedState = selectAllRows(localPane.entries, "first");
+        setTabs((prev) =>
+          prev.map((tab) =>
+            tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, ...selectedState } } : tab
+          )
+        );
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      if (activePane === "remote") {
+        const selectedState = selectAllRows(remotePane.entries, "first");
+        setTabs((prev) =>
+          prev.map((tab) =>
+            tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, ...selectedState } } : tab
+          )
+        );
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs]);
 
   async function loadTransferTasks(): Promise<void> {
     const res = await window.cofinder.transfer.list();
@@ -147,7 +217,8 @@ export function App() {
               entries: response.entries,
               currentPath: response.path,
               pathInput: response.path,
-              selectedPath: null,
+              selectedFullPaths: [],
+              selectionAnchorFullPath: null,
               history: nextHistory
             }
           };
@@ -241,14 +312,10 @@ export function App() {
     return copied;
   }, [remotePane.entries, remotePane.sortDirection, remotePane.sortKey]);
 
-  const selectedEntries = localPane.selectedPath
-    ? localPane.entries.filter((entry) => entry.fullPath === localPane.selectedPath)
-    : [];
+  const selectedEntries = localPane.entries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
   const totalSize = localPane.entries.reduce((acc, item) => acc + item.size, 0);
-  const remoteSelectedEntries = remotePane.selectedPath
-    ? remotePane.entries.filter((entry) => entry.fullPath === remotePane.selectedPath)
-    : [];
+  const remoteSelectedEntries = remotePane.entries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
   const remoteTotalSize = remotePane.entries.reduce((acc, item) => acc + item.size, 0);
 
@@ -788,7 +855,8 @@ export function App() {
             entries: payload.entries,
             currentPath: payload.path,
             pathInput: payload.path,
-            selectedPath: null,
+            selectedFullPaths: [],
+            selectionAnchorFullPath: null,
             history: computeHistory(tab.remotePane.history, mode, previousPath, payload.path)
           }
         };
@@ -816,7 +884,7 @@ export function App() {
   async function enqueueUpload(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const selected = tab.localPane.selectedPath ? [tab.localPane.selectedPath] : [];
+    const selected = tab.localPane.selectedFullPaths;
     if (selected.length === 0) {
       setTabs((prev) =>
         prev.map((item) =>
@@ -875,7 +943,7 @@ export function App() {
   async function enqueueDownload(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const selected = tab.remotePane.selectedPath ? [tab.remotePane.selectedPath] : [];
+    const selected = tab.remotePane.selectedFullPaths;
     if (selected.length === 0) {
       setTabs((prev) =>
         prev.map((item) =>
@@ -927,6 +995,100 @@ export function App() {
       )
     );
     setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
+  }
+
+  function handleLocalRowClick(tabId: string, entry: LocalFileEntry, event: { metaKey: boolean; shiftKey: boolean }): void {
+    setActivePane("local");
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        return {
+          ...tab,
+          localPane: {
+            ...tab.localPane,
+            ...applyRowSelection(
+              tab.localPane.entries,
+              {
+                selectedFullPaths: tab.localPane.selectedFullPaths,
+                selectionAnchorFullPath: tab.localPane.selectionAnchorFullPath
+              },
+              entry.fullPath,
+              event
+            )
+          }
+        };
+      })
+    );
+  }
+
+  function handleRemoteRowClick(tabId: string, entry: RemoteFileEntry, event: { metaKey: boolean; shiftKey: boolean }): void {
+    setActivePane("remote");
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        return {
+          ...tab,
+          remotePane: {
+            ...tab.remotePane,
+            ...applyRowSelection(
+              tab.remotePane.entries,
+              {
+                selectedFullPaths: tab.remotePane.selectedFullPaths,
+                selectionAnchorFullPath: tab.remotePane.selectionAnchorFullPath
+              },
+              entry.fullPath,
+              event
+            )
+          }
+        };
+      })
+    );
+  }
+
+  function openContextMenu(
+    tabId: string,
+    pane: "local" | "remote",
+    entryPath: string,
+    event: { clientX: number; clientY: number }
+  ): void {
+    setActivePane(pane);
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        if (pane === "local") {
+          const nextSelected = normalizeContextSelection(tab.localPane.selectedFullPaths, entryPath);
+          return {
+            ...tab,
+            localPane: {
+              ...tab.localPane,
+              selectedFullPaths: nextSelected,
+              selectionAnchorFullPath: entryPath
+            }
+          };
+        }
+        const nextSelected = normalizeContextSelection(tab.remotePane.selectedFullPaths, entryPath);
+        return {
+          ...tab,
+          remotePane: {
+            ...tab.remotePane,
+            selectedFullPaths: nextSelected,
+            selectionAnchorFullPath: entryPath
+          }
+        };
+      })
+    );
+    setContextMenu({ pane, tabId, x: event.clientX, y: event.clientY });
+  }
+
+  async function copySelection(tabId: string, pane: "local" | "remote", mode: "name" | "path"): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const text =
+      pane === "local"
+        ? stringifySelection(tab.localPane.selectedFullPaths, tab.localPane.entries, mode)
+        : stringifySelection(tab.remotePane.selectedFullPaths, tab.remotePane.entries, mode);
+    if (!text) return;
+    await window.cofinder.system.copyText({ text });
   }
 
   async function disconnectRemote(tabId: string): Promise<void> {
@@ -1057,7 +1219,7 @@ export function App() {
             <button
               type="button"
               className="toolbar-button"
-              disabled={!localPane.selectedPath || !remotePane.connectionId}
+              disabled={localPane.selectedFullPaths.length === 0 || !remotePane.connectionId}
               onClick={() => void enqueueUpload(activeTab.id)}
             >
               Upload
@@ -1088,7 +1250,12 @@ export function App() {
 
           {localPane.error ? <div className="error-banner">{localPane.error}</div> : null}
 
-          <div className="table-wrap">
+          <div
+            className="table-wrap"
+            onMouseDown={() => {
+              setActivePane("local");
+            }}
+          >
             <table className="file-table">
               <colgroup>
                 <col className="col-name" />
@@ -1114,16 +1281,14 @@ export function App() {
                 {sortedEntries.map((entry) => (
                   <tr
                     key={entry.fullPath}
-                    className={localPane.selectedPath === entry.fullPath ? "row-selected" : ""}
-                    onClick={() =>
-                      setTabs((prev) =>
-                        prev.map((tab) =>
-                          tab.id === activeTab.id
-                            ? { ...tab, localPane: { ...tab.localPane, selectedPath: entry.fullPath } }
-                            : tab
-                        )
-                      )
+                    className={localPane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
+                    onClick={(event) =>
+                      handleLocalRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey })
                     }
+                    onContextMenu={(event) => {
+                      event.preventDefault();
+                      openContextMenu(activeTab.id, "local", entry.fullPath, event);
+                    }}
                     onDoubleClick={() => void handleRowDoubleClick(activeTab.id, entry)}
                   >
                     <td className="name-cell" title={entry.name}>
@@ -1227,7 +1392,7 @@ export function App() {
                 <button
                   type="button"
                   className="toolbar-button"
-                  disabled={!remotePane.selectedPath || !localPane.currentPath}
+                  disabled={remotePane.selectedFullPaths.length === 0 || !localPane.currentPath}
                   onClick={() => void enqueueDownload(activeTab.id)}
                 >
                   Download
@@ -1261,7 +1426,12 @@ export function App() {
 
               {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
 
-              <div className="table-wrap">
+              <div
+                className="table-wrap"
+                onMouseDown={() => {
+                  setActivePane("remote");
+                }}
+              >
                 <table className="file-table">
                   <colgroup>
                     <col className="col-name" />
@@ -1287,16 +1457,14 @@ export function App() {
                     {sortedRemoteEntries.map((entry) => (
                       <tr
                         key={entry.fullPath}
-                        className={remotePane.selectedPath === entry.fullPath ? "row-selected" : ""}
-                        onClick={() =>
-                          setTabs((prev) =>
-                            prev.map((tab) =>
-                              tab.id === activeTab.id
-                                ? { ...tab, remotePane: { ...tab.remotePane, selectedPath: entry.fullPath } }
-                                : tab
-                            )
-                          )
+                        className={remotePane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
+                        onClick={(event) =>
+                          handleRemoteRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey })
                         }
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          openContextMenu(activeTab.id, "remote", entry.fullPath, event);
+                        }}
                         onDoubleClick={() => void handleRemoteDoubleClick(activeTab.id, entry)}
                       >
                         <td className="name-cell" title={entry.name}>
@@ -1420,6 +1588,139 @@ export function App() {
           )}
         </section>
       ) : null}
+      {contextMenu ? (
+        <div
+          className="context-menu"
+          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {contextMenu.pane === "local" ? (
+            <>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  const tab = tabs.find((t) => t.id === contextMenu.tabId);
+                  const target = tab?.localPane.selectedFullPaths[0];
+                  if (target) await window.cofinder.local.openPath({ path: target });
+                  setContextMenu(null);
+                }}
+              >
+                Open
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={
+                  (tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) === 0 ||
+                  !(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.connectionId ?? null)
+                }
+                onClick={async () => {
+                  await enqueueUpload(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Upload
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  const tab = tabs.find((t) => t.id === contextMenu.tabId);
+                  const target = tab?.localPane.selectedFullPaths[0];
+                  if (target) await window.cofinder.local.revealPath({ path: target });
+                  setContextMenu(null);
+                }}
+              >
+                Reveal in Finder
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await copySelection(contextMenu.tabId, "local", "name");
+                  setContextMenu(null);
+                }}
+              >
+                Copy Name
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await copySelection(contextMenu.tabId, "local", "path");
+                  setContextMenu(null);
+                }}
+              >
+                Copy Full Path
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  const tab = tabs.find((t) => t.id === contextMenu.tabId);
+                  if (tab) await navigateLocal(contextMenu.tabId, tab.localPane.currentPath, "replace");
+                  setContextMenu(null);
+                }}
+              >
+                Refresh
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="context-item"
+                disabled={
+                  (tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) === 0 ||
+                  !(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.currentPath ?? "")
+                }
+                onClick={async () => {
+                  await enqueueDownload(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Download
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await copySelection(contextMenu.tabId, "remote", "name");
+                  setContextMenu(null);
+                }}
+              >
+                Copy Name
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await copySelection(contextMenu.tabId, "remote", "path");
+                  setContextMenu(null);
+                }}
+              >
+                Copy Full Path
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  const tab = tabs.find((t) => t.id === contextMenu.tabId);
+                  if (tab?.remotePane.connectionId) {
+                    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", contextMenu.tabId);
+                  }
+                  setContextMenu(null);
+                }}
+              >
+                Refresh
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
       {activeSiteManager?.open ? (
         <SiteManagerModal
           open={activeSiteManager.open}
@@ -1499,7 +1800,8 @@ function createLocalPaneState(): LocalPaneState {
     currentPath: "",
     pathInput: "",
     entries: [],
-    selectedPath: null,
+    selectedFullPaths: [],
+    selectionAnchorFullPath: null,
     error: "",
     sortKey: "name",
     sortDirection: "asc",
@@ -1520,7 +1822,8 @@ function createRemotePaneState(): RemotePaneState {
     currentPath: "/",
     pathInput: "/",
     entries: [],
-    selectedPath: null,
+    selectedFullPaths: [],
+    selectionAnchorFullPath: null,
     sortKey: "name",
     sortDirection: "asc",
     history: { backStack: [], forwardStack: [] },

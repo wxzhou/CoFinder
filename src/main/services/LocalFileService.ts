@@ -66,6 +66,11 @@ export class LocalFileService {
     }
   }
 
+  async revealPath(targetPath: string): Promise<void> {
+    const normalizedPath = path.resolve(targetPath);
+    shell.showItemInFolder(normalizedPath);
+  }
+
   private mapEntryType(dirent: { isDirectory: () => boolean; isFile: () => boolean; isSymbolicLink: () => boolean }) {
     if (dirent.isDirectory()) return "directory";
     if (dirent.isFile()) return "file";
