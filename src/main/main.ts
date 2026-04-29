@@ -1,6 +1,6 @@
 import { app, BrowserWindow } from "electron";
 import path from "node:path";
-import { registerIpcHandlers } from "./ipc/registerIpcHandlers";
+import { disconnectAllRemoteConnections, registerIpcHandlers } from "./ipc/registerIpcHandlers";
 
 const isDev = !app.isPackaged;
 
@@ -48,4 +48,8 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", () => {
+  void disconnectAllRemoteConnections();
 });

@@ -135,6 +135,10 @@ export function registerIpcHandlers(): void {
   });
 }
 
+export async function disconnectAllRemoteConnections(): Promise<void> {
+  await connectionManager.disconnectAll();
+}
+
 function toIpcError(error: unknown): Error {
   const payload: LocalErrorPayload = {
     code: "UNKNOWN",

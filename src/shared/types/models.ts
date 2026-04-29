@@ -56,18 +56,44 @@ export interface SortState {
   directoriesFirst: boolean;
 }
 
-export interface PaneState {
-  path: string;
-  selection: string[];
+export interface AppError {
+  code: string;
+  message: string;
+  detail?: string;
+}
+
+export interface PaneState<TEntry extends FileEntry = FileEntry> {
+  currentPath: string;
+  entries: TEntry[];
+  selectedFullPaths: string[];
   sort: SortState;
+  historyBack: string[];
+  historyForward: string[];
+  isLoading: boolean;
+  error?: AppError;
+}
+
+export interface RemotePaneState extends PaneState<RemoteFileEntry> {
+  connectionStatus: "disconnected" | "connecting" | "connected" | "failed";
+  connectionId?: string;
+  profileId?: string;
+  connectionLabel?: string;
+  formDraft?: {
+    alias?: string;
+    host?: string;
+    port?: number;
+    username?: string;
+    initialPath?: string;
+    saveProfile?: boolean;
+  };
 }
 
 export interface TabState {
   id: string;
-  connectionConfigId?: string;
-  local: PaneState;
-  remote: PaneState;
-  transferQueueRefs: string[];
+  title: string;
+  createdAt: number;
+  localPane: PaneState<LocalFileEntry>;
+  remotePane: RemotePaneState;
 }
 
 export interface TransferTask {

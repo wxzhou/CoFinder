@@ -4,7 +4,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
 
 ## Status
 
-- Current milestone: **M2 completed (remote connection and remote pane)**
+- Current milestone: **M3 completed (multi-tab session isolation)**
 - Implemented in M0:
   - Electron + Vite + React + TypeScript scaffold
   - main / preload / renderer separation
@@ -42,6 +42,15 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
   - IPC response normalization (`ok/data` or `ok=false/error`)
   - Remote listDirectory reliability fix: treat `sftp.list(path)` success as browsable source of truth
   - Session-only password usage (no plaintext password persisted in profiles)
+- Implemented in M3 (multi-tab session isolation):
+  - Tab bar with add/switch/close support and per-tab title lifecycle
+  - Independent local pane state per tab (path, history, sort, selection, errors)
+  - Independent remote pane state per tab (connect form, path/history, sort, selection, errors)
+  - Connection isolation in main process via `Map<connectionId, client>` to prevent tab cross-talk
+  - Async stale-result guards in renderer (`tabId` + `connectionId`) to avoid wrong-tab updates
+  - Session-scoped password drafts in renderer state (not persisted in tab model)
+  - Remote connect UX update: default-to-connect form and removal of pre-login placeholder/cancel dead-end
+  - App quit hardening: disconnect all active remote sessions on `before-quit`
 
 ## Tech Stack
 
@@ -101,13 +110,12 @@ src/
   - Local pane functional flow (M1)
   - UI foundation + Transfer Queue display behavior (M1.5 / M1.6)
   - Remote connection and remote pane browsing (M2)
+  - Multi-tab session model with isolated tab state (M3)
 - Not implemented yet:
-  - Multi-tab session model (M3)
   - Real rsync transfer execution pipeline (M4)
 
 ## Roadmap
 
-- M3: Multi-tab session model with isolated tab state
 - M4: Rsync transfer queue (serial execution, status, logs)
 - M5: Polish, hardening, packaging
 

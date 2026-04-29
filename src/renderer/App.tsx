@@ -1,28 +1,52 @@
 import { useEffect, useMemo, useState } from "react";
-import type {
-  LocalErrorPayload,
-  RemoteConnectRequest
-} from "../shared/types/ipc";
+import { TabBar } from "./components/TabBar";
+import type { LocalErrorPayload, RemoteConnectRequest } from "../shared/types/ipc";
 import type { LocalFileEntry, RemoteFileEntry, SortDirection, SortKey, TransferStatus } from "../shared/types/models";
 
-type LocalHistoryState = {
+type HistoryState = {
   backStack: string[];
   forwardStack: string[];
 };
 
-type RemoteConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
-type RemoteHistoryState = {
-  backStack: string[];
-  forwardStack: string[];
-};
 type ConnectFormState = {
   alias: string;
   host: string;
   port: string;
   username: string;
-  password: string;
   initialPath: string;
   saveProfile: boolean;
+};
+type RemoteConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
+type LocalPaneState = {
+  currentPath: string;
+  pathInput: string;
+  entries: LocalFileEntry[];
+  selectedPath: string | null;
+  error: string;
+  sortKey: SortKey;
+  sortDirection: SortDirection;
+  history: HistoryState;
+};
+type RemotePaneState = {
+  connectionStatus: RemoteConnectionStatus;
+  connectionId: string | null;
+  homePath: string;
+  currentPath: string;
+  pathInput: string;
+  entries: RemoteFileEntry[];
+  selectedPath: string | null;
+  sortKey: SortKey;
+  sortDirection: SortDirection;
+  history: HistoryState;
+  error: string;
+  connectForm: ConnectFormState;
+};
+type UiTabState = {
+  id: string;
+  title: string;
+  createdAt: number;
+  localPane: LocalPaneState;
+  remotePane: RemotePaneState;
 };
 
 const HOME_FALLBACK = "";
@@ -40,78 +64,75 @@ type MockTransferTask = {
 const IS_DEV = import.meta.env.DEV;
 
 export function App() {
-  const [homePath, setHomePath] = useState<string>(HOME_FALLBACK);
-  const [currentPath, setCurrentPath] = useState<string>("");
-  const [pathInput, setPathInput] = useState<string>("");
-  const [entries, setEntries] = useState<LocalFileEntry[]>([]);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string>("");
-  const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
-  const [history, setHistory] = useState<LocalHistoryState>({ backStack: [], forwardStack: [] });
-  const [remoteConnectionStatus, setRemoteConnectionStatus] = useState<RemoteConnectionStatus>("disconnected");
-  const [showConnectForm, setShowConnectForm] = useState<boolean>(false);
-  const [remoteConnectionId, setRemoteConnectionId] = useState<string | null>(null);
-  const [remoteHomePath, setRemoteHomePath] = useState<string>("/");
-  const [remoteCurrentPath, setRemoteCurrentPath] = useState<string>("/");
-  const [remotePathInput, setRemotePathInput] = useState<string>("/");
-  const [remoteEntries, setRemoteEntries] = useState<RemoteFileEntry[]>([]);
-  const [remoteSelectedPath, setRemoteSelectedPath] = useState<string | null>(null);
-  const [remoteSortKey, setRemoteSortKey] = useState<SortKey>("name");
-  const [remoteSortDirection, setRemoteSortDirection] = useState<SortDirection>("asc");
-  const [remoteHistory, setRemoteHistory] = useState<RemoteHistoryState>({ backStack: [], forwardStack: [] });
-  const [remoteError, setRemoteError] = useState<string>("");
-  const [connectForm, setConnectForm] = useState<ConnectFormState>({
-    alias: "",
-    host: "",
-    port: "22",
-    username: "",
-    password: "",
-    initialPath: "",
-    saveProfile: false
+  const [tabState] = useState(() => {
+    const firstTabId = createId();
+    return {
+      firstTabId,
+      tabs: [createTabState(firstTabId, 1)],
+      activeTabId: firstTabId,
+      remotePasswordDrafts: { [firstTabId]: "" } as Record<string, string>
+    };
   });
+  const [tabs, setTabs] = useState<UiTabState[]>(tabState.tabs);
+  const [activeTabId, setActiveTabId] = useState<string>(tabState.activeTabId);
+  const [remotePasswordDrafts, setRemotePasswordDrafts] = useState<Record<string, string>>(tabState.remotePasswordDrafts);
   const [queuePanelState, setQueuePanelState] = useState<QueuePanelState>("hidden");
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [mockTasks, setMockTasks] = useState<MockTransferTask[]>([]);
 
-  async function navigateTo(targetPath: string, mode: "push" | "replace" | "back" | "forward" = "push"): Promise<void> {
-    const previousPath = currentPath;
-    try {
-      const response = await window.cofinder.local.listDirectory({ path: targetPath });
-      setErrorMessage("");
-      setEntries(response.entries);
-      setCurrentPath(response.path);
-      setPathInput(response.path);
-      setSelectedPath(null);
-      setHomePath((prev) => (prev || response.path));
-
-      setHistory((prev) => {
-        if (mode === "replace") return prev;
-        if (mode === "back") {
-          if (prev.backStack.length === 0) return prev;
-          const nextBack = prev.backStack.slice(0, -1);
-          const nextForward = previousPath ? [previousPath, ...prev.forwardStack] : prev.forwardStack;
-          return { backStack: nextBack, forwardStack: nextForward };
-        }
-        if (mode === "forward") {
-          if (prev.forwardStack.length === 0) return prev;
-          const nextBack = previousPath ? [...prev.backStack, previousPath] : prev.backStack;
-          return { backStack: nextBack, forwardStack: prev.forwardStack.slice(1) };
-        }
-        if (!previousPath || response.path === previousPath) return prev;
-        return { backStack: [...prev.backStack, previousPath], forwardStack: [] };
-      });
-    } catch (error) {
-      const localError = parseLocalError(error);
-      setErrorMessage(localError.message);
-      setPathInput(previousPath);
-    }
-  }
+  const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
+  const localPane = activeTab.localPane;
+  const remotePane = activeTab.remotePane;
 
   useEffect(() => {
-    void navigateTo("", "replace");
+    void navigateLocal(tabState.firstTabId, "", "replace");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function navigateLocal(
+    tabId: string,
+    targetPath: string,
+    mode: "push" | "replace" | "back" | "forward" = "push"
+  ): Promise<void> {
+    const previousPath = tabs.find((tab) => tab.id === tabId)?.localPane.currentPath ?? "";
+    try {
+      const response = await window.cofinder.local.listDirectory({ path: targetPath });
+      setTabs((prev) =>
+        prev.map((tab) => {
+          if (tab.id !== tabId) return tab;
+          const nextHistory = computeHistory(tab.localPane.history, mode, previousPath, response.path);
+          return {
+            ...tab,
+            localPane: {
+              ...tab.localPane,
+              error: "",
+              entries: response.entries,
+              currentPath: response.path,
+              pathInput: response.path,
+              selectedPath: null,
+              history: nextHistory
+            }
+          };
+        })
+      );
+    } catch (error) {
+      const localError = parseLocalError(error);
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id !== tabId
+            ? tab
+            : {
+                ...tab,
+                localPane: {
+                  ...tab.localPane,
+                  error: localError.message,
+                  pathInput: previousPath
+                }
+              }
+        )
+      );
+    }
+  }
 
   const queueStats = useMemo(() => {
     const activeCount = mockTasks.filter((task) => task.status === "running").length;
@@ -152,73 +173,95 @@ export function App() {
   }, [mockTasks, queuePinned, queueStats.allDone, queueStats.failedCount]);
 
   const sortedEntries = useMemo(() => {
-    const copied = [...entries];
+    const copied = [...localPane.entries];
     copied.sort((a, b) => {
       if (a.type === "directory" && b.type !== "directory") return -1;
       if (a.type !== "directory" && b.type === "directory") return 1;
 
       let value = 0;
-      if (sortKey === "name") value = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      if (sortKey === "size") value = a.size - b.size;
-      if (sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
-      return sortDirection === "asc" ? value : -value;
+      if (localPane.sortKey === "name") value = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      if (localPane.sortKey === "size") value = a.size - b.size;
+      if (localPane.sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
+      return localPane.sortDirection === "asc" ? value : -value;
     });
     return copied;
-  }, [entries, sortDirection, sortKey]);
+  }, [localPane.entries, localPane.sortDirection, localPane.sortKey]);
 
   const sortedRemoteEntries = useMemo(() => {
-    const copied = [...remoteEntries];
+    const copied = [...remotePane.entries];
     copied.sort((a, b) => {
       if (a.type === "directory" && b.type !== "directory") return -1;
       if (a.type !== "directory" && b.type === "directory") return 1;
       let value = 0;
-      if (remoteSortKey === "name") value = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      if (remoteSortKey === "size") value = a.size - b.size;
-      if (remoteSortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
-      return remoteSortDirection === "asc" ? value : -value;
+      if (remotePane.sortKey === "name") value = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+      if (remotePane.sortKey === "size") value = a.size - b.size;
+      if (remotePane.sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
+      return remotePane.sortDirection === "asc" ? value : -value;
     });
     return copied;
-  }, [remoteEntries, remoteSortDirection, remoteSortKey]);
+  }, [remotePane.entries, remotePane.sortDirection, remotePane.sortKey]);
 
-  const selectedEntries = selectedPath ? entries.filter((entry) => entry.fullPath === selectedPath) : [];
+  const selectedEntries = localPane.selectedPath
+    ? localPane.entries.filter((entry) => entry.fullPath === localPane.selectedPath)
+    : [];
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const totalSize = entries.reduce((acc, item) => acc + item.size, 0);
-  const remoteSelectedEntries = remoteSelectedPath
-    ? remoteEntries.filter((entry) => entry.fullPath === remoteSelectedPath)
+  const totalSize = localPane.entries.reduce((acc, item) => acc + item.size, 0);
+  const remoteSelectedEntries = remotePane.selectedPath
+    ? remotePane.entries.filter((entry) => entry.fullPath === remotePane.selectedPath)
     : [];
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const remoteTotalSize = remoteEntries.reduce((acc, item) => acc + item.size, 0);
+  const remoteTotalSize = remotePane.entries.reduce((acc, item) => acc + item.size, 0);
 
-  async function handleRowDoubleClick(entry: LocalFileEntry): Promise<void> {
+  async function handleRowDoubleClick(tabId: string, entry: LocalFileEntry): Promise<void> {
     if (entry.type === "directory") {
-      await navigateTo(entry.fullPath);
+      await navigateLocal(tabId, entry.fullPath);
       return;
     }
     try {
       await window.cofinder.local.openPath({ path: entry.fullPath });
-      setErrorMessage("");
+      setTabs((prev) =>
+        prev.map((tab) => (tab.id === tabId ? { ...tab, localPane: { ...tab.localPane, error: "" } } : tab))
+      );
     } catch (error) {
       const localError = parseLocalError(error);
-      setErrorMessage(localError.message);
+      setTabs((prev) =>
+        prev.map((tab) => (tab.id === tabId ? { ...tab, localPane: { ...tab.localPane, error: localError.message } } : tab))
+      );
     }
   }
 
-  function handleSort(nextKey: SortKey): void {
-    if (sortKey === nextKey) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-      return;
-    }
-    setSortKey(nextKey);
-    setSortDirection("asc");
+  function handleSort(tabId: string, nextKey: SortKey): void {
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        const same = tab.localPane.sortKey === nextKey;
+        return {
+          ...tab,
+          localPane: {
+            ...tab.localPane,
+            sortKey: same ? tab.localPane.sortKey : nextKey,
+            sortDirection: same ? (tab.localPane.sortDirection === "asc" ? "desc" : "asc") : "asc"
+          }
+        };
+      })
+    );
   }
 
-  function handleRemoteSort(nextKey: SortKey): void {
-    if (remoteSortKey === nextKey) {
-      setRemoteSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-      return;
-    }
-    setRemoteSortKey(nextKey);
-    setRemoteSortDirection("asc");
+  function handleRemoteSort(tabId: string, nextKey: SortKey): void {
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        const same = tab.remotePane.sortKey === nextKey;
+        return {
+          ...tab,
+          remotePane: {
+            ...tab.remotePane,
+            sortKey: same ? tab.remotePane.sortKey : nextKey,
+            sortDirection: same ? (tab.remotePane.sortDirection === "asc" ? "desc" : "asc") : "asc"
+          }
+        };
+      })
+    );
   }
 
   function getParentPath(input: string): string {
@@ -235,128 +278,247 @@ export function App() {
     return `${queueStats.activeCount} active, ${queueStats.queuedCount} queued`;
   }
 
-  async function connectRemote(): Promise<void> {
-    const host = connectForm.host.trim();
-    const username = connectForm.username.trim();
-    const password = connectForm.password;
-    const port = Number(connectForm.port);
+  async function connectRemote(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const host = tab.remotePane.connectForm.host.trim();
+    const username = tab.remotePane.connectForm.username.trim();
+    const password = remotePasswordDrafts[tabId] ?? "";
+    const port = Number(tab.remotePane.connectForm.port);
 
     if (!host) {
-      setRemoteError("Host is required.");
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Host is required." } } : item
+        )
+      );
       return;
     }
     if (!username) {
-      setRemoteError("Username is required.");
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Username is required." } } : item
+        )
+      );
       return;
     }
     if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-      setRemoteError("Port must be between 1 and 65535.");
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId
+            ? { ...item, remotePane: { ...item.remotePane, error: "Port must be between 1 and 65535." } }
+            : item
+        )
+      );
       return;
     }
     if (!password.trim()) {
-      setRemoteError("Password is required.");
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Password is required." } } : item
+        )
+      );
       return;
     }
 
     const payload: RemoteConnectRequest = {
-      alias: connectForm.alias.trim() || undefined,
+      alias: tab.remotePane.connectForm.alias.trim() || undefined,
       host,
       port,
       username,
       password,
-      defaultRemotePath: connectForm.initialPath.trim() || undefined,
-      saveProfile: connectForm.saveProfile
+      defaultRemotePath: tab.remotePane.connectForm.initialPath.trim() || undefined,
+      saveProfile: tab.remotePane.connectForm.saveProfile
     };
 
-    setRemoteConnectionStatus("connecting");
-    setRemoteError("");
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId
+          ? { ...item, remotePane: { ...item.remotePane, connectionStatus: "connecting", error: "" } }
+          : item
+      )
+    );
 
     const connectResult = await window.cofinder.remote.connect(payload);
     if (!connectResult.ok) {
-      setRemoteConnectionStatus("failed");
-      setRemoteError(connectResult.error.message);
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId
+            ? {
+                ...item,
+                remotePane: {
+                  ...item.remotePane,
+                  connectionStatus: "failed",
+                  error: connectResult.error.message
+                }
+              }
+            : item
+        )
+      );
       return;
     }
 
     const { connectionId, homePath } = connectResult.data;
-    setRemoteConnectionId(connectionId);
-    setRemoteHomePath(homePath || "/");
-    setRemoteConnectionStatus("connected");
-    setShowConnectForm(false);
-    const initialPath = connectForm.initialPath.trim() || homePath || "/";
-    const listed = await listRemotePath(connectionId, initialPath, "replace");
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId && item.remotePane.connectionStatus === "connecting"
+          ? {
+              ...item,
+              title: tab.remotePane.connectForm.alias.trim() || host,
+              remotePane: {
+                ...item.remotePane,
+                connectionId,
+                homePath: homePath || "/",
+                connectionStatus: "connected"
+              }
+            }
+          : item
+      )
+    );
+    const initialPath = tab.remotePane.connectForm.initialPath.trim() || homePath || "/";
+    const listed = await listRemotePath(connectionId, initialPath, "replace", tabId);
     if (!listed) {
-      setRemoteError(`Connected, but failed to list initial path: ${initialPath}. You can retry with another path.`);
-      setRemoteCurrentPath(homePath || "/");
-      setRemotePathInput(initialPath);
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId
+            ? {
+                ...item,
+                remotePane: {
+                  ...item.remotePane,
+                  error: `Connected, but failed to list initial path: ${initialPath}. You can retry with another path.`,
+                  currentPath: homePath || "/",
+                  pathInput: initialPath
+                }
+              }
+            : item
+        )
+      );
     }
   }
 
   async function listRemotePath(
     connectionId: string,
     targetPath: string,
-    mode: "push" | "replace" | "back" | "forward" = "push"
+    mode: "push" | "replace" | "back" | "forward" = "push",
+    tabId: string = activeTabId
   ): Promise<boolean> {
-    const previousPath = remoteCurrentPath;
+    const previousPath = tabs.find((tab) => tab.id === tabId)?.remotePane.currentPath ?? "";
     const result = await window.cofinder.remote.listDirectory({
       connectionId,
       path: targetPath
     });
     if (!result.ok) {
-      setRemoteError(result.error.message);
-      setRemotePathInput(previousPath || targetPath);
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id !== tabId ||
+          (tab.remotePane.connectionId !== connectionId && tab.remotePane.connectionStatus !== "connecting")
+            ? tab
+            : {
+                ...tab,
+                remotePane: {
+                  ...tab.remotePane,
+                  error: result.error.message,
+                  pathInput: previousPath || targetPath
+                }
+              }
+        )
+      );
       return false;
     }
 
     const payload = result.data;
-    setRemoteError("");
-    setRemoteEntries(payload.entries);
-    setRemoteCurrentPath(payload.path);
-    setRemotePathInput(payload.path);
-    setRemoteSelectedPath(null);
-
-    setRemoteHistory((prev) => {
-      if (mode === "replace") return prev;
-      if (mode === "back") {
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (
+          tab.id !== tabId ||
+          (tab.remotePane.connectionId !== connectionId && tab.remotePane.connectionStatus !== "connecting")
+        ) {
+          return tab;
+        }
         return {
-          backStack: prev.backStack.slice(0, -1),
-          forwardStack: previousPath ? [previousPath, ...prev.forwardStack] : prev.forwardStack
+          ...tab,
+          remotePane: {
+            ...tab.remotePane,
+            error: "",
+            entries: payload.entries,
+            currentPath: payload.path,
+            pathInput: payload.path,
+            selectedPath: null,
+            history: computeHistory(tab.remotePane.history, mode, previousPath, payload.path)
+          }
         };
-      }
-      if (mode === "forward") {
-        return {
-          backStack: previousPath ? [...prev.backStack, previousPath] : prev.backStack,
-          forwardStack: prev.forwardStack.slice(1)
-        };
-      }
-      if (!previousPath || previousPath === payload.path) return prev;
-      return {
-        backStack: [...prev.backStack, previousPath],
-        forwardStack: []
-      };
-    });
+      })
+    );
     return true;
   }
 
-  async function handleRemoteDoubleClick(entry: RemoteFileEntry): Promise<void> {
+  async function handleRemoteDoubleClick(tabId: string, entry: RemoteFileEntry): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
     if (entry.type === "directory") {
-      if (remoteConnectionId) await listRemotePath(remoteConnectionId, entry.fullPath);
+      if (tab.remotePane.connectionId) await listRemotePath(tab.remotePane.connectionId, entry.fullPath, "push", tabId);
       return;
     }
-    setRemoteError("Remote file open/edit will be implemented later.");
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId
+          ? { ...item, remotePane: { ...item.remotePane, error: "Remote file open/edit will be implemented later." } }
+          : item
+      )
+    );
   }
 
-  async function disconnectRemote(): Promise<void> {
-    if (!remoteConnectionId) return;
-    await window.cofinder.remote.disconnect({ connectionId: remoteConnectionId });
-    setRemoteConnectionId(null);
-    setRemoteConnectionStatus("disconnected");
-    setRemoteCurrentPath("/");
-    setRemotePathInput("/");
-    setRemoteEntries([]);
-    setRemoteSelectedPath(null);
-    setRemoteError("");
-    setRemoteHistory({ backStack: [], forwardStack: [] });
+  async function disconnectRemote(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId) return;
+    await window.cofinder.remote.disconnect({ connectionId: tab.remotePane.connectionId });
+    setTabs((prev) =>
+      prev.map((item) => {
+        if (item.id !== tabId) return item;
+        return {
+          ...item,
+          title: `Tab ${getTabNumber(item.id, prev)}`,
+          remotePane: createRemotePaneState()
+        };
+      })
+    );
+  }
+
+  function createTab(): void {
+    const id = createId();
+    setTabs((prev) => [...prev, createTabState(id, prev.length + 1)]);
+    setRemotePasswordDrafts((prev) => ({ ...prev, [id]: "" }));
+    setActiveTabId(id);
+    void navigateLocal(id, "", "replace");
+  }
+
+  async function closeTab(tabId: string): Promise<void> {
+    const closingIndex = tabs.findIndex((tab) => tab.id === tabId);
+    const closing = tabs[closingIndex];
+    if (!closing) return;
+    if (closing.remotePane.connectionId) {
+      await window.cofinder.remote.disconnect({ connectionId: closing.remotePane.connectionId });
+    }
+
+    setTabs((prev) => {
+      const next = prev.filter((tab) => tab.id !== tabId);
+      if (next.length === 0) {
+        const newId = createId();
+        void navigateLocal(newId, "", "replace");
+        setActiveTabId(newId);
+        return [createTabState(newId, 1)];
+      }
+      if (activeTabId === tabId) {
+        const fallback = next[Math.max(0, closingIndex - 1)];
+        if (fallback) setActiveTabId(fallback.id);
+      }
+      return next;
+    });
+    setRemotePasswordDrafts((prev) => {
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
   }
 
   function seedMockTransfer(status: TransferStatus): void {
@@ -380,6 +542,13 @@ export function App() {
           <strong>CoFinder</strong>
         </div>
       </header>
+      <TabBar
+        tabs={tabs}
+        activeTabId={activeTabId}
+        onSelect={setActiveTabId}
+        onAdd={createTab}
+        onClose={(tabId) => void closeTab(tabId)}
+      />
       <main className="pane-layout">
         <section className="pane local-pane">
           <div className="pane-toolbar">
@@ -388,10 +557,10 @@ export function App() {
               className="nav-btn"
               aria-label="Back"
               title="Back"
-              disabled={history.backStack.length === 0}
+              disabled={localPane.history.backStack.length === 0}
               onClick={() => {
-                const target = history.backStack[history.backStack.length - 1];
-                if (target) void navigateTo(target, "back");
+                const target = localPane.history.backStack[localPane.history.backStack.length - 1];
+                if (target) void navigateLocal(activeTab.id, target, "back");
               }}
             >
               ←
@@ -401,10 +570,10 @@ export function App() {
               className="nav-btn"
               aria-label="Forward"
               title="Forward"
-              disabled={history.forwardStack.length === 0}
+              disabled={localPane.history.forwardStack.length === 0}
               onClick={() => {
-                const target = history.forwardStack[0];
-                if (target) void navigateTo(target, "forward");
+                const target = localPane.history.forwardStack[0];
+                if (target) void navigateLocal(activeTab.id, target, "forward");
               }}
             >
               →
@@ -414,11 +583,17 @@ export function App() {
               className="nav-btn"
               aria-label="Up"
               title="Up"
-              onClick={() => void navigateTo(getParentPath(currentPath))}
+              onClick={() => void navigateLocal(activeTab.id, getParentPath(localPane.currentPath))}
             >
               ↑
             </button>
-            <button type="button" className="nav-btn" aria-label="Home" title="Home" onClick={() => void navigateTo(homePath)}>
+            <button
+              type="button"
+              className="nav-btn"
+              aria-label="Home"
+              title="Home"
+              onClick={() => void navigateLocal(activeTab.id, HOME_FALLBACK)}
+            >
               ⌂
             </button>
             <button
@@ -426,8 +601,8 @@ export function App() {
               className="nav-btn"
               aria-label="Refresh"
               title="Refresh"
-              disabled={!currentPath}
-              onClick={() => void navigateTo(currentPath, "replace")}
+              disabled={!localPane.currentPath}
+              onClick={() => void navigateLocal(activeTab.id, localPane.currentPath, "replace")}
             >
               ↻
             </button>
@@ -437,13 +612,25 @@ export function App() {
             className="path-form"
             onSubmit={(event) => {
               event.preventDefault();
-              void navigateTo(pathInput);
+              void navigateLocal(activeTab.id, localPane.pathInput);
             }}
           >
-            <input value={pathInput} onChange={(event) => setPathInput(event.target.value)} aria-label="Local path" />
+            <input
+              value={localPane.pathInput}
+              onChange={(event) =>
+                setTabs((prev) =>
+                  prev.map((tab) =>
+                    tab.id === activeTab.id
+                      ? { ...tab, localPane: { ...tab.localPane, pathInput: event.target.value } }
+                      : tab
+                  )
+                )
+              }
+              aria-label="Local path"
+            />
           </form>
 
-          {errorMessage ? <div className="error-banner">{errorMessage}</div> : null}
+          {localPane.error ? <div className="error-banner">{localPane.error}</div> : null}
 
           <div className="table-wrap">
             <table className="file-table">
@@ -455,14 +642,14 @@ export function App() {
               </colgroup>
               <thead>
                 <tr>
-                  <th className="name-header" onClick={() => handleSort("name")}>
-                    name {sortKey === "name" ? sortMark(sortDirection) : ""}
+                  <th className="name-header" onClick={() => handleSort(activeTab.id, "name")}>
+                    name {localPane.sortKey === "name" ? sortMark(localPane.sortDirection) : ""}
                   </th>
-                  <th className="size-header" onClick={() => handleSort("size")}>
-                    size {sortKey === "size" ? sortMark(sortDirection) : ""}
+                  <th className="size-header" onClick={() => handleSort(activeTab.id, "size")}>
+                    size {localPane.sortKey === "size" ? sortMark(localPane.sortDirection) : ""}
                   </th>
-                  <th className="mtime-header" onClick={() => handleSort("mtime")}>
-                    mtime {sortKey === "mtime" ? sortMark(sortDirection) : ""}
+                  <th className="mtime-header" onClick={() => handleSort(activeTab.id, "mtime")}>
+                    mtime {localPane.sortKey === "mtime" ? sortMark(localPane.sortDirection) : ""}
                   </th>
                   <th className="type-header">type</th>
                 </tr>
@@ -471,9 +658,17 @@ export function App() {
                 {sortedEntries.map((entry) => (
                   <tr
                     key={entry.fullPath}
-                    className={selectedPath === entry.fullPath ? "row-selected" : ""}
-                    onClick={() => setSelectedPath(entry.fullPath)}
-                    onDoubleClick={() => void handleRowDoubleClick(entry)}
+                    className={localPane.selectedPath === entry.fullPath ? "row-selected" : ""}
+                    onClick={() =>
+                      setTabs((prev) =>
+                        prev.map((tab) =>
+                          tab.id === activeTab.id
+                            ? { ...tab, localPane: { ...tab.localPane, selectedPath: entry.fullPath } }
+                            : tab
+                        )
+                      )
+                    }
+                    onDoubleClick={() => void handleRowDoubleClick(activeTab.id, entry)}
                   >
                     <td className="name-cell" title={entry.name}>
                       <span className={`file-kind kind-${entry.type}`} aria-hidden="true">
@@ -492,61 +687,108 @@ export function App() {
 
           <div className="pane-status">
             <span>Selected: {selectedEntries.length}</span>
-            <span>Total: {entries.length}</span>
+            <span>Total: {localPane.entries.length}</span>
             <span>Selected Size: {formatSize(selectedSize)}</span>
             <span>Total Size: {formatSize(totalSize)}</span>
           </div>
         </section>
         <section className="splitter" />
         <section className="pane remote-pane">
-          {remoteConnectionStatus === "disconnected" && !showConnectForm ? (
-            <div className="placeholder-pane">
-              <div className="placeholder-title">Not connected</div>
-              <div className="placeholder-body">Connect to a server to browse remote files.</div>
-              <button type="button" className="toolbar-button placeholder-action" onClick={() => setShowConnectForm(true)}>
-                Connect...
-              </button>
-            </div>
-          ) : null}
-
-          {showConnectForm ? (
+          {!(remotePane.connectionStatus === "connected" && remotePane.connectionId) ? (
             <form
               className="connect-form"
               onSubmit={(event) => {
                 event.preventDefault();
-                void connectRemote();
+                void connectRemote(activeTab.id);
               }}
             >
+              <p className="connect-form-lead">Enter server details to connect.</p>
               <div className="connect-grid">
                 <label>
                   Alias
                   <input
-                    value={connectForm.alias}
-                    onChange={(event) => setConnectForm((prev) => ({ ...prev, alias: event.target.value }))}
+                    value={remotePane.connectForm.alias}
+                    onChange={(event) =>
+                      setTabs((prev) =>
+                        prev.map((tab) =>
+                          tab.id === activeTab.id
+                            ? {
+                                ...tab,
+                                remotePane: {
+                                  ...tab.remotePane,
+                                  connectForm: { ...tab.remotePane.connectForm, alias: event.target.value }
+                                }
+                              }
+                            : tab
+                        )
+                      )
+                    }
                   />
                 </label>
                 <label>
                   Host *
                   <input
                     required
-                    value={connectForm.host}
-                    onChange={(event) => setConnectForm((prev) => ({ ...prev, host: event.target.value }))}
+                    value={remotePane.connectForm.host}
+                    onChange={(event) =>
+                      setTabs((prev) =>
+                        prev.map((tab) =>
+                          tab.id === activeTab.id
+                            ? {
+                                ...tab,
+                                remotePane: {
+                                  ...tab.remotePane,
+                                  connectForm: { ...tab.remotePane.connectForm, host: event.target.value }
+                                }
+                              }
+                            : tab
+                        )
+                      )
+                    }
                   />
                 </label>
                 <label>
                   Port *
                   <input
                     required
-                    value={connectForm.port}
-                    onChange={(event) => setConnectForm((prev) => ({ ...prev, port: event.target.value }))}
+                    value={remotePane.connectForm.port}
+                    onChange={(event) =>
+                      setTabs((prev) =>
+                        prev.map((tab) =>
+                          tab.id === activeTab.id
+                            ? {
+                                ...tab,
+                                remotePane: {
+                                  ...tab.remotePane,
+                                  connectForm: { ...tab.remotePane.connectForm, port: event.target.value }
+                                }
+                              }
+                            : tab
+                        )
+                      )
+                    }
                   />
                 </label>
                 <label>
                   Username *
                   <input
                     required
-                    value={connectForm.username}
-                    onChange={(event) => setConnectForm((prev) => ({ ...prev, username: event.target.value }))}
+                    value={remotePane.connectForm.username}
+                    onChange={(event) =>
+                      setTabs((prev) =>
+                        prev.map((tab) =>
+                          tab.id === activeTab.id
+                            ? {
+                                ...tab,
+                                remotePane: {
+                                  ...tab.remotePane,
+                                  connectForm: { ...tab.remotePane.connectForm, username: event.target.value }
+                                }
+                              }
+                            : tab
+                        )
+                      )
+                    }
                   />
                 </label>
                 <label>
@@ -554,58 +796,79 @@ export function App() {
                   <input
                     required
                     type="password"
-                    value={connectForm.password}
-                    onChange={(event) => setConnectForm((prev) => ({ ...prev, password: event.target.value }))}
+                    value={remotePasswordDrafts[activeTab.id] ?? ""}
+                    onChange={(event) =>
+                      setRemotePasswordDrafts((prev) => ({
+                        ...prev,
+                        [activeTab.id]: event.target.value
+                      }))
+                    }
                   />
                 </label>
                 <label>
                   Initial path
                   <input
-                    value={connectForm.initialPath}
-                    onChange={(event) => setConnectForm((prev) => ({ ...prev, initialPath: event.target.value }))}
+                    value={remotePane.connectForm.initialPath}
+                    onChange={(event) =>
+                      setTabs((prev) =>
+                        prev.map((tab) =>
+                          tab.id === activeTab.id
+                            ? {
+                                ...tab,
+                                remotePane: {
+                                  ...tab.remotePane,
+                                  connectForm: { ...tab.remotePane.connectForm, initialPath: event.target.value }
+                                }
+                              }
+                            : tab
+                        )
+                      )
+                    }
                   />
                 </label>
               </div>
               <label className="checkbox-row">
                 <input
                   type="checkbox"
-                  checked={connectForm.saveProfile}
-                  onChange={(event) => setConnectForm((prev) => ({ ...prev, saveProfile: event.target.checked }))}
+                  checked={remotePane.connectForm.saveProfile}
+                  onChange={(event) =>
+                    setTabs((prev) =>
+                      prev.map((tab) =>
+                        tab.id === activeTab.id
+                          ? {
+                              ...tab,
+                              remotePane: {
+                                ...tab.remotePane,
+                                connectForm: { ...tab.remotePane.connectForm, saveProfile: event.target.checked }
+                              }
+                            }
+                          : tab
+                      )
+                    )
+                  }
                 />
                 Save profile (without password)
               </label>
-              {remoteError ? <div className="error-banner">{remoteError}</div> : null}
+              {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
               <div className="connect-actions">
                 <button type="submit" className="toolbar-button">
-                  {remoteConnectionStatus === "connecting" ? "Connecting..." : "Connect"}
-                </button>
-                <button
-                  type="button"
-                  className="toolbar-button"
-                  onClick={() => {
-                    if (remoteConnectionStatus !== "connecting") {
-                      setShowConnectForm(false);
-                      setRemoteError("");
-                    }
-                  }}
-                >
-                  Cancel
+                  {remotePane.connectionStatus === "connecting" ? "Connecting..." : "Connect"}
                 </button>
               </div>
             </form>
           ) : null}
 
-          {remoteConnectionStatus === "connected" && remoteConnectionId ? (
+          {remotePane.connectionStatus === "connected" && remotePane.connectionId ? (
             <>
               <div className="pane-toolbar">
                 <button
                   type="button"
                   className="nav-btn"
                   title="Back"
-                  disabled={remoteHistory.backStack.length === 0}
+                  disabled={remotePane.history.backStack.length === 0}
                   onClick={() => {
-                    const target = remoteHistory.backStack[remoteHistory.backStack.length - 1];
-                    if (target) void listRemotePath(remoteConnectionId, target, "back");
+                    const target = remotePane.history.backStack[remotePane.history.backStack.length - 1];
+                    if (target) void listRemotePath(remotePane.connectionId!, target, "back", activeTab.id);
                   }}
                 >
                   ←
@@ -614,10 +877,10 @@ export function App() {
                   type="button"
                   className="nav-btn"
                   title="Forward"
-                  disabled={remoteHistory.forwardStack.length === 0}
+                  disabled={remotePane.history.forwardStack.length === 0}
                   onClick={() => {
-                    const target = remoteHistory.forwardStack[0];
-                    if (target) void listRemotePath(remoteConnectionId, target, "forward");
+                    const target = remotePane.history.forwardStack[0];
+                    if (target) void listRemotePath(remotePane.connectionId!, target, "forward", activeTab.id);
                   }}
                 >
                   →
@@ -626,7 +889,7 @@ export function App() {
                   type="button"
                   className="nav-btn"
                   title="Up"
-                  onClick={() => void listRemotePath(remoteConnectionId, getParentPath(remoteCurrentPath))}
+                  onClick={() => void listRemotePath(remotePane.connectionId!, getParentPath(remotePane.currentPath), "push", activeTab.id)}
                 >
                   ↑
                 </button>
@@ -634,7 +897,7 @@ export function App() {
                   type="button"
                   className="nav-btn"
                   title="Home"
-                  onClick={() => void listRemotePath(remoteConnectionId, remoteHomePath)}
+                  onClick={() => void listRemotePath(remotePane.connectionId!, remotePane.homePath, "push", activeTab.id)}
                 >
                   ⌂
                 </button>
@@ -642,11 +905,11 @@ export function App() {
                   type="button"
                   className="nav-btn"
                   title="Refresh"
-                  onClick={() => void listRemotePath(remoteConnectionId, remoteCurrentPath, "replace")}
+                  onClick={() => void listRemotePath(remotePane.connectionId!, remotePane.currentPath, "replace", activeTab.id)}
                 >
                   ↻
                 </button>
-                <button type="button" className="toolbar-button" onClick={() => void disconnectRemote()}>
+                <button type="button" className="toolbar-button" onClick={() => void disconnectRemote(activeTab.id)}>
                   Disconnect
                 </button>
               </div>
@@ -655,17 +918,25 @@ export function App() {
                 className="path-form"
                 onSubmit={(event) => {
                   event.preventDefault();
-                  void listRemotePath(remoteConnectionId, remotePathInput);
+                  void listRemotePath(remotePane.connectionId!, remotePane.pathInput, "push", activeTab.id);
                 }}
               >
                 <input
-                  value={remotePathInput}
-                  onChange={(event) => setRemotePathInput(event.target.value)}
+                  value={remotePane.pathInput}
+                  onChange={(event) =>
+                    setTabs((prev) =>
+                      prev.map((tab) =>
+                        tab.id === activeTab.id
+                          ? { ...tab, remotePane: { ...tab.remotePane, pathInput: event.target.value } }
+                          : tab
+                      )
+                    )
+                  }
                   aria-label="Remote path"
                 />
               </form>
 
-              {remoteError ? <div className="error-banner">{remoteError}</div> : null}
+              {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
 
               <div className="table-wrap">
                 <table className="file-table">
@@ -677,14 +948,14 @@ export function App() {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th className="name-header" onClick={() => handleRemoteSort("name")}>
-                        name {remoteSortKey === "name" ? sortMark(remoteSortDirection) : ""}
+                      <th className="name-header" onClick={() => handleRemoteSort(activeTab.id, "name")}>
+                        name {remotePane.sortKey === "name" ? sortMark(remotePane.sortDirection) : ""}
                       </th>
-                      <th className="size-header" onClick={() => handleRemoteSort("size")}>
-                        size {remoteSortKey === "size" ? sortMark(remoteSortDirection) : ""}
+                      <th className="size-header" onClick={() => handleRemoteSort(activeTab.id, "size")}>
+                        size {remotePane.sortKey === "size" ? sortMark(remotePane.sortDirection) : ""}
                       </th>
-                      <th className="mtime-header" onClick={() => handleRemoteSort("mtime")}>
-                        mtime {remoteSortKey === "mtime" ? sortMark(remoteSortDirection) : ""}
+                      <th className="mtime-header" onClick={() => handleRemoteSort(activeTab.id, "mtime")}>
+                        mtime {remotePane.sortKey === "mtime" ? sortMark(remotePane.sortDirection) : ""}
                       </th>
                       <th className="type-header">type</th>
                     </tr>
@@ -693,9 +964,17 @@ export function App() {
                     {sortedRemoteEntries.map((entry) => (
                       <tr
                         key={entry.fullPath}
-                        className={remoteSelectedPath === entry.fullPath ? "row-selected" : ""}
-                        onClick={() => setRemoteSelectedPath(entry.fullPath)}
-                        onDoubleClick={() => void handleRemoteDoubleClick(entry)}
+                        className={remotePane.selectedPath === entry.fullPath ? "row-selected" : ""}
+                        onClick={() =>
+                          setTabs((prev) =>
+                            prev.map((tab) =>
+                              tab.id === activeTab.id
+                                ? { ...tab, remotePane: { ...tab.remotePane, selectedPath: entry.fullPath } }
+                                : tab
+                            )
+                          )
+                        }
+                        onDoubleClick={() => void handleRemoteDoubleClick(activeTab.id, entry)}
                       >
                         <td className="name-cell" title={entry.name}>
                           <span className={`file-kind kind-${entry.type}`} aria-hidden="true">
@@ -714,7 +993,7 @@ export function App() {
 
               <div className="pane-status">
                 <span>Selected: {remoteSelectedEntries.length}</span>
-                <span>Total: {remoteEntries.length}</span>
+                <span>Total: {remotePane.entries.length}</span>
                 <span>Selected Size: {formatSize(remoteSelectedSize)}</span>
                 <span>Total Size: {formatSize(remoteTotalSize)}</span>
               </div>
@@ -866,4 +1145,86 @@ function parseLocalError(error: unknown): LocalErrorPayload {
 
 function sortMark(direction: SortDirection): string {
   return direction === "asc" ? "^" : "v";
+}
+
+function createId(): string {
+  return `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function createLocalPaneState(): LocalPaneState {
+  return {
+    currentPath: "",
+    pathInput: "",
+    entries: [],
+    selectedPath: null,
+    error: "",
+    sortKey: "name",
+    sortDirection: "asc",
+    history: { backStack: [], forwardStack: [] }
+  };
+}
+
+function createRemotePaneState(): RemotePaneState {
+  return {
+    connectionStatus: "disconnected",
+    connectionId: null,
+    homePath: "/",
+    currentPath: "/",
+    pathInput: "/",
+    entries: [],
+    selectedPath: null,
+    sortKey: "name",
+    sortDirection: "asc",
+    history: { backStack: [], forwardStack: [] },
+    error: "",
+    connectForm: {
+      alias: "",
+      host: "",
+      port: "22",
+      username: "",
+      initialPath: "",
+      saveProfile: false
+    }
+  };
+}
+
+function createTabState(id: string, index: number): UiTabState {
+  return {
+    id,
+    title: `Tab ${index}`,
+    createdAt: Date.now(),
+    localPane: createLocalPaneState(),
+    remotePane: createRemotePaneState()
+  };
+}
+
+function computeHistory(
+  history: HistoryState,
+  mode: "push" | "replace" | "back" | "forward",
+  previousPath: string,
+  nextPath: string
+): HistoryState {
+  if (mode === "replace") return history;
+  if (mode === "back") {
+    return {
+      backStack: history.backStack.slice(0, -1),
+      forwardStack: previousPath ? [previousPath, ...history.forwardStack] : history.forwardStack
+    };
+  }
+  if (mode === "forward") {
+    return {
+      backStack: previousPath ? [...history.backStack, previousPath] : history.backStack,
+      forwardStack: history.forwardStack.slice(1)
+    };
+  }
+  if (!previousPath || previousPath === nextPath) return history;
+  return {
+    backStack: [...history.backStack, previousPath],
+    forwardStack: []
+  };
+}
+
+function getTabNumber(id: string, tabs: UiTabState[]): number {
+  const index = tabs.findIndex((tab) => tab.id === id);
+  return index >= 0 ? index + 1 : 1;
 }
