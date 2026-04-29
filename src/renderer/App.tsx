@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
-import type { LocalErrorPayload, ProfileUpsertPayload, RemoteConnectRequest } from "../shared/types/ipc";
-import type { LocalFileEntry, RemoteFileEntry, ServerProfile, SortDirection, SortKey, TransferStatus } from "../shared/types/models";
+import type {
+  EnqueueDownloadRequest,
+  EnqueueUploadRequest,
+  LocalErrorPayload,
+  ProfileUpsertPayload,
+  RemoteConnectRequest,
+  TransferUpdatePayload
+} from "../shared/types/ipc";
+import type { LocalFileEntry, RemoteFileEntry, ServerProfile, SortDirection, SortKey, TransferTask } from "../shared/types/models";
 
 type HistoryState = {
   backStack: string[];
@@ -25,6 +32,10 @@ type RemotePaneState = {
   connectionId: string | null;
   /** Last profile id used for this connection, if any */
   activeProfileId: string | null;
+  host: string;
+  port: number;
+  username: string;
+  authType: "password" | "privateKey";
   homePath: string;
   currentPath: string;
   pathInput: string;
@@ -59,15 +70,6 @@ const HOME_FALLBACK = "";
 const AUTO_HIDE_DELAY_MS = 10_000;
 
 type QueuePanelState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
-type MockTransferTask = {
-  id: string;
-  status: TransferStatus;
-  direction: "upload" | "download";
-  source: string;
-  target: string;
-};
-
-const IS_DEV = import.meta.env.DEV;
 
 export function App() {
   const [tabState] = useState(() => {
@@ -87,7 +89,8 @@ export function App() {
   }, [siteManagerByTab]);
   const [queuePanelState, setQueuePanelState] = useState<QueuePanelState>("hidden");
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
-  const [mockTasks, setMockTasks] = useState<MockTransferTask[]>([]);
+  const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
+  const [queueError, setQueueError] = useState<string>("");
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const localPane = activeTab.localPane;
@@ -97,6 +100,32 @@ export function App() {
     void navigateLocal(tabState.firstTabId, "", "replace");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const off = window.cofinder.transfer.onUpdate((payload: TransferUpdatePayload) => {
+      setTransferTasks(payload.tasks);
+    });
+    void loadTransferTasks();
+    return off;
+  }, []);
+
+  async function loadTransferTasks(): Promise<void> {
+    const res = await window.cofinder.transfer.list();
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setTransferTasks(res.data);
+  }
+
+  async function clearCompletedTransfers(): Promise<void> {
+    const res = await window.cofinder.transfer.clearCompleted();
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    if (res.data.cleared === 0 && transferTasks.length === 0) setQueuePanelState("hidden");
+  }
 
   async function navigateLocal(
     tabId: string,
@@ -144,18 +173,20 @@ export function App() {
   }
 
   const queueStats = useMemo(() => {
-    const activeCount = mockTasks.filter((task) => task.status === "running").length;
-    const queuedCount = mockTasks.filter((task) => task.status === "pending").length;
-    const failedCount = mockTasks.filter((task) => task.status === "failed").length;
-    const completedCount = mockTasks.filter((task) => task.status === "success" || task.status === "canceled").length;
-    const allDone = mockTasks.length > 0 && activeCount === 0 && queuedCount === 0;
+    const activeCount = transferTasks.filter((task) => task.status === "running").length;
+    const queuedCount = transferTasks.filter((task) => task.status === "pending").length;
+    const failedCount = transferTasks.filter((task) => task.status === "failed").length;
+    const completedCount = transferTasks.filter((task) =>
+      task.status === "success" || task.status === "canceled" || task.status === "stopped"
+    ).length;
+    const allDone = transferTasks.length > 0 && activeCount === 0 && queuedCount === 0;
     return { activeCount, queuedCount, failedCount, completedCount, allDone };
-  }, [mockTasks]);
+  }, [transferTasks]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    if (mockTasks.length === 0) {
+    if (transferTasks.length === 0) {
       setQueuePanelState("hidden");
       return;
     }
@@ -164,7 +195,7 @@ export function App() {
       setQueuePanelState("autoHidePending");
       timer = setTimeout(() => {
         setQueuePanelState("hidden");
-        setMockTasks([]);
+        void clearCompletedTransfers();
       }, AUTO_HIDE_DELAY_MS);
       return () => {
         if (timer) clearTimeout(timer);
@@ -179,7 +210,7 @@ export function App() {
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [mockTasks, queuePinned, queueStats.allDone, queueStats.failedCount]);
+  }, [transferTasks, queuePinned, queueStats.allDone, queueStats.failedCount]);
 
   const sortedEntries = useMemo(() => {
     const copied = [...localPane.entries];
@@ -382,7 +413,8 @@ export function App() {
     homePath: string,
     initialPath: string,
     titleLabel: string,
-    activeProfileId: string | null
+    activeProfileId: string | null,
+    connMeta: { host: string; port: number; username: string; authType: "password" | "privateKey" }
   ): Promise<void> {
     setTabs((prev) =>
       prev.map((item) =>
@@ -394,6 +426,10 @@ export function App() {
                 ...item.remotePane,
                 connectionId,
                 activeProfileId,
+                host: connMeta.host,
+                port: connMeta.port,
+                username: connMeta.username,
+                authType: connMeta.authType,
                 homePath: homePath || "/",
                 connectionStatus: "connected"
               }
@@ -544,7 +580,12 @@ export function App() {
 
     closeSiteManagerForTab(tabId);
 
-    await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, titleLabel, profileId ?? null);
+    await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, titleLabel, profileId ?? null, {
+      host,
+      port,
+      username,
+      authType: "password"
+    });
   }
 
   async function handleSiteManagerSave(tabId: string): Promise<void> {
@@ -772,6 +813,122 @@ export function App() {
     );
   }
 
+  async function enqueueUpload(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const selected = tab.localPane.selectedPath ? [tab.localPane.selectedPath] : [];
+    if (selected.length === 0) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, localPane: { ...item.localPane, error: "Select a local file or folder first." } } : item
+        )
+      );
+      return;
+    }
+    if (!tab.remotePane.connectionId) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, localPane: { ...item.localPane, error: "Connect to a remote server first." } } : item
+        )
+      );
+      return;
+    }
+    if (!tab.remotePane.host || !tab.remotePane.username || !tab.remotePane.port) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId
+            ? { ...item, localPane: { ...item.localPane, error: "Missing connection metadata for rsync transfer." } }
+            : item
+        )
+      );
+      return;
+    }
+
+    const payload: EnqueueUploadRequest = {
+      tabId,
+      profileId: tab.remotePane.activeProfileId ?? undefined,
+      connectionId: tab.remotePane.connectionId,
+      host: tab.remotePane.host,
+      port: tab.remotePane.port,
+      username: tab.remotePane.username,
+      authType: tab.remotePane.authType,
+      localSources: selected,
+      remoteDestinationDir: tab.remotePane.currentPath
+    };
+    const result = await window.cofinder.transfer.enqueueUpload(payload);
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId ? { ...item, localPane: { ...item.localPane, error: "" }, remotePane: { ...item.remotePane, error: "" } } : item
+      )
+    );
+    setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
+  }
+
+  async function enqueueDownload(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const selected = tab.remotePane.selectedPath ? [tab.remotePane.selectedPath] : [];
+    if (selected.length === 0) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Select a remote file or folder first." } } : item
+        )
+      );
+      return;
+    }
+    if (!tab.localPane.currentPath) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Select a local destination first." } } : item
+        )
+      );
+      return;
+    }
+    if (!tab.remotePane.connectionId || !tab.remotePane.host || !tab.remotePane.username || !tab.remotePane.port) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Missing connection metadata for rsync transfer." } } : item
+        )
+      );
+      return;
+    }
+
+    const payload: EnqueueDownloadRequest = {
+      tabId,
+      profileId: tab.remotePane.activeProfileId ?? undefined,
+      connectionId: tab.remotePane.connectionId,
+      host: tab.remotePane.host,
+      port: tab.remotePane.port,
+      username: tab.remotePane.username,
+      authType: tab.remotePane.authType,
+      remoteSources: selected,
+      localDestinationDir: tab.localPane.currentPath
+    };
+    const result = await window.cofinder.transfer.enqueueDownload(payload);
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "" }, localPane: { ...item.localPane, error: "" } } : item
+      )
+    );
+    setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
+  }
+
   async function disconnectRemote(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId) return;
@@ -822,20 +979,6 @@ export function App() {
       delete next[tabId];
       return next;
     });
-  }
-
-  function seedMockTransfer(status: TransferStatus): void {
-    const id = `${Date.now()}-${Math.random().toString(16).slice(2, 6)}`;
-    setMockTasks((prev) => [
-      ...prev,
-      {
-        id,
-        status,
-        direction: status === "pending" ? "upload" : "download",
-        source: "/Users/demo/source.txt",
-        target: "/tmp/target.txt"
-      }
-    ]);
   }
 
   const activeSiteManager = siteManagerByTab[activeTab.id];
@@ -910,6 +1053,14 @@ export function App() {
               onClick={() => void navigateLocal(activeTab.id, localPane.currentPath, "replace")}
             >
               ↻
+            </button>
+            <button
+              type="button"
+              className="toolbar-button"
+              disabled={!localPane.selectedPath || !remotePane.connectionId}
+              onClick={() => void enqueueUpload(activeTab.id)}
+            >
+              Upload
             </button>
           </div>
 
@@ -1073,6 +1224,14 @@ export function App() {
                 >
                   ↻
                 </button>
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  disabled={!remotePane.selectedPath || !localPane.currentPath}
+                  onClick={() => void enqueueDownload(activeTab.id)}
+                >
+                  Download
+                </button>
                 <button type="button" className="toolbar-button" onClick={() => void disconnectRemote(activeTab.id)}>
                   Disconnect
                 </button>
@@ -1200,24 +1359,55 @@ export function App() {
                     type="button"
                     className="toolbar-button"
                     onClick={() => {
-                      setMockTasks([]);
-                      setQueuePanelState("hidden");
+                      void clearCompletedTransfers();
                     }}
                   >
                     Clear
                   </button>
                 </div>
               </div>
+              {queueError ? <div className="error-banner">{queueError}</div> : null}
               <div className="queue-list">
-                {mockTasks.length === 0 ? (
+                {transferTasks.length === 0 ? (
                   <div className="queue-empty">No transfer tasks.</div>
                 ) : (
-                  mockTasks.map((task) => (
+                  transferTasks.map((task) => (
                     <div key={task.id} className="queue-item">
                       <span>{task.direction}</span>
                       <span className={`queue-status status-${task.status}`}>{task.status}</span>
-                      <span className="queue-path" title={`${task.source} -> ${task.target}`}>
-                        {task.source} {"->"} {task.target}
+                      <span className="queue-path" title={`${task.sourceDisplay} -> ${task.destinationDisplay}`}>
+                        {task.sourceDisplay} {"->"} {task.destinationDisplay}
+                      </span>
+                      <span className="queue-path" title={task.progressText ?? task.currentFile ?? "-"}>
+                        {task.progressText ?? task.currentFile ?? "-"}
+                        {task.speed ? ` | ${task.speed}` : ""}
+                        {task.eta ? ` | ETA ${task.eta}` : ""}
+                      </span>
+                      <span>
+                        {task.status === "pending" ? (
+                          <button
+                            type="button"
+                            className="toolbar-button"
+                            onClick={async () => {
+                              const res = await window.cofinder.transfer.cancel({ taskId: task.id });
+                              if (!res.ok) setQueueError(res.error.message);
+                            }}
+                          >
+                            Cancel
+                          </button>
+                        ) : null}
+                        {task.status === "running" ? (
+                          <button
+                            type="button"
+                            className="toolbar-button"
+                            onClick={async () => {
+                              const res = await window.cofinder.transfer.stop({ taskId: task.id });
+                              if (!res.ok) setQueueError(res.error.message);
+                            }}
+                          >
+                            Stop
+                          </button>
+                        ) : null}
                       </span>
                     </div>
                   ))
@@ -1225,39 +1415,6 @@ export function App() {
               </div>
               {queuePanelState === "autoHidePending" ? (
                 <div className="queue-footnote">All tasks completed. Auto-hiding in 10 seconds.</div>
-              ) : null}
-              {IS_DEV ? (
-                <details className="queue-debug">
-                  <summary>Debug transfer seeds</summary>
-                  <div className="queue-debug-actions">
-                    <button type="button" className="toolbar-button" onClick={() => seedMockTransfer("running")}>
-                      +Running
-                    </button>
-                    <button type="button" className="toolbar-button" onClick={() => seedMockTransfer("pending")}>
-                      +Queued
-                    </button>
-                    <button
-                      type="button"
-                      className="toolbar-button"
-                      onClick={() => setMockTasks((prev) => prev.map((task) => ({ ...task, status: "success" })))}
-                      disabled={mockTasks.length === 0}
-                    >
-                      Complete all
-                    </button>
-                    <button
-                      type="button"
-                      className="toolbar-button"
-                      onClick={() =>
-                        setMockTasks((prev) =>
-                          prev.length === 0 ? prev : [{ ...prev[0], status: "failed" }, ...prev.slice(1)]
-                        )
-                      }
-                      disabled={mockTasks.length === 0}
-                    >
-                      Mark failed
-                    </button>
-                  </div>
-                </details>
               ) : null}
             </div>
           )}
@@ -1355,6 +1512,10 @@ function createRemotePaneState(): RemotePaneState {
     connectionStatus: "disconnected",
     connectionId: null,
     activeProfileId: null,
+    host: "",
+    port: 22,
+    username: "",
+    authType: "password",
     homePath: "/",
     currentPath: "/",
     pathInput: "/",

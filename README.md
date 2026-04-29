@@ -4,7 +4,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
 
 ## Status
 
-- Current milestone: **M3.5 completed (Site Manager / Login Manager + profile credential management)**
+- Current milestone: **M4 completed (rsync upload/download transfer queue)**
 - Implemented in M0:
   - Electron + Vite + React + TypeScript scaffold
   - main / preload / renderer separation
@@ -60,6 +60,17 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
   - Save password option controlled per profile; stored password can be reused for Login
   - Deleting a profile also removes its associated saved credential
   - Authentication boundary hardening: password never persisted in profile payloads
+- Implemented in M4 (rsync upload/download transfer queue):
+  - Main-process serial transfer queue with task lifecycle (`pending/running/success/failed/canceled/stopped`)
+  - Upload from local selection to remote current directory and download from remote selection to local current directory
+  - Real transfer execution via `rsync` (`spawn` + args array; no shell command string concatenation)
+  - SSH BatchMode preflight (`ssh -o BatchMode=yes ... true`) before enqueue/start
+  - Precheck failures surfaced as task-level failures (e.g. key/passwordless SSH required)
+  - Queue task metadata includes tab binding, endpoint info, progress text, speed/eta hints, and raw log tail
+  - Queue controls: cancel pending, stop running, list tasks, clear completed
+  - Renderer queue switched from mock seed state to IPC-driven real-time updates (`transfer:onUpdate`)
+  - Queue panel behavior kept aligned with hidden/expanded/collapsed/auto-hide policy
+  - Security boundary preserved: no password persisted in transfer task, renderer queue state, or command args
 
 ## Tech Stack
 
@@ -121,12 +132,12 @@ src/
   - Remote connection and remote pane browsing (M2)
   - Multi-tab session model with isolated tab state (M3)
   - Site Manager / Login Manager with profile + credential management (M3.5)
+  - rsync upload/download transfer queue with serial execution and task controls (M4)
 - Not implemented yet:
-  - Real rsync transfer execution pipeline (M4)
+  - Remote file open/edit and sync-back workflow
 
 ## Roadmap
 
-- M4: Rsync transfer queue (serial execution, status, logs)
 - M5: Polish, hardening, packaging
 
 ## License

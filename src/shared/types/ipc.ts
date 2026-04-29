@@ -1,4 +1,4 @@
-import type { ConnectionConfig, RemoteFileEntry, ServerProfile } from "./models";
+import type { ConnectionConfig, RemoteFileEntry, ServerProfile, TransferTask } from "./models";
 import type { LocalFileEntry } from "./models";
 
 export type LocalErrorCode = "NOT_FOUND" | "PERMISSION_DENIED" | "NOT_DIRECTORY" | "OPEN_FAILED" | "UNKNOWN";
@@ -30,7 +30,12 @@ export type RemoteErrorCode =
   | "CREDENTIAL_SAVE_FAILED"
   | "CREDENTIAL_LOAD_FAILED"
   | "CREDENTIAL_DELETE_FAILED"
-  | "CREDENTIAL_UNAVAILABLE";
+  | "CREDENTIAL_UNAVAILABLE"
+  | "TRANSFER_INVALID_REQUEST"
+  | "TRANSFER_PRECHECK_FAILED"
+  | "TRANSFER_NOT_FOUND"
+  | "TRANSFER_NOT_RUNNING"
+  | "TRANSFER_QUEUE_ERROR";
 
 export interface RemoteErrorPayload {
   code: RemoteErrorCode;
@@ -70,6 +75,34 @@ export interface RemoteListDirectoryResponse {
   entries: RemoteFileEntry[];
 }
 
+export type EnqueueUploadRequest = {
+  tabId: string;
+  profileId?: string;
+  connectionId?: string;
+  host: string;
+  port: number;
+  username: string;
+  authType?: "password" | "privateKey";
+  localSources: string[];
+  remoteDestinationDir: string;
+};
+
+export type EnqueueDownloadRequest = {
+  tabId: string;
+  profileId?: string;
+  connectionId?: string;
+  host: string;
+  port: number;
+  username: string;
+  authType?: "password" | "privateKey";
+  remoteSources: string[];
+  localDestinationDir: string;
+};
+
+export type TransferUpdatePayload = {
+  tasks: TransferTask[];
+};
+
 /** Sent from Site Manager to create/update a profile; password is never persisted in profiles.json. */
 export type ProfileUpsertPayload = {
   id?: string;
@@ -96,10 +129,13 @@ export interface IpcApi {
     getHomeDirectory: (request: { connectionId: string }) => Promise<IpcResponse<{ homePath: string }>>;
   };
   transfer: {
-    enqueueUpload: (request: { tabId: string; sources: string[]; target: string }) => Promise<unknown>;
-    enqueueDownload: (request: { tabId: string; sources: string[]; target: string }) => Promise<unknown>;
-    cancel: (request: { taskId: string }) => Promise<void>;
-    onUpdate: (handler: (payload: unknown) => void) => () => void;
+    enqueueUpload: (request: EnqueueUploadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueDownload: (request: EnqueueDownloadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    cancel: (request: { taskId: string }) => Promise<IpcResponse<{ canceled: true }>>;
+    stop: (request: { taskId: string }) => Promise<IpcResponse<{ stopped: true }>>;
+    list: () => Promise<IpcResponse<TransferTask[]>>;
+    clearCompleted: () => Promise<IpcResponse<{ cleared: number }>>;
+    onUpdate: (handler: (payload: TransferUpdatePayload) => void) => () => void;
   };
   settings: {
     get: () => Promise<unknown>;

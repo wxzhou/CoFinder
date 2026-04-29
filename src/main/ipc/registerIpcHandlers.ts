@@ -1,4 +1,4 @@
-import { app, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { IPC_CHANNELS } from "./channels";
 import { LocalFileService } from "../services/LocalFileService";
@@ -10,12 +10,15 @@ import { CredentialService } from "../services/CredentialService";
 import { ProfileRepository, defaultCredentialsPath, defaultProfilesPath } from "../services/ProfileRepository";
 import { SafeStorageCredentialProvider } from "../services/SafeStorageCredentialProvider";
 import type {
+  EnqueueDownloadRequest,
+  EnqueueUploadRequest,
   IpcFailureResponse,
   IpcResponse,
   LocalErrorPayload,
   ProfileUpsertPayload,
   RemoteConnectRequest,
   RemoteConnectResponse,
+  TransferUpdatePayload,
   RemoteListDirectoryRequest,
   RemoteListDirectoryResponse
 } from "../../shared/types/ipc";
@@ -31,6 +34,12 @@ const userData = app.getPath("userData");
 const profileRepository = new ProfileRepository(defaultProfilesPath(userData));
 const credentialProvider = new SafeStorageCredentialProvider(defaultCredentialsPath(userData));
 const credentialService = new CredentialService(credentialProvider);
+
+transferQueueService.onUpdate((payload: TransferUpdatePayload) => {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(IPC_CHANNELS.transfer.onUpdate, payload);
+  }
+});
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.local.listDirectory, async (_event, request: { path: string }) => {
@@ -106,18 +115,54 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(
     IPC_CHANNELS.transfer.enqueueUpload,
-    (_event, request: { tabId: string; sources: string[]; target: string }) =>
-      transferQueueService.enqueueUpload(request.tabId, request.sources, request.target)
+    async (_event, request: EnqueueUploadRequest): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const data = await transferQueueService.enqueueUpload(request);
+        return { ok: true, data };
+      } catch (error) {
+        return toTransferIpcError(error);
+      }
+    }
   );
 
   ipcMain.handle(
     IPC_CHANNELS.transfer.enqueueDownload,
-    (_event, request: { tabId: string; sources: string[]; target: string }) =>
-      transferQueueService.enqueueDownload(request.tabId, request.sources, request.target)
+    async (_event, request: EnqueueDownloadRequest): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const data = await transferQueueService.enqueueDownload(request);
+        return { ok: true, data };
+      } catch (error) {
+        return toTransferIpcError(error);
+      }
+    }
   );
 
-  ipcMain.handle(IPC_CHANNELS.transfer.cancel, (_event, request: { taskId: string }) =>
-    transferQueueService.cancel(request.taskId)
+  ipcMain.handle(IPC_CHANNELS.transfer.cancel, async (_event, request: { taskId: string }) => {
+    try {
+      const data = await transferQueueService.cancel(request.taskId);
+      return { ok: true, data };
+    } catch (error) {
+      return toTransferIpcError(error);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.transfer.stop, async (_event, request: { taskId: string }) => {
+    try {
+      const data = await transferQueueService.stop(request.taskId);
+      return { ok: true, data };
+    } catch (error) {
+      return toTransferIpcError(error);
+    }
+  });
+
+  ipcMain.handle(IPC_CHANNELS.transfer.list, (): IpcResponse<ReturnType<typeof transferQueueService.list>> => ({
+    ok: true,
+    data: transferQueueService.list()
+  }));
+
+  ipcMain.handle(
+    IPC_CHANNELS.transfer.clearCompleted,
+    (): IpcResponse<{ cleared: number }> => ({ ok: true, data: transferQueueService.clearCompleted() })
   );
 
   ipcMain.handle(IPC_CHANNELS.settings.get, () => settingsService.get());
@@ -336,4 +381,35 @@ function toIpcResponseError(error: unknown): IpcFailureResponse {
     };
   }
   return base;
+}
+
+function toTransferIpcError(error: unknown): IpcFailureResponse {
+  if (typeof error === "object" && error !== null && "code" in error && "message" in error) {
+    const code = String((error as { code: unknown }).code);
+    const mapped =
+      code === "TRANSFER_INVALID_REQUEST"
+        ? "TRANSFER_INVALID_REQUEST"
+        : code === "TRANSFER_PRECHECK_FAILED"
+          ? "TRANSFER_PRECHECK_FAILED"
+          : code === "TRANSFER_NOT_FOUND"
+            ? "TRANSFER_NOT_FOUND"
+            : code === "TRANSFER_NOT_RUNNING"
+              ? "TRANSFER_NOT_RUNNING"
+              : "TRANSFER_QUEUE_ERROR";
+    return {
+      ok: false,
+      error: {
+        code: mapped,
+        message: String((error as { message: unknown }).message),
+        detail: "detail" in error ? String((error as { detail?: unknown }).detail) : undefined
+      }
+    };
+  }
+  return {
+    ok: false,
+    error: {
+      code: "TRANSFER_QUEUE_ERROR",
+      message: "Unexpected transfer queue error."
+    }
+  };
 }

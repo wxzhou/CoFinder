@@ -16,8 +16,12 @@ const api: IpcApi = {
     enqueueUpload: (request) => ipcRenderer.invoke("transfer:enqueueUpload", request),
     enqueueDownload: (request) => ipcRenderer.invoke("transfer:enqueueDownload", request),
     cancel: (request) => ipcRenderer.invoke("transfer:cancel", request),
+    stop: (request) => ipcRenderer.invoke("transfer:stop", request),
+    list: () => ipcRenderer.invoke("transfer:list"),
+    clearCompleted: () => ipcRenderer.invoke("transfer:clearCompleted"),
     onUpdate: (handler) => {
-      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => handler(payload);
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) =>
+        handler(payload as Parameters<typeof handler>[0]);
       ipcRenderer.on("transfer:onUpdate", wrapped);
       return () => ipcRenderer.off("transfer:onUpdate", wrapped);
     }

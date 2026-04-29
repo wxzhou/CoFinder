@@ -13,6 +13,9 @@ export const IPC_CHANNELS = {
     enqueueUpload: "transfer:enqueueUpload",
     enqueueDownload: "transfer:enqueueDownload",
     cancel: "transfer:cancel",
+    stop: "transfer:stop",
+    list: "transfer:list",
+    clearCompleted: "transfer:clearCompleted",
     onUpdate: "transfer:onUpdate"
   },
   settings: {

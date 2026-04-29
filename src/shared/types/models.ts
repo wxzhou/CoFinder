@@ -5,10 +5,10 @@ export type TransferDirection = "upload" | "download";
 export type TransferStatus =
   | "pending"
   | "running"
-  | "paused"
   | "success"
   | "failed"
-  | "canceled";
+  | "canceled"
+  | "stopped";
 
 export interface FileEntry {
   name: string;
@@ -107,10 +107,25 @@ export interface TransferTask {
   tabId: string;
   direction: TransferDirection;
   source: string;
-  target: string;
+  destination: string;
+  sourceDisplay: string;
+  destinationDisplay: string;
+  profileId?: string;
+  connectionId?: string;
+  host: string;
+  port: number;
+  username: string;
+  remotePath: string;
+  localPath: string;
   status: TransferStatus;
   progressText?: string;
+  percent?: number;
   speed?: string;
+  eta?: string;
   currentFile?: string;
   rawLog: string[];
+  createdAt: number;
+  startedAt?: number;
+  finishedAt?: number;
+  error?: string;
 }
