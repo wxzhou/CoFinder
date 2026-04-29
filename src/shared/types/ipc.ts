@@ -22,7 +22,15 @@ export type RemoteErrorCode =
   | "REMOTE_LIST_FAILED"
   | "REMOTE_DISCONNECTED"
   | "REMOTE_UNKNOWN_ERROR"
-  | "REMOTE_INVALID_INPUT";
+  | "REMOTE_INVALID_INPUT"
+  | "PROFILE_LOAD_FAILED"
+  | "PROFILE_SAVE_FAILED"
+  | "PROFILE_DELETE_FAILED"
+  | "PROFILE_INVALID"
+  | "CREDENTIAL_SAVE_FAILED"
+  | "CREDENTIAL_LOAD_FAILED"
+  | "CREDENTIAL_DELETE_FAILED"
+  | "CREDENTIAL_UNAVAILABLE";
 
 export interface RemoteErrorPayload {
   code: RemoteErrorCode;
@@ -62,6 +70,20 @@ export interface RemoteListDirectoryResponse {
   entries: RemoteFileEntry[];
 }
 
+/** Sent from Site Manager to create/update a profile; password is never persisted in profiles.json. */
+export type ProfileUpsertPayload = {
+  id?: string;
+  alias: string;
+  host: string;
+  port: number;
+  username: string;
+  defaultRemotePath?: string;
+  authType: "password" | "privateKey";
+  privateKeyPath?: string;
+  password?: string;
+  savePassword: boolean;
+};
+
 export interface IpcApi {
   local: {
     listDirectory: (request: { path: string }) => Promise<LocalListDirectoryResponse>;
@@ -84,8 +106,12 @@ export interface IpcApi {
     set: (request: unknown) => Promise<void>;
   };
   profiles: {
-    list: () => Promise<ServerProfile[]>;
-    save: (request: ServerProfile) => Promise<ServerProfile>;
-    delete: (request: { id: string }) => Promise<void>;
+    list: () => Promise<IpcResponse<ServerProfile[]>>;
+    save: (request: ProfileUpsertPayload) => Promise<IpcResponse<ServerProfile>>;
+    update: (request: ProfileUpsertPayload) => Promise<IpcResponse<ServerProfile>>;
+    delete: (request: { id: string }) => Promise<IpcResponse<{ deleted: true }>>;
+  };
+  credentials: {
+    isAvailable: () => Promise<IpcResponse<{ available: boolean }>>;
   };
 }

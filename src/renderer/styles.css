@@ -339,6 +339,219 @@ body,
   align-items: center;
 }
 
+.remote-disconnected-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+  min-height: 0;
+}
+
+.placeholder-pane {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--text-secondary);
+  flex: 1;
+  min-height: 0;
+}
+
+.placeholder-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.placeholder-body {
+  font-size: 12px;
+}
+
+.placeholder-action {
+  width: fit-content;
+}
+
+.remote-connecting-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.site-manager-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: color-mix(in srgb, #000 35%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3);
+}
+
+.site-manager-dialog {
+  width: min(880px, 96vw);
+  max-height: min(640px, 92vh);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-pane, #f6f6f6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 12px 40px color-mix(in srgb, #000 18%, transparent);
+  overflow: hidden;
+}
+
+.site-manager-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--separator);
+  background: var(--bg-surface-subtle, #eee);
+}
+
+.site-manager-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.site-manager-close {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.site-manager-body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  min-height: 360px;
+  max-height: min(560px, 80vh);
+}
+
+.site-manager-sites {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--separator);
+  min-height: 0;
+  background: #fff;
+}
+
+.site-manager-sites-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--separator);
+}
+
+.site-manager-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  flex: 1;
+}
+
+.site-manager-list-error {
+  margin: var(--space-2);
+}
+
+.site-manager-empty {
+  padding: var(--space-3);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.site-manager-list-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  padding: 8px var(--space-2);
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.site-manager-list-item:hover {
+  background: color-mix(in srgb, var(--bg-hover) 50%, transparent);
+}
+
+.site-manager-list-item.is-selected {
+  background: color-mix(in srgb, var(--bg-selected) 55%, transparent);
+}
+
+.site-manager-list-primary {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.site-manager-list-secondary {
+  font-size: 11px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.site-manager-form-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  overflow: auto;
+  min-height: 0;
+  background: #fff;
+}
+
+.site-manager-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+}
+
+.site-manager-span-2 {
+  grid-column: span 2;
+}
+
+.site-manager-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.site-manager-grid input,
+.site-manager-grid select {
+  height: var(--control-h);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 0 7px;
+  background: #fff;
+  font-size: 12px;
+}
+
+.site-manager-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.site-manager-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: var(--space-2);
+}
+
 .connect-form {
   display: flex;
   flex-direction: column;

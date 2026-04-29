@@ -1,21 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
-import type { LocalErrorPayload, RemoteConnectRequest } from "../shared/types/ipc";
-import type { LocalFileEntry, RemoteFileEntry, SortDirection, SortKey, TransferStatus } from "../shared/types/models";
+import { SiteManagerModal } from "./components/SiteManagerModal";
+import type { LocalErrorPayload, ProfileUpsertPayload, RemoteConnectRequest } from "../shared/types/ipc";
+import type { LocalFileEntry, RemoteFileEntry, ServerProfile, SortDirection, SortKey, TransferStatus } from "../shared/types/models";
 
 type HistoryState = {
   backStack: string[];
   forwardStack: string[];
 };
 
-type ConnectFormState = {
-  alias: string;
-  host: string;
-  port: string;
-  username: string;
-  initialPath: string;
-  saveProfile: boolean;
-};
 type RemoteConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
 type LocalPaneState = {
   currentPath: string;
@@ -30,6 +23,8 @@ type LocalPaneState = {
 type RemotePaneState = {
   connectionStatus: RemoteConnectionStatus;
   connectionId: string | null;
+  /** Last profile id used for this connection, if any */
+  activeProfileId: string | null;
   homePath: string;
   currentPath: string;
   pathInput: string;
@@ -39,7 +34,18 @@ type RemotePaneState = {
   sortDirection: SortDirection;
   history: HistoryState;
   error: string;
-  connectForm: ConnectFormState;
+};
+
+type SiteManagerTabState = {
+  open: boolean;
+  profiles: ServerProfile[];
+  selectedProfileId: string | null;
+  draft: ProfileUpsertPayload;
+  passwordDirty: boolean;
+  listError: string;
+  modalError: string;
+  busy: "idle" | "load" | "save" | "login" | "delete";
+  credentialAvailable: boolean;
 };
 type UiTabState = {
   id: string;
@@ -69,13 +75,16 @@ export function App() {
     return {
       firstTabId,
       tabs: [createTabState(firstTabId, 1)],
-      activeTabId: firstTabId,
-      remotePasswordDrafts: { [firstTabId]: "" } as Record<string, string>
+      activeTabId: firstTabId
     };
   });
   const [tabs, setTabs] = useState<UiTabState[]>(tabState.tabs);
   const [activeTabId, setActiveTabId] = useState<string>(tabState.activeTabId);
-  const [remotePasswordDrafts, setRemotePasswordDrafts] = useState<Record<string, string>>(tabState.remotePasswordDrafts);
+  const [siteManagerByTab, setSiteManagerByTab] = useState<Record<string, SiteManagerTabState>>({});
+  const siteManagerRef = useRef(siteManagerByTab);
+  useEffect(() => {
+    siteManagerRef.current = siteManagerByTab;
+  }, [siteManagerByTab]);
   const [queuePanelState, setQueuePanelState] = useState<QueuePanelState>("hidden");
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [mockTasks, setMockTasks] = useState<MockTransferTask[]>([]);
@@ -278,96 +287,113 @@ export function App() {
     return `${queueStats.activeCount} active, ${queueStats.queuedCount} queued`;
   }
 
-  async function connectRemote(tabId: string): Promise<void> {
-    const tab = tabs.find((item) => item.id === tabId);
-    if (!tab) return;
-    const host = tab.remotePane.connectForm.host.trim();
-    const username = tab.remotePane.connectForm.username.trim();
-    const password = remotePasswordDrafts[tabId] ?? "";
-    const port = Number(tab.remotePane.connectForm.port);
-
-    if (!host) {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Host is required." } } : item
-        )
-      );
-      return;
-    }
-    if (!username) {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Username is required." } } : item
-        )
-      );
-      return;
-    }
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId
-            ? { ...item, remotePane: { ...item.remotePane, error: "Port must be between 1 and 65535." } }
-            : item
-        )
-      );
-      return;
-    }
-    if (!password.trim()) {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Password is required." } } : item
-        )
-      );
-      return;
-    }
-
-    const payload: RemoteConnectRequest = {
-      alias: tab.remotePane.connectForm.alias.trim() || undefined,
-      host,
-      port,
-      username,
-      password,
-      defaultRemotePath: tab.remotePane.connectForm.initialPath.trim() || undefined,
-      saveProfile: tab.remotePane.connectForm.saveProfile
+  function emptyProfileDraft(): ProfileUpsertPayload {
+    return {
+      alias: "",
+      host: "",
+      port: 22,
+      username: "",
+      defaultRemotePath: "",
+      authType: "password",
+      privateKeyPath: "",
+      password: "",
+      savePassword: false
     };
+  }
 
-    setTabs((prev) =>
-      prev.map((item) =>
-        item.id === tabId
-          ? { ...item, remotePane: { ...item.remotePane, connectionStatus: "connecting", error: "" } }
-          : item
-      )
-    );
+  function profileToDraft(profile: ServerProfile): ProfileUpsertPayload {
+    return {
+      id: profile.id,
+      alias: profile.alias,
+      host: profile.host,
+      port: profile.port,
+      username: profile.username,
+      defaultRemotePath: profile.defaultRemotePath ?? "",
+      authType: profile.authType,
+      privateKeyPath: profile.privateKeyPath ?? "",
+      password: "",
+      savePassword: !!profile.hasSavedPassword
+    };
+  }
 
-    const connectResult = await window.cofinder.remote.connect(payload);
-    if (!connectResult.ok) {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId
-            ? {
-                ...item,
-                remotePane: {
-                  ...item.remotePane,
-                  connectionStatus: "failed",
-                  error: connectResult.error.message
-                }
-              }
-            : item
-        )
-      );
-      return;
-    }
+  function closeSiteManagerForTab(tabId: string): void {
+    setSiteManagerByTab((prev) => {
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
+  }
 
-    const { connectionId, homePath } = connectResult.data;
+  async function refreshSiteManagerForTab(tabId: string): Promise<void> {
+    const [listRes, credRes] = await Promise.all([
+      window.cofinder.profiles.list(),
+      window.cofinder.credentials.isAvailable()
+    ]);
+    setSiteManagerByTab((prev) => {
+      const cur = prev[tabId];
+      if (!cur?.open) return prev;
+      const credentialAvailable = credRes.ok ? credRes.data.available : false;
+      if (!listRes.ok) {
+        return {
+          ...prev,
+          [tabId]: {
+            ...cur,
+            busy: "idle",
+            listError: listRes.error.message,
+            profiles: [],
+            credentialAvailable
+          }
+        };
+      }
+      return {
+        ...prev,
+        [tabId]: {
+          ...cur,
+          busy: "idle",
+          profiles: listRes.data,
+          listError: "",
+          credentialAvailable
+        }
+      };
+    });
+  }
+
+  function openSiteManagerForTab(tabId: string): void {
+    setSiteManagerByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        open: true,
+        profiles: [],
+        selectedProfileId: null,
+        draft: emptyProfileDraft(),
+        passwordDirty: false,
+        listError: "",
+        modalError: "",
+        busy: "load",
+        credentialAvailable: false
+      }
+    }));
+    void refreshSiteManagerForTab(tabId);
+  }
+
+  async function finalizeRemoteConnection(
+    tabId: string,
+    connectionId: string,
+    homePath: string,
+    initialPath: string,
+    titleLabel: string,
+    activeProfileId: string | null
+  ): Promise<void> {
     setTabs((prev) =>
       prev.map((item) =>
         item.id === tabId && item.remotePane.connectionStatus === "connecting"
           ? {
               ...item,
-              title: tab.remotePane.connectForm.alias.trim() || host,
+              title: titleLabel,
               remotePane: {
                 ...item.remotePane,
                 connectionId,
+                activeProfileId,
                 homePath: homePath || "/",
                 connectionStatus: "connected"
               }
@@ -375,7 +401,6 @@ export function App() {
           : item
       )
     );
-    const initialPath = tab.remotePane.connectForm.initialPath.trim() || homePath || "/";
     const listed = await listRemotePath(connectionId, initialPath, "replace", tabId);
     if (!listed) {
       setTabs((prev) =>
@@ -394,6 +419,285 @@ export function App() {
         )
       );
     }
+  }
+
+  async function handleSiteManagerLogin(tabId: string): Promise<void> {
+    const sm = siteManagerRef.current[tabId];
+    if (!sm?.open) return;
+    const { draft, profiles } = sm;
+    const host = draft.host.trim();
+    const username = draft.username.trim();
+    const port = draft.port;
+    const pwd = (draft.password ?? "").trim();
+    const hasStored = draft.id ? profiles.some((p) => p.id === draft.id && p.hasSavedPassword) : false;
+
+    if (draft.authType === "privateKey") {
+      setSiteManagerByTab((prev) => ({
+        ...prev,
+        [tabId]: { ...sm, modalError: "Private key authentication is not supported yet." }
+      }));
+      return;
+    }
+    if (!host) {
+      setSiteManagerByTab((prev) => ({ ...prev, [tabId]: { ...sm, modalError: "Host is required." } }));
+      return;
+    }
+    if (!username) {
+      setSiteManagerByTab((prev) => ({ ...prev, [tabId]: { ...sm, modalError: "Username is required." } }));
+      return;
+    }
+    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+      setSiteManagerByTab((prev) => ({
+        ...prev,
+        [tabId]: { ...sm, modalError: "Port must be between 1 and 65535." }
+      }));
+      return;
+    }
+    if (!pwd && !hasStored) {
+      setSiteManagerByTab((prev) => ({
+        ...prev,
+        [tabId]: { ...sm, modalError: "Password is required, or choose a site with a saved password." }
+      }));
+      return;
+    }
+
+    setSiteManagerByTab((prev) => ({
+      ...prev,
+      [tabId]: { ...sm, busy: "login", modalError: "" }
+    }));
+
+    let profileId = draft.id;
+    let connectPassword: string | undefined = pwd || undefined;
+
+    if (draft.savePassword && pwd) {
+      const saveRes = await window.cofinder.profiles.save({
+        ...draft,
+        host,
+        username,
+        port,
+        password: pwd,
+        savePassword: true,
+        defaultRemotePath: draft.defaultRemotePath?.trim() || undefined
+      });
+      if (!saveRes.ok) {
+        setSiteManagerByTab((prev) => ({
+          ...prev,
+          [tabId]: { ...(prev[tabId] ?? sm), busy: "idle", modalError: saveRes.error.message }
+        }));
+        return;
+      }
+      profileId = saveRes.data.id;
+      connectPassword = undefined;
+      void refreshSiteManagerForTab(tabId);
+    }
+
+    const defaultPath = draft.defaultRemotePath?.trim() || undefined;
+
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId
+          ? { ...item, remotePane: { ...item.remotePane, connectionStatus: "connecting", error: "" } }
+          : item
+      )
+    );
+
+    const connectPayload: RemoteConnectRequest = {
+      profileId: profileId || undefined,
+      host,
+      port,
+      username,
+      password: connectPassword,
+      defaultRemotePath: defaultPath,
+      authType: "password"
+    };
+
+    const connectResult = await window.cofinder.remote.connect(connectPayload);
+    if (!connectResult.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId
+            ? {
+                ...item,
+                remotePane: {
+                  ...item.remotePane,
+                  connectionStatus: "failed",
+                  error: connectResult.error.message
+                }
+              }
+            : item
+        )
+      );
+      setSiteManagerByTab((prev) => ({
+        ...prev,
+        [tabId]: {
+          ...(prev[tabId] ?? sm),
+          busy: "idle",
+          modalError: connectResult.error.message
+        }
+      }));
+      return;
+    }
+
+    const { connectionId, homePath } = connectResult.data;
+    const titleLabel = draft.alias.trim() || `${username}@${host}:${port}`;
+    const initialPath = defaultPath || homePath || "/";
+
+    closeSiteManagerForTab(tabId);
+
+    await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, titleLabel, profileId ?? null);
+  }
+
+  async function handleSiteManagerSave(tabId: string): Promise<void> {
+    const sm = siteManagerRef.current[tabId];
+    if (!sm?.open) return;
+    const { draft } = sm;
+    setSiteManagerByTab((prev) => ({
+      ...prev,
+      [tabId]: { ...sm, busy: "save", modalError: "" }
+    }));
+    const res = await window.cofinder.profiles.save({
+      ...draft,
+      host: draft.host.trim(),
+      username: draft.username.trim(),
+      defaultRemotePath: draft.defaultRemotePath?.trim() || undefined
+    });
+    if (!res.ok) {
+      setSiteManagerByTab((prev) => ({
+        ...prev,
+        [tabId]: { ...(prev[tabId] ?? sm), busy: "idle", modalError: res.error.message }
+      }));
+      return;
+    }
+    const saved = res.data;
+    await refreshSiteManagerForTab(tabId);
+    setSiteManagerByTab((prev) => {
+      const cur = prev[tabId];
+      if (!cur) return prev;
+      return {
+        ...prev,
+        [tabId]: {
+          ...cur,
+          busy: "idle",
+          selectedProfileId: saved.id,
+          draft: profileToDraft(saved),
+          passwordDirty: false,
+          modalError: ""
+        }
+      };
+    });
+  }
+
+  function handleSiteManagerNew(tabId: string): void {
+    setSiteManagerByTab((prev) => {
+      const cur = prev[tabId];
+      if (!cur) return prev;
+      return {
+        ...prev,
+        [tabId]: {
+          ...cur,
+          selectedProfileId: null,
+          draft: emptyProfileDraft(),
+          passwordDirty: false,
+          modalError: ""
+        }
+      };
+    });
+  }
+
+  function handleSiteManagerDuplicate(tabId: string): void {
+    setSiteManagerByTab((prev) => {
+      const cur = prev[tabId];
+      if (!cur?.draft.id) return prev;
+      const d = cur.draft;
+      const baseAlias = (d.alias || d.username || "Site").trim();
+      return {
+        ...prev,
+        [tabId]: {
+          ...cur,
+          selectedProfileId: null,
+          passwordDirty: false,
+          modalError: "",
+          draft: {
+            ...emptyProfileDraft(),
+            alias: `${baseAlias} copy`,
+            host: d.host,
+            port: d.port,
+            username: d.username,
+            defaultRemotePath: d.defaultRemotePath ?? "",
+            authType: "password",
+            savePassword: false,
+            password: ""
+          }
+        }
+      };
+    });
+  }
+
+  function handleSiteManagerSelectProfile(tabId: string, profile: ServerProfile): void {
+    setSiteManagerByTab((prev) => {
+      const cur = prev[tabId];
+      if (!cur) return prev;
+      return {
+        ...prev,
+        [tabId]: {
+          ...cur,
+          selectedProfileId: profile.id,
+          draft: profileToDraft(profile),
+          passwordDirty: false,
+          modalError: ""
+        }
+      };
+    });
+  }
+
+  function patchSiteManagerDraft(tabId: string, patch: Partial<ProfileUpsertPayload>): void {
+    setSiteManagerByTab((prev) => {
+      const cur = prev[tabId];
+      if (!cur) return prev;
+      return { ...prev, [tabId]: { ...cur, draft: { ...cur.draft, ...patch } } };
+    });
+  }
+
+  function setSiteManagerPasswordInput(tabId: string, value: string): void {
+    setSiteManagerByTab((prev) => {
+      const cur = prev[tabId];
+      if (!cur) return prev;
+      return { ...prev, [tabId]: { ...cur, draft: { ...cur.draft, password: value }, passwordDirty: true } };
+    });
+  }
+
+  async function handleSiteManagerDelete(tabId: string): Promise<void> {
+    const sm = siteManagerRef.current[tabId];
+    if (!sm?.open || !sm.draft.id) return;
+    if (!window.confirm("Delete this saved site and its stored password?")) return;
+    setSiteManagerByTab((prev) => ({
+      ...prev,
+      [tabId]: { ...sm, busy: "delete", modalError: "" }
+    }));
+    const res = await window.cofinder.profiles.delete({ id: sm.draft.id });
+    if (!res.ok) {
+      setSiteManagerByTab((prev) => ({
+        ...prev,
+        [tabId]: { ...(prev[tabId] ?? sm), busy: "idle", modalError: res.error.message }
+      }));
+      return;
+    }
+    await refreshSiteManagerForTab(tabId);
+    setSiteManagerByTab((prev) => {
+      const cur = prev[tabId];
+      if (!cur) return prev;
+      return {
+        ...prev,
+        [tabId]: {
+          ...cur,
+          busy: "idle",
+          selectedProfileId: null,
+          draft: emptyProfileDraft(),
+          passwordDirty: false,
+          modalError: ""
+        }
+      };
+    });
   }
 
   async function listRemotePath(
@@ -487,7 +791,6 @@ export function App() {
   function createTab(): void {
     const id = createId();
     setTabs((prev) => [...prev, createTabState(id, prev.length + 1)]);
-    setRemotePasswordDrafts((prev) => ({ ...prev, [id]: "" }));
     setActiveTabId(id);
     void navigateLocal(id, "", "replace");
   }
@@ -514,7 +817,7 @@ export function App() {
       }
       return next;
     });
-    setRemotePasswordDrafts((prev) => {
+    setSiteManagerByTab((prev) => {
       const next = { ...prev };
       delete next[tabId];
       return next;
@@ -534,6 +837,8 @@ export function App() {
       }
     ]);
   }
+
+  const activeSiteManager = siteManagerByTab[activeTab.id];
 
   return (
     <div className="app-shell">
@@ -695,167 +1000,26 @@ export function App() {
         <section className="splitter" />
         <section className="pane remote-pane">
           {!(remotePane.connectionStatus === "connected" && remotePane.connectionId) ? (
-            <form
-              className="connect-form"
-              onSubmit={(event) => {
-                event.preventDefault();
-                void connectRemote(activeTab.id);
-              }}
-            >
-              <p className="connect-form-lead">Enter server details to connect.</p>
-              <div className="connect-grid">
-                <label>
-                  Alias
-                  <input
-                    value={remotePane.connectForm.alias}
-                    onChange={(event) =>
-                      setTabs((prev) =>
-                        prev.map((tab) =>
-                          tab.id === activeTab.id
-                            ? {
-                                ...tab,
-                                remotePane: {
-                                  ...tab.remotePane,
-                                  connectForm: { ...tab.remotePane.connectForm, alias: event.target.value }
-                                }
-                              }
-                            : tab
-                        )
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  Host *
-                  <input
-                    required
-                    value={remotePane.connectForm.host}
-                    onChange={(event) =>
-                      setTabs((prev) =>
-                        prev.map((tab) =>
-                          tab.id === activeTab.id
-                            ? {
-                                ...tab,
-                                remotePane: {
-                                  ...tab.remotePane,
-                                  connectForm: { ...tab.remotePane.connectForm, host: event.target.value }
-                                }
-                              }
-                            : tab
-                        )
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  Port *
-                  <input
-                    required
-                    value={remotePane.connectForm.port}
-                    onChange={(event) =>
-                      setTabs((prev) =>
-                        prev.map((tab) =>
-                          tab.id === activeTab.id
-                            ? {
-                                ...tab,
-                                remotePane: {
-                                  ...tab.remotePane,
-                                  connectForm: { ...tab.remotePane.connectForm, port: event.target.value }
-                                }
-                              }
-                            : tab
-                        )
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  Username *
-                  <input
-                    required
-                    value={remotePane.connectForm.username}
-                    onChange={(event) =>
-                      setTabs((prev) =>
-                        prev.map((tab) =>
-                          tab.id === activeTab.id
-                            ? {
-                                ...tab,
-                                remotePane: {
-                                  ...tab.remotePane,
-                                  connectForm: { ...tab.remotePane.connectForm, username: event.target.value }
-                                }
-                              }
-                            : tab
-                        )
-                      )
-                    }
-                  />
-                </label>
-                <label>
-                  Password *
-                  <input
-                    required
-                    type="password"
-                    value={remotePasswordDrafts[activeTab.id] ?? ""}
-                    onChange={(event) =>
-                      setRemotePasswordDrafts((prev) => ({
-                        ...prev,
-                        [activeTab.id]: event.target.value
-                      }))
-                    }
-                  />
-                </label>
-                <label>
-                  Initial path
-                  <input
-                    value={remotePane.connectForm.initialPath}
-                    onChange={(event) =>
-                      setTabs((prev) =>
-                        prev.map((tab) =>
-                          tab.id === activeTab.id
-                            ? {
-                                ...tab,
-                                remotePane: {
-                                  ...tab.remotePane,
-                                  connectForm: { ...tab.remotePane.connectForm, initialPath: event.target.value }
-                                }
-                              }
-                            : tab
-                        )
-                      )
-                    }
-                  />
-                </label>
-              </div>
-              <label className="checkbox-row">
-                <input
-                  type="checkbox"
-                  checked={remotePane.connectForm.saveProfile}
-                  onChange={(event) =>
-                    setTabs((prev) =>
-                      prev.map((tab) =>
-                        tab.id === activeTab.id
-                          ? {
-                              ...tab,
-                              remotePane: {
-                                ...tab.remotePane,
-                                connectForm: { ...tab.remotePane.connectForm, saveProfile: event.target.checked }
-                              }
-                            }
-                          : tab
-                      )
-                    )
-                  }
-                />
-                Save profile (without password)
-              </label>
-              {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
-              <div className="connect-actions">
-                <button type="submit" className="toolbar-button">
-                  {remotePane.connectionStatus === "connecting" ? "Connecting..." : "Connect"}
+            <div className="remote-disconnected-wrap">
+              <div className="placeholder-pane">
+                <div className="placeholder-title">Not connected</div>
+                <div className="placeholder-body">Connect to a server to browse remote files.</div>
+                <button
+                  type="button"
+                  className="toolbar-button placeholder-action"
+                  disabled={remotePane.connectionStatus === "connecting"}
+                  onClick={() => openSiteManagerForTab(activeTab.id)}
+                >
+                  Connect...
                 </button>
               </div>
-            </form>
+              {remotePane.connectionStatus === "connecting" ? (
+                <p className="remote-connecting-hint">Connecting…</p>
+              ) : null}
+              {remotePane.connectionStatus === "failed" && remotePane.error ? (
+                <div className="error-banner">{remotePane.error}</div>
+              ) : null}
+            </div>
           ) : null}
 
           {remotePane.connectionStatus === "connected" && remotePane.connectionId ? (
@@ -1099,6 +1263,28 @@ export function App() {
           )}
         </section>
       ) : null}
+      {activeSiteManager?.open ? (
+        <SiteManagerModal
+          open={activeSiteManager.open}
+          profiles={activeSiteManager.profiles}
+          draft={activeSiteManager.draft}
+          passwordDirty={activeSiteManager.passwordDirty}
+          listError={activeSiteManager.listError}
+          modalError={activeSiteManager.modalError}
+          busy={activeSiteManager.busy}
+          credentialAvailable={activeSiteManager.credentialAvailable}
+          selectedProfileId={activeSiteManager.selectedProfileId}
+          onClose={() => closeSiteManagerForTab(activeTab.id)}
+          onSelectProfile={(profile) => handleSiteManagerSelectProfile(activeTab.id, profile)}
+          onNew={() => handleSiteManagerNew(activeTab.id)}
+          onDuplicate={() => handleSiteManagerDuplicate(activeTab.id)}
+          onDelete={() => void handleSiteManagerDelete(activeTab.id)}
+          onSave={() => void handleSiteManagerSave(activeTab.id)}
+          onLogin={() => void handleSiteManagerLogin(activeTab.id)}
+          onDraftPatch={(patch) => patchSiteManagerDraft(activeTab.id, patch)}
+          onPasswordChange={(value) => setSiteManagerPasswordInput(activeTab.id, value)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1168,6 +1354,7 @@ function createRemotePaneState(): RemotePaneState {
   return {
     connectionStatus: "disconnected",
     connectionId: null,
+    activeProfileId: null,
     homePath: "/",
     currentPath: "/",
     pathInput: "/",
@@ -1176,15 +1363,7 @@ function createRemotePaneState(): RemotePaneState {
     sortKey: "name",
     sortDirection: "asc",
     history: { backStack: [], forwardStack: [] },
-    error: "",
-    connectForm: {
-      alias: "",
-      host: "",
-      port: "22",
-      username: "",
-      initialPath: "",
-      saveProfile: false
-    }
+    error: ""
   };
 }
 

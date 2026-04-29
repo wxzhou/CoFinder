@@ -22,6 +22,10 @@ export const IPC_CHANNELS = {
   profiles: {
     list: "profiles:list",
     save: "profiles:save",
+    update: "profiles:update",
     delete: "profiles:delete"
+  },
+  credentials: {
+    isAvailable: "credentials:isAvailable"
   }
 } as const;

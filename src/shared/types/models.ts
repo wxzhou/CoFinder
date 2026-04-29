@@ -38,6 +38,11 @@ export interface ServerProfile {
   username: string;
   defaultRemotePath?: string;
   authType: "password" | "privateKey";
+  privateKeyPath?: string;
+  /** Runtime-only: set when listing profiles; never persisted in profiles.json */
+  hasSavedPassword?: boolean;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ConnectionConfig {
@@ -48,6 +53,7 @@ export interface ConnectionConfig {
   password?: string;
   privateKeyPath?: string;
   defaultRemotePath?: string;
+  authType?: "password" | "privateKey";
 }
 
 export interface SortState {

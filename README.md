@@ -4,7 +4,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
 
 ## Status
 
-- Current milestone: **M3 completed (multi-tab session isolation)**
+- Current milestone: **M3.5 completed (Site Manager / Login Manager + profile credential management)**
 - Implemented in M0:
   - Electron + Vite + React + TypeScript scaffold
   - main / preload / renderer separation
@@ -45,12 +45,21 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
 - Implemented in M3 (multi-tab session isolation):
   - Tab bar with add/switch/close support and per-tab title lifecycle
   - Independent local pane state per tab (path, history, sort, selection, errors)
-  - Independent remote pane state per tab (connect form, path/history, sort, selection, errors)
+  - Independent remote pane state per tab (connection/path/history/sort/selection/errors)
   - Connection isolation in main process via `Map<connectionId, client>` to prevent tab cross-talk
   - Async stale-result guards in renderer (`tabId` + `connectionId`) to avoid wrong-tab updates
-  - Session-scoped password drafts in renderer state (not persisted in tab model)
-  - Remote connect UX update: default-to-connect form and removal of pre-login placeholder/cancel dead-end
+  - Session-scoped remote state guards to avoid tab cross-contamination
   - App quit hardening: disconnect all active remote sessions on `before-quit`
+- Implemented in M3.5 (Site Manager / Login Manager):
+  - WinSCP-style Site Manager modal for saved-site list + profile editor + Login workflow
+  - Saved profiles CRUD: list/save/update/delete/duplicate from modal
+  - Unconnected remote pane restored to `Not connected` + `Connect...` entry point
+  - Profile persistence in app userData (`profiles.json`) with non-sensitive fields only
+  - Password persistence separated from profiles via credential service
+  - Electron `safeStorage`-backed credential provider (`credentials.enc.json`) with availability guard
+  - Save password option controlled per profile; stored password can be reused for Login
+  - Deleting a profile also removes its associated saved credential
+  - Authentication boundary hardening: password never persisted in profile payloads
 
 ## Tech Stack
 
@@ -111,6 +120,7 @@ src/
   - UI foundation + Transfer Queue display behavior (M1.5 / M1.6)
   - Remote connection and remote pane browsing (M2)
   - Multi-tab session model with isolated tab state (M3)
+  - Site Manager / Login Manager with profile + credential management (M3.5)
 - Not implemented yet:
   - Real rsync transfer execution pipeline (M4)
 

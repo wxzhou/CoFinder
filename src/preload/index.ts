@@ -29,7 +29,11 @@ const api: IpcApi = {
   profiles: {
     list: () => ipcRenderer.invoke("profiles:list"),
     save: (request) => ipcRenderer.invoke("profiles:save", request),
+    update: (request) => ipcRenderer.invoke("profiles:update", request),
     delete: (request) => ipcRenderer.invoke("profiles:delete", request)
+  },
+  credentials: {
+    isAvailable: () => ipcRenderer.invoke("credentials:isAvailable")
   }
 };
 

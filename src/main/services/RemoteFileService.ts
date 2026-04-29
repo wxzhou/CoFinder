@@ -34,6 +34,12 @@ export class RemoteFileService {
     if (!Number.isInteger(config.port) || config.port <= 0 || config.port > 65535) {
       throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Port must be between 1 and 65535.");
     }
+    if (config.authType === "privateKey") {
+      throw new RemoteServiceError(
+        "REMOTE_INVALID_INPUT",
+        "Private key authentication is not supported in this version."
+      );
+    }
     if (!config.password?.trim()) throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Password is required.");
 
     try {
