@@ -8,6 +8,9 @@ import type { TransferTask } from "../../shared/types/models";
 
 type TransferServiceErrorCode = "TRANSFER_INVALID_REQUEST" | "TRANSFER_PRECHECK_FAILED" | "TRANSFER_NOT_FOUND" | "TRANSFER_NOT_RUNNING";
 type TransferServiceError = Error & { code: TransferServiceErrorCode; detail?: string };
+type CommandCheckResult = { ok: true } | { ok: false; message: string; detail?: string };
+type RunCommand = (command: string, args: string[], notFoundMessage: string) => Promise<CommandCheckResult>;
+type SpawnProcess = (command: string, args: string[]) => ChildProcess;
 
 const SAFE_REMOTE_PATH = /^[A-Za-z0-9._/\-@+=,: ]+$/;
 const SAFE_HOST_USER = /^[A-Za-z0-9._-]+$/;
@@ -17,10 +20,27 @@ type RunningContext = {
   child: ChildProcess;
 };
 
+type TransferQueueDeps = {
+  now: () => number;
+  runCommand: RunCommand;
+  spawnProcess: SpawnProcess;
+  pathExists: (fullPath: string) => Promise<boolean>;
+};
+
 export class TransferQueueService {
   private tasks: TransferTask[] = [];
   private running: RunningContext | null = null;
   private listeners = new Set<(payload: TransferUpdatePayload) => void>();
+  private readonly deps: TransferQueueDeps;
+
+  constructor(deps?: Partial<TransferQueueDeps>) {
+    this.deps = {
+      now: deps?.now ?? (() => Date.now()),
+      runCommand: deps?.runCommand ?? runSimpleCommand,
+      spawnProcess: deps?.spawnProcess ?? defaultSpawnProcess,
+      pathExists: deps?.pathExists ?? defaultPathExists
+    };
+  }
 
   onUpdate(listener: (payload: TransferUpdatePayload) => void): () => void {
     this.listeners.add(listener);
@@ -35,16 +55,14 @@ export class TransferQueueService {
   async enqueueUpload(request: EnqueueUploadRequest): Promise<{ queued: true; taskIds: string[] }> {
     validateCommonRequest(request);
     if (request.localSources.length === 0) throw transferError("TRANSFER_INVALID_REQUEST", "Select at least one local file to upload.");
-    await ensureDirExists(request.remoteDestinationDir, "Remote destination");
-    await this.ensureRsyncInstalled();
-    await this.ensureBatchModeLogin(request);
+    validateRsyncPath(request.remoteDestinationDir);
 
     const taskIds: string[] = [];
     for (const source of request.localSources) {
       validateLocalPath(source);
-      await ensurePathExists(source);
+      await ensureExistingPath(this.deps.pathExists, source);
       const sourceName = path.basename(source);
-      const remotePath = normalizeRemotePath(posixPath.join(request.remoteDestinationDir, sourceName));
+      const remotePath = validateRsyncPath(posixPath.join(request.remoteDestinationDir, sourceName));
       const task = this.makeTask({
         tabId: request.tabId,
         direction: "upload",
@@ -74,13 +92,11 @@ export class TransferQueueService {
       throw transferError("TRANSFER_INVALID_REQUEST", "Select at least one remote file to download.");
     }
     validateLocalPath(request.localDestinationDir);
-    await ensurePathExists(request.localDestinationDir);
-    await this.ensureRsyncInstalled();
-    await this.ensureBatchModeLogin(request);
+    await ensureExistingPath(this.deps.pathExists, request.localDestinationDir);
 
     const taskIds: string[] = [];
     for (const source of request.remoteSources) {
-      const remotePath = normalizeRemotePath(source);
+      const remotePath = validateRsyncPath(source);
       const sourceName = posixPath.basename(remotePath);
       const localPath = path.join(request.localDestinationDir, sourceName);
       const task = this.makeTask({
@@ -111,7 +127,7 @@ export class TransferQueueService {
     if (!task) throw transferError("TRANSFER_NOT_FOUND", "Transfer task not found.");
     if (task.status !== "pending") throw transferError("TRANSFER_INVALID_REQUEST", "Only pending task can be canceled.");
     task.status = "canceled";
-    task.finishedAt = Date.now();
+    task.finishedAt = this.deps.now();
     this.appendLog(task, "Task canceled before execution.");
     this.emit();
     return { canceled: true };
@@ -140,7 +156,7 @@ export class TransferQueueService {
       id: randomUUID(),
       status: "pending",
       rawLog: [],
-      createdAt: Date.now(),
+      createdAt: this.deps.now(),
       ...input
     };
   }
@@ -155,29 +171,42 @@ export class TransferQueueService {
 
   private async runTask(task: TransferTask): Promise<void> {
     task.status = "running";
-    task.startedAt = Date.now();
+    task.startedAt = this.deps.now();
     task.error = undefined;
     this.emit();
 
-    const sshSpec = `ssh -p ${task.port} -o BatchMode=yes`;
-    const remoteSpec = buildRsyncRemoteSpec(task.username, task.host, task.remotePath);
+    const rsyncCheck = await this.deps.runCommand("rsync", ["--version"], "rsync is not installed or not found in PATH");
+    if (!rsyncCheck.ok) {
+      this.failTask(task, rsyncCheck.message, rsyncCheck.detail);
+      return;
+    }
+    const sshCheck = await this.deps.runCommand(
+      "ssh",
+      ["-o", "BatchMode=yes", "-p", String(task.port), `${task.username}@${task.host}`, "true"],
+      "SSH key/passwordless login required for rsync transfer."
+    );
+    if (!sshCheck.ok) {
+      this.failTask(task, sshCheck.message, sshCheck.detail);
+      return;
+    }
+
     const args =
       task.direction === "upload"
-        ? ["-avh", "--progress", "-e", sshSpec, task.localPath, remoteSpec]
-        : ["-avh", "--progress", "-e", sshSpec, remoteSpec, task.localPath];
+        ? buildRsyncUploadArgs(task.port, task.username, task.host, task.localPath, task.remotePath)
+        : buildRsyncDownloadArgs(task.port, task.username, task.host, task.remotePath, task.localPath);
 
     // Directory transfer rule: source path does not get trailing slash, so rsync keeps the directory itself.
-    const child = spawn("rsync", args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = this.deps.spawnProcess("rsync", args);
     this.running = { taskId: task.id, child };
 
     await new Promise<void>((resolve) => {
-      child.stdout.on("data", (chunk: Buffer) => {
+      child.stdout?.on("data", (chunk: Buffer) => {
         for (const raw of chunk.toString("utf8").split(/\r?\n/)) {
           if (!raw.trim()) continue;
           this.consumeProgressLine(task, raw.trim());
         }
       });
-      child.stderr.on("data", (chunk: Buffer) => {
+      child.stderr?.on("data", (chunk: Buffer) => {
         for (const raw of chunk.toString("utf8").split(/\r?\n/)) {
           if (!raw.trim()) continue;
           this.consumeProgressLine(task, raw.trim());
@@ -185,7 +214,7 @@ export class TransferQueueService {
       });
       child.on("error", (error) => {
         task.status = "failed";
-        task.finishedAt = Date.now();
+        task.finishedAt = this.deps.now();
         task.error = (error as NodeJS.ErrnoException).code === "ENOENT"
           ? "rsync is not installed or not found in PATH"
           : "Failed to start rsync process.";
@@ -195,7 +224,7 @@ export class TransferQueueService {
         resolve();
       });
       child.on("close", (code, signal) => {
-        task.finishedAt = Date.now();
+        task.finishedAt = this.deps.now();
         if (task.status === "stopped") {
           this.appendLog(task, `Stopped by signal ${signal ?? "SIGTERM"}.`);
         } else if (signal) {
@@ -242,6 +271,15 @@ export class TransferQueueService {
     task.rawLog = [...task.rawLog.slice(-199), line];
   }
 
+  private failTask(task: TransferTask, message: string, detail?: string): void {
+    task.status = "failed";
+    task.error = message;
+    task.finishedAt = this.deps.now();
+    this.appendLog(task, message);
+    if (detail) this.appendLog(task, detail.slice(0, 300));
+    this.emit();
+  }
+
   private emit(): void {
     const payload: TransferUpdatePayload = { tasks: this.snapshot() };
     for (const listener of this.listeners) listener(payload);
@@ -254,39 +292,11 @@ export class TransferQueueService {
     }));
   }
 
-  private async ensureRsyncInstalled(): Promise<void> {
-    await runSimpleCommand("rsync", ["--version"], "rsync is not installed or not found in PATH");
-  }
-
-  private async ensureBatchModeLogin(request: {
-    host: string;
-    port: number;
-    username: string;
-    authType?: "password" | "privateKey";
-  }): Promise<void> {
-    const result = await runSimpleCommand(
-      "ssh",
-      ["-o", "BatchMode=yes", "-p", String(request.port), `${request.username}@${request.host}`, "true"],
-      "SSH key/passwordless login required for rsync transfer."
-    );
-    if (!result.ok) {
-      throw transferError("TRANSFER_PRECHECK_FAILED", result.message, result.detail);
-    }
-  }
 }
 
-async function ensurePathExists(fullPath: string): Promise<void> {
-  try {
-    await fs.stat(fullPath);
-  } catch {
-    throw transferError("TRANSFER_INVALID_REQUEST", `Path not found: ${fullPath}`);
-  }
-}
-
-async function ensureDirExists(posixTarget: string, label: string): Promise<void> {
-  if (!normalizeRemotePath(posixTarget)) {
-    throw transferError("TRANSFER_INVALID_REQUEST", `${label} is required.`);
-  }
+async function ensureExistingPath(pathExists: (fullPath: string) => Promise<boolean>, fullPath: string): Promise<void> {
+  const exists = await pathExists(fullPath);
+  if (!exists) throw transferError("TRANSFER_INVALID_REQUEST", `Path not found: ${fullPath}`);
 }
 
 function validateCommonRequest(request: {
@@ -310,7 +320,7 @@ function validateLocalPath(fullPath: string): void {
   if (/\u0000|\n|\r/.test(fullPath)) throw transferError("TRANSFER_INVALID_REQUEST", "Path contains unsupported characters.");
 }
 
-function normalizeRemotePath(input: string): string {
+export function validateRsyncPath(input: string): string {
   const value = (input ?? "").trim();
   if (!value) throw transferError("TRANSFER_INVALID_REQUEST", "Remote path is required.");
   if (/\u0000|\n|\r/.test(value)) {
@@ -326,11 +336,42 @@ function normalizeRemotePath(input: string): string {
   return normalized.startsWith("/") ? normalized : `/${normalized}`;
 }
 
-function buildRsyncRemoteSpec(username: string, host: string, remotePath: string): string {
+export function buildRsyncRemoteSpec(username: string, host: string, remotePath: string): string {
   if (!SAFE_HOST_USER.test(username) || !SAFE_HOST_USER.test(host)) {
     throw transferError("TRANSFER_INVALID_REQUEST", "Invalid username or host for rsync transfer.");
   }
   return `${username}@${host}:${remotePath}`;
+}
+
+export function buildSshSpec(port: number): string {
+  if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+    throw transferError("TRANSFER_INVALID_REQUEST", "Port must be between 1 and 65535.");
+  }
+  return `ssh -p ${port} -o BatchMode=yes`;
+}
+
+export function buildRsyncUploadArgs(
+  port: number,
+  username: string,
+  host: string,
+  localSourcePath: string,
+  remoteDestinationPath: string
+): string[] {
+  validateLocalPath(localSourcePath);
+  const remotePath = validateRsyncPath(remoteDestinationPath);
+  return ["-avh", "--progress", "-e", buildSshSpec(port), localSourcePath, buildRsyncRemoteSpec(username, host, remotePath)];
+}
+
+export function buildRsyncDownloadArgs(
+  port: number,
+  username: string,
+  host: string,
+  remoteSourcePath: string,
+  localDestinationDir: string
+): string[] {
+  validateLocalPath(localDestinationDir);
+  const remotePath = validateRsyncPath(remoteSourcePath);
+  return ["-avh", "--progress", "-e", buildSshSpec(port), buildRsyncRemoteSpec(username, host, remotePath), localDestinationDir];
 }
 
 function transferError(code: TransferServiceErrorCode, message: string, detail?: string): TransferServiceError {
@@ -364,4 +405,17 @@ async function runSimpleCommand(
       else resolve({ ok: false, message: notFoundMessage, detail: stderr.trim().slice(0, 300) || undefined });
     });
   });
+}
+
+function defaultSpawnProcess(command: string, args: string[]): ChildProcess {
+  return spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+}
+
+async function defaultPathExists(fullPath: string): Promise<boolean> {
+  try {
+    await fs.stat(fullPath);
+    return true;
+  } catch {
+    return false;
+  }
 }

@@ -4,7 +4,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
 
 ## Status
 
-- Current milestone: **M4 completed (rsync upload/download transfer queue)**
+- Current milestone: **M4.5 completed (test harness, regression protection, and smoke checklist)**
 - Implemented in M0:
   - Electron + Vite + React + TypeScript scaffold
   - main / preload / renderer separation
@@ -71,6 +71,15 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP, focused on sta
   - Renderer queue switched from mock seed state to IPC-driven real-time updates (`transfer:onUpdate`)
   - Queue panel behavior kept aligned with hidden/expanded/collapsed/auto-hide policy
   - Security boundary preserved: no password persisted in transfer task, renderer queue state, or command args
+- Implemented in M4.5 (tests and regression protection):
+  - Unit test framework introduced with Vitest (`npm test` / `npm run test:unit`)
+  - Transfer queue state-machine tests (serial execution, cancel/stop, precheck failures, update events)
+  - rsync arg/path helper tests (`buildRsyncUploadArgs`, `buildRsyncDownloadArgs`, `buildSshSpec`, `buildRsyncRemoteSpec`, `validateRsyncPath`)
+  - Profile repository persistence tests to ensure no password-like fields are written to `profiles.json`
+  - Credential storage unavailable-path test (`CREDENTIAL_UNAVAILABLE`) for safeStorage provider
+  - Remote path/list regression tests (POSIX normalize, list success source-of-truth, missing path mapping)
+  - Manual release smoke checklist added at `docs/smoke-test.md`
+  - Optional secret-leak helper script added (`npm run check:secrets`)
 
 ## Tech Stack
 
@@ -133,6 +142,7 @@ src/
   - Multi-tab session model with isolated tab state (M3)
   - Site Manager / Login Manager with profile + credential management (M3.5)
   - rsync upload/download transfer queue with serial execution and task controls (M4)
+  - Automated unit tests + smoke harness for core M1-M4 logic (M4.5)
 - Not implemented yet:
   - Remote file open/edit and sync-back workflow
 
