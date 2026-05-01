@@ -1,4 +1,4 @@
-# CoFinder Smoke Test Checklist (V1.1 M4)
+# CoFinder Smoke Test Checklist (V1.1 M5)
 
 Use this checklist before a release candidate. Prefer an isolated test workspace.
 
@@ -66,6 +66,13 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 - Verify selected rows still have clear contrast in both panes and hover does not hide selection state.
 - Open transfer queue with mixed states (`pending`, `running`, `success`, `failed`) and verify status chips are distinct/readable.
 - Open local and remote context menus; verify item spacing/readability improves and disabled items remain clearly disabled.
+
+## Quick Look Smoke (V1.1 M5)
+
+- In local pane, single-select a previewable file and use context menu `Quick Look`; verify macOS Quick Look opens.
+- In local pane, keep single-file selection and press `Space`; verify Quick Look opens (when focus is not in an input).
+- In local pane, select a directory and trigger `Quick Look`; verify operation is rejected with a clear error message.
+- In remote pane, trigger context menu `Quick Look`; verify clear fallback message indicates remote Quick Look is not supported in M5.
 
 ## Select All Hotkey + Text Selection Guard (M4.6.1)
 

@@ -40,6 +40,7 @@ export const IPC_CHANNELS = {
     isAvailable: "credentials:isAvailable"
   },
   system: {
-    copyText: "system:copyText"
+    copyText: "system:copyText",
+    quickLook: "system:quickLook"
   }
 } as const;

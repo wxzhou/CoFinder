@@ -200,6 +200,16 @@ export function App() {
 
     const onKeyDown = (event: KeyboardEvent) => {
       const isSelectAll = (event.key === "a" || event.key === "A") && (event.metaKey || event.ctrlKey);
+      const isQuickLook =
+        event.key === " " && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.repeat;
+      if (isQuickLook) {
+        if (contextMenu) return;
+        if (isEditableTarget(document.activeElement)) return;
+        void quickLookSelection(activeTab.id, activePane);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (!isSelectAll) return;
       if (contextMenu) return;
       if (isEditableTarget(document.activeElement)) return;
@@ -228,7 +238,7 @@ export function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs]);
+  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs, tabs]);
 
   async function loadTransferTasks(): Promise<void> {
     const res = await window.cofinder.transfer.list();
@@ -1469,6 +1479,35 @@ export function App() {
     }
   }
 
+  async function quickLookSelection(tabId: string, pane: "local" | "remote"): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "remote") {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId
+            ? { ...item, remotePane: { ...item.remotePane, error: "Quick Look for remote files is not supported in M5." } }
+            : item
+        )
+      );
+      return;
+    }
+    const selected = tab.localPane.selectedFullPaths;
+    if (selected.length !== 1) return;
+    const result = await window.cofinder.system.quickLook({ path: selected[0] });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+    setTabs((prev) =>
+      prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: "" } } : item))
+    );
+  }
+
   async function disconnectRemote(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId) return;
@@ -2122,6 +2161,17 @@ export function App() {
                 className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
                 onClick={async () => {
+                  await quickLookSelection(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Quick Look
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
                   const tab = tabs.find((t) => t.id === contextMenu.tabId);
                   const target = tab?.localPane.selectedFullPaths[0];
                   if (target) {
@@ -2221,6 +2271,17 @@ export function App() {
                 }}
               >
                 Delete
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await quickLookSelection(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Quick Look
               </button>
               <button
                 type="button"

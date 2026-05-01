@@ -43,6 +43,7 @@ export type RemoteErrorCode =
   | "LOCAL_INFO_FAILED"
   | "LOCAL_UNKNOWN_ERROR"
   | "SYSTEM_INVALID_INPUT"
+  | "SYSTEM_PREVIEW_FAILED"
   | "REMOTE_AUTH_FAILED"
   | "REMOTE_CONNECTION_FAILED"
   | "REMOTE_PERMISSION_DENIED"
@@ -200,5 +201,6 @@ export interface IpcApi {
   };
   system: {
     copyText: (request: { text: string }) => Promise<IpcResponse<{ copied: true }>>;
+    quickLook: (request: { path: string }) => Promise<IpcResponse<{ opened: true }>>;
   };
 }

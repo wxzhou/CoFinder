@@ -24,6 +24,7 @@ import { ConnectionManager } from "../services/ConnectionManager";
 import { CredentialService } from "../services/CredentialService";
 import { ProfileRepository, defaultCredentialsPath, defaultProfilesPath } from "../services/ProfileRepository";
 import { SafeStorageCredentialProvider } from "../services/SafeStorageCredentialProvider";
+import { QuickLookService } from "../services/QuickLookService";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -42,6 +43,7 @@ const connectionManager = new ConnectionManager();
 const remoteFileService = new RemoteFileService(connectionManager);
 const transferQueueService = new TransferQueueService();
 const settingsService = new SettingsService();
+const quickLookService = new QuickLookService();
 
 const userData = app.getPath("userData");
 const profileRepository = new ProfileRepository(defaultProfilesPath(userData));
@@ -390,6 +392,17 @@ export function registerIpcHandlers(): void {
       return ok({ copied: true as const });
     } catch (error) {
       return toIpcError(error, "SYSTEM_INVALID_INPUT", "Failed to copy text.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.system.quickLook, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "SYSTEM_INVALID_INPUT", "Invalid system:quickLook request.");
+      const targetPath = validateLocalPathInput(body.path, "SYSTEM_INVALID_INPUT");
+      await quickLookService.previewLocalPath(targetPath);
+      return ok({ opened: true as const });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_PREVIEW_FAILED", "Failed to open Quick Look preview.");
     }
   });
 }

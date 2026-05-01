@@ -48,7 +48,8 @@ const api: IpcApi = {
     isAvailable: () => ipcRenderer.invoke("credentials:isAvailable")
   },
   system: {
-    copyText: (request) => ipcRenderer.invoke("system:copyText", request)
+    copyText: (request) => ipcRenderer.invoke("system:copyText", request),
+    quickLook: (request) => ipcRenderer.invoke("system:quickLook", request)
   }
 };
 
