@@ -2,6 +2,7 @@ import path from "node:path";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
 import type { RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse } from "../../shared/types/ipc";
 import { ConnectionManager } from "./ConnectionManager";
+import { isSafeHostOrUsername, normalizeRemotePosixPath } from "../utils/pathSafety";
 
 const posixPath = path.posix;
 type RemoteListItem = {
@@ -31,6 +32,12 @@ export class RemoteFileService {
   async connect(config: ConnectionConfig): Promise<RemoteConnectResponse> {
     if (!config.host.trim()) throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Host is required.");
     if (!config.username.trim()) throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Username is required.");
+    if (!isSafeHostOrUsername(config.host.trim())) {
+      throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Host contains unsupported characters.");
+    }
+    if (!isSafeHostOrUsername(config.username.trim())) {
+      throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Username contains unsupported characters.");
+    }
     if (!Number.isInteger(config.port) || config.port <= 0 || config.port > 65535) {
       throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Port must be between 1 and 65535.");
     }
@@ -128,10 +135,7 @@ export class RemoteFileService {
   }
 
   private normalizeRemotePath(inputPath: string): string {
-    const source = inputPath.trim() || "/";
-    const normalized = posixPath.normalize(source);
-    if (normalized === ".") return "/";
-    return normalized.startsWith("/") ? normalized : `/${normalized}`;
+    return normalizeRemotePosixPath(inputPath.trim() || "/");
   }
 
   private mapRemoteEntry(basePath: string, entry: RemoteListItem): RemoteFileEntry {

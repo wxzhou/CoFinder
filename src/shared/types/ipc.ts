@@ -14,6 +14,13 @@ export interface LocalListDirectoryResponse {
 }
 
 export type RemoteErrorCode =
+  | "LOCAL_INVALID_INPUT"
+  | "LOCAL_NOT_FOUND"
+  | "LOCAL_PERMISSION_DENIED"
+  | "LOCAL_NOT_DIRECTORY"
+  | "LOCAL_OPEN_FAILED"
+  | "LOCAL_UNKNOWN_ERROR"
+  | "SYSTEM_INVALID_INPUT"
   | "REMOTE_AUTH_FAILED"
   | "REMOTE_CONNECTION_FAILED"
   | "REMOTE_PERMISSION_DENIED"
@@ -119,9 +126,10 @@ export type ProfileUpsertPayload = {
 
 export interface IpcApi {
   local: {
-    listDirectory: (request: { path: string }) => Promise<LocalListDirectoryResponse>;
-    openPath: (request: { path: string }) => Promise<void>;
-    revealPath: (request: { path: string }) => Promise<void>;
+    listDirectory: (request: { path: string }) => Promise<IpcResponse<LocalListDirectoryResponse>>;
+    openPath: (request: { path: string }) => Promise<IpcResponse<{ opened: true }>>;
+    revealPath: (request: { path: string }) => Promise<IpcResponse<{ revealed: true }>>;
+    getHomePath: () => Promise<IpcResponse<{ homePath: string }>>;
   };
   remote: {
     connect: (request: RemoteConnectRequest) => Promise<IpcResponse<RemoteConnectResponse>>;
@@ -152,6 +160,6 @@ export interface IpcApi {
     isAvailable: () => Promise<IpcResponse<{ available: boolean }>>;
   };
   system: {
-    copyText: (request: { text: string }) => Promise<void>;
+    copyText: (request: { text: string }) => Promise<IpcResponse<{ copied: true }>>;
   };
 }

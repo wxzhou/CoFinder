@@ -4,6 +4,7 @@ import path from "node:path";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
 import type { LocalListDirectoryResponse, LocalErrorCode } from "../../shared/types/ipc";
+import { normalizeLocalPath } from "../utils/pathSafety";
 
 class LocalFileServiceError extends Error {
   constructor(
@@ -18,7 +19,7 @@ class LocalFileServiceError extends Error {
 export class LocalFileService {
   async listDirectory(inputPath: string): Promise<LocalListDirectoryResponse> {
     const requestedPath = inputPath.trim() || os.homedir();
-    const normalizedPath = path.resolve(requestedPath);
+    const normalizedPath = normalizeLocalPath(requestedPath);
 
     let stats;
     try {
@@ -40,7 +41,7 @@ export class LocalFileService {
 
     const entries = await Promise.all(
       dirEntries.map(async (dirent): Promise<LocalFileEntry> => {
-        const fullPath = path.join(normalizedPath, dirent.name);
+        const fullPath = normalizeLocalPath(path.join(normalizedPath, dirent.name));
         const fileStats = await fs.lstat(fullPath);
 
         return {
@@ -59,7 +60,7 @@ export class LocalFileService {
   }
 
   async openPath(targetPath: string): Promise<void> {
-    const normalizedPath = path.resolve(targetPath);
+    const normalizedPath = normalizeLocalPath(targetPath);
     const result = await shell.openPath(normalizedPath);
     if (result) {
       throw new LocalFileServiceError("OPEN_FAILED", result);
@@ -67,7 +68,7 @@ export class LocalFileService {
   }
 
   async revealPath(targetPath: string): Promise<void> {
-    const normalizedPath = path.resolve(targetPath);
+    const normalizedPath = normalizeLocalPath(targetPath);
     shell.showItemInFolder(normalizedPath);
   }
 

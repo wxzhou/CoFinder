@@ -1,12 +1,21 @@
-appId: com.cofinder.app
+appId: com.wxzhou.cofinder
 productName: CoFinder
 directories:
   output: release
+artifactName: ${productName}-${version}-${arch}.${ext}
 files:
   - dist/**
   - dist-electron/**
   - package.json
+  - '!**/*.map'
+  - '!tests/**'
+  - '!docs/**'
+  - '!scripts/**'
+  - '!.git/**'
+  - '!release/**'
+  - '!**/*.log'
 mac:
+  category: public.app-category.productivity
   target:
     - dmg
     - zip

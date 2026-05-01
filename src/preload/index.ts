@@ -5,7 +5,8 @@ const api: IpcApi = {
   local: {
     listDirectory: (request) => ipcRenderer.invoke("local:listDirectory", request),
     openPath: (request) => ipcRenderer.invoke("local:openPath", request),
-    revealPath: (request) => ipcRenderer.invoke("local:revealPath", request)
+    revealPath: (request) => ipcRenderer.invoke("local:revealPath", request),
+    getHomePath: () => ipcRenderer.invoke("local:getHomePath")
   },
   remote: {
     connect: (request) => ipcRenderer.invoke("remote:connect", request),

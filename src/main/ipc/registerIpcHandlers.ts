@@ -1,6 +1,21 @@
 import { app, BrowserWindow, clipboard, ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
 import { IPC_CHANNELS } from "./channels";
+import {
+  AppError,
+  asRecord,
+  fail,
+  normalizeRemotePathInput,
+  ok,
+  optionalString,
+  requiredHost,
+  requiredId,
+  requiredPort,
+  requiredString,
+  requiredUsername,
+  toIpcError,
+  validateLocalPathInput
+} from "./ipcUtils";
 import { LocalFileService } from "../services/LocalFileService";
 import { RemoteFileService } from "../services/RemoteFileService";
 import { TransferQueueService } from "../services/TransferQueueService";
@@ -12,9 +27,7 @@ import { SafeStorageCredentialProvider } from "../services/SafeStorageCredential
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
-  IpcFailureResponse,
   IpcResponse,
-  LocalErrorPayload,
   ProfileUpsertPayload,
   RemoteConnectRequest,
   RemoteConnectResponse,
@@ -34,201 +47,281 @@ const userData = app.getPath("userData");
 const profileRepository = new ProfileRepository(defaultProfilesPath(userData));
 const credentialProvider = new SafeStorageCredentialProvider(defaultCredentialsPath(userData));
 const credentialService = new CredentialService(credentialProvider);
+const registeredChannels: string[] = [];
+let transferOff: (() => void) | null = null;
+let isRegistered = false;
 
-transferQueueService.onUpdate((payload: TransferUpdatePayload) => {
-  for (const win of BrowserWindow.getAllWindows()) {
-    win.webContents.send(IPC_CHANNELS.transfer.onUpdate, payload);
-  }
-});
+function registerChannel<TArgs extends unknown[], TResult>(
+  channel: string,
+  handler: (_event: Electron.IpcMainInvokeEvent, ...args: TArgs) => TResult
+): void {
+  ipcMain.handle(channel, handler);
+  registeredChannels.push(channel);
+}
 
 export function registerIpcHandlers(): void {
-  ipcMain.handle(IPC_CHANNELS.local.listDirectory, async (_event, request: { path: string }) => {
-    try {
-      return await localFileService.listDirectory(request.path);
-    } catch (error) {
-      throw toIpcError(error);
+  if (isRegistered) return;
+  isRegistered = true;
+
+  transferOff = transferQueueService.onUpdate((payload: TransferUpdatePayload) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send(IPC_CHANNELS.transfer.onUpdate, payload);
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.local.openPath, async (_event, request: { path: string }) => {
+  registerChannel(IPC_CHANNELS.local.listDirectory, async (_event, request: unknown) => {
     try {
-      await localFileService.openPath(request.path);
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:listDirectory request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      return ok(await localFileService.listDirectory(targetPath));
     } catch (error) {
-      throw toIpcError(error);
+      return toIpcError(error, "LOCAL_UNKNOWN_ERROR", "Unexpected local operation failure.");
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.local.revealPath, async (_event, request: { path: string }) => {
+  registerChannel(IPC_CHANNELS.local.openPath, async (_event, request: unknown) => {
     try {
-      await localFileService.revealPath(request.path);
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:openPath request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      await localFileService.openPath(targetPath);
+      return ok({ opened: true as const });
     } catch (error) {
-      throw toIpcError(error);
+      return toIpcError(error, "LOCAL_UNKNOWN_ERROR", "Unexpected local operation failure.");
     }
   });
 
-  ipcMain.handle(
+  registerChannel(IPC_CHANNELS.local.revealPath, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:revealPath request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      await localFileService.revealPath(targetPath);
+      return ok({ revealed: true as const });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_UNKNOWN_ERROR", "Unexpected local operation failure.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.local.getHomePath, async () => {
+    try {
+      return ok({ homePath: app.getPath("home") });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_UNKNOWN_ERROR", "Failed to resolve home path.");
+    }
+  });
+
+  registerChannel(
     IPC_CHANNELS.remote.connect,
-    async (_event, request: RemoteConnectRequest): Promise<IpcResponse<RemoteConnectResponse>> => {
+    async (_event, request: unknown): Promise<IpcResponse<RemoteConnectResponse>> => {
       try {
-        let password = request.password?.trim() ?? "";
-        if (!password && request.profileId) {
-          password = (await credentialService.get(request.profileId))?.trim() ?? "";
+        const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:connect request.");
+        const connectRequest: RemoteConnectRequest = {
+          host: requiredHost(body.host, "REMOTE_INVALID_INPUT"),
+          port: requiredPort(body.port, "REMOTE_INVALID_INPUT"),
+          username: requiredUsername(body.username, "REMOTE_INVALID_INPUT"),
+          password: optionalString(body.password),
+          profileId: optionalString(body.profileId),
+          defaultRemotePath: optionalString(body.defaultRemotePath),
+          privateKeyPath: optionalString(body.privateKeyPath),
+          authType: body.authType === "privateKey" ? "privateKey" : "password"
+        };
+        let password = connectRequest.password?.trim() ?? "";
+        if (!password && connectRequest.profileId) {
+          password = (await credentialService.get(connectRequest.profileId))?.trim() ?? "";
         }
         const data = await remoteFileService.connect({
-          host: request.host,
-          port: request.port,
-          username: request.username,
+          host: connectRequest.host,
+          port: connectRequest.port,
+          username: connectRequest.username,
           password,
-          profileId: request.profileId,
-          defaultRemotePath: request.defaultRemotePath,
-          privateKeyPath: request.privateKeyPath,
-          authType: request.authType
+          profileId: connectRequest.profileId,
+          defaultRemotePath: connectRequest.defaultRemotePath,
+          privateKeyPath: connectRequest.privateKeyPath,
+          authType: connectRequest.authType
         });
-        return { ok: true, data };
+        return ok(data);
       } catch (error) {
-        return toIpcResponseError(error);
+        return toIpcError(error, "REMOTE_UNKNOWN_ERROR", "Unexpected remote error.");
       }
     }
   );
 
-  ipcMain.handle(
+  registerChannel(
     IPC_CHANNELS.remote.listDirectory,
-    async (_event, request: RemoteListDirectoryRequest): Promise<IpcResponse<RemoteListDirectoryResponse>> => {
+    async (_event, request: unknown): Promise<IpcResponse<RemoteListDirectoryResponse>> => {
       try {
-        const data = await remoteFileService.listDirectory(request.connectionId, request.path);
-        return { ok: true, data };
+        const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:listDirectory request.");
+        const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+        const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+        const data = await remoteFileService.listDirectory(connectionId, targetPath);
+        return ok(data);
       } catch (error) {
-        return toIpcResponseError(error);
+        return toIpcError(error, "REMOTE_UNKNOWN_ERROR", "Unexpected remote error.");
       }
     }
   );
 
-  ipcMain.handle(IPC_CHANNELS.remote.getHomeDirectory, async (_event, request: { connectionId: string }) => {
+  registerChannel(IPC_CHANNELS.remote.getHomeDirectory, async (_event, request: unknown) => {
     try {
-      const homePath = await remoteFileService.getHomeDirectory(request.connectionId);
-      return { ok: true, data: { homePath } };
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:getHomeDirectory request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const homePath = await remoteFileService.getHomeDirectory(connectionId);
+      return ok({ homePath });
     } catch (error) {
-      return toIpcResponseError(error);
+      return toIpcError(error, "REMOTE_UNKNOWN_ERROR", "Unexpected remote error.");
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.remote.disconnect, async (_event, request: { connectionId: string }) => {
+  registerChannel(IPC_CHANNELS.remote.disconnect, async (_event, request: unknown) => {
     try {
-      await remoteFileService.disconnect(request.connectionId);
-      return { ok: true, data: { disconnected: true as const } };
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:disconnect request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      await remoteFileService.disconnect(connectionId);
+      return ok({ disconnected: true as const });
     } catch (error) {
-      return toIpcResponseError(error);
+      return toIpcError(error, "REMOTE_UNKNOWN_ERROR", "Unexpected remote error.");
     }
   });
 
-  ipcMain.handle(
+  registerChannel(
     IPC_CHANNELS.transfer.enqueueUpload,
-    async (_event, request: EnqueueUploadRequest): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
       try {
-        const data = await transferQueueService.enqueueUpload(request);
-        return { ok: true, data };
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueUpload request.");
+        const data = await transferQueueService.enqueueUpload({
+          tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+          profileId: optionalString(body.profileId),
+          connectionId: optionalString(body.connectionId),
+          host: requiredHost(body.host, "TRANSFER_INVALID_REQUEST"),
+          port: requiredPort(body.port, "TRANSFER_INVALID_REQUEST"),
+          username: requiredUsername(body.username, "TRANSFER_INVALID_REQUEST"),
+          authType: body.authType === "privateKey" ? "privateKey" : "password",
+          localSources: Array.isArray(body.localSources) ? body.localSources.map((v) => String(v)) : [],
+          remoteDestinationDir: normalizeRemotePathInput(body.remoteDestinationDir, "TRANSFER_INVALID_REQUEST")
+        });
+        return ok(data);
       } catch (error) {
-        return toTransferIpcError(error);
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
       }
     }
   );
 
-  ipcMain.handle(
+  registerChannel(
     IPC_CHANNELS.transfer.enqueueDownload,
-    async (_event, request: EnqueueDownloadRequest): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
       try {
-        const data = await transferQueueService.enqueueDownload(request);
-        return { ok: true, data };
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueDownload request.");
+        const data = await transferQueueService.enqueueDownload({
+          tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+          profileId: optionalString(body.profileId),
+          connectionId: optionalString(body.connectionId),
+          host: requiredHost(body.host, "TRANSFER_INVALID_REQUEST"),
+          port: requiredPort(body.port, "TRANSFER_INVALID_REQUEST"),
+          username: requiredUsername(body.username, "TRANSFER_INVALID_REQUEST"),
+          authType: body.authType === "privateKey" ? "privateKey" : "password",
+          remoteSources: Array.isArray(body.remoteSources) ? body.remoteSources.map((v) => String(v)) : [],
+          localDestinationDir: validateLocalPathInput(body.localDestinationDir, "TRANSFER_INVALID_REQUEST")
+        });
+        return ok(data);
       } catch (error) {
-        return toTransferIpcError(error);
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
       }
     }
   );
 
-  ipcMain.handle(IPC_CHANNELS.transfer.cancel, async (_event, request: { taskId: string }) => {
+  registerChannel(IPC_CHANNELS.transfer.cancel, async (_event, request: unknown) => {
     try {
-      const data = await transferQueueService.cancel(request.taskId);
-      return { ok: true, data };
+      const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:cancel request.");
+      const taskId = requiredId(body.taskId, "taskId", "TRANSFER_INVALID_REQUEST");
+      const data = await transferQueueService.cancel(taskId);
+      return ok(data);
     } catch (error) {
-      return toTransferIpcError(error);
+      return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.transfer.stop, async (_event, request: { taskId: string }) => {
+  registerChannel(IPC_CHANNELS.transfer.stop, async (_event, request: unknown) => {
     try {
-      const data = await transferQueueService.stop(request.taskId);
-      return { ok: true, data };
+      const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:stop request.");
+      const taskId = requiredId(body.taskId, "taskId", "TRANSFER_INVALID_REQUEST");
+      const data = await transferQueueService.stop(taskId);
+      return ok(data);
     } catch (error) {
-      return toTransferIpcError(error);
+      return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.transfer.list, (): IpcResponse<ReturnType<typeof transferQueueService.list>> => ({
-    ok: true,
-    data: transferQueueService.list()
-  }));
+  registerChannel(IPC_CHANNELS.transfer.list, (): IpcResponse<ReturnType<typeof transferQueueService.list>> => ok(transferQueueService.list()));
 
-  ipcMain.handle(
+  registerChannel(
     IPC_CHANNELS.transfer.clearCompleted,
-    (): IpcResponse<{ cleared: number }> => ({ ok: true, data: transferQueueService.clearCompleted() })
+    (): IpcResponse<{ cleared: number }> => ok(transferQueueService.clearCompleted())
   );
 
-  ipcMain.handle(IPC_CHANNELS.settings.get, () => settingsService.get());
-  ipcMain.handle(IPC_CHANNELS.settings.set, (_event, request: Record<string, unknown>) => settingsService.set(request));
+  registerChannel(IPC_CHANNELS.settings.get, () => settingsService.get());
+  registerChannel(IPC_CHANNELS.settings.set, (_event, request: Record<string, unknown>) => settingsService.set(request));
 
-  ipcMain.handle(IPC_CHANNELS.profiles.list, async (): Promise<IpcResponse<ServerProfile[]>> => {
+  registerChannel(IPC_CHANNELS.profiles.list, async (): Promise<IpcResponse<ServerProfile[]>> => {
     try {
       const data = await listProfilesWithCredentialFlags();
-      return { ok: true, data };
+      return ok(data);
     } catch (error) {
-      return {
-        ok: false,
-        error: {
-          code: "PROFILE_LOAD_FAILED",
-          message: "Failed to load saved sites.",
-          detail: error instanceof Error ? error.message : undefined
-        }
-      };
+      return toIpcError(error, "PROFILE_LOAD_FAILED", "Failed to load saved sites.");
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.profiles.save, async (_event, body: ProfileUpsertPayload) => {
+  registerChannel(IPC_CHANNELS.profiles.save, async (_event, body: unknown) => {
     try {
-      const data = await upsertProfile(body);
-      return { ok: true, data };
+      const data = await upsertProfile(validateProfileUpsertPayload(body));
+      return ok(data);
     } catch (error) {
-      return toProfileCredentialIpcError(error);
+      return toIpcError(error, "PROFILE_SAVE_FAILED", "Unexpected profile save error.");
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.profiles.update, async (_event, body: ProfileUpsertPayload) => {
+  registerChannel(IPC_CHANNELS.profiles.update, async (_event, body: unknown) => {
     try {
-      const data = await upsertProfile(body);
-      return { ok: true, data };
+      const data = await upsertProfile(validateProfileUpsertPayload(body));
+      return ok(data);
     } catch (error) {
-      return toProfileCredentialIpcError(error);
+      return toIpcError(error, "PROFILE_SAVE_FAILED", "Unexpected profile save error.");
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.profiles.delete, async (_event, request: { id: string }) => {
+  registerChannel(IPC_CHANNELS.profiles.delete, async (_event, request: unknown) => {
     try {
-      await deleteProfileById(request.id);
-      return { ok: true, data: { deleted: true as const } };
+      const body = asRecord(request, "PROFILE_INVALID", "Invalid profiles:delete request.");
+      await deleteProfileById(requiredId(body.id, "id", "PROFILE_INVALID"));
+      return ok({ deleted: true as const });
     } catch (error) {
-      return toProfileCredentialIpcError(error);
+      return toIpcError(error, "PROFILE_DELETE_FAILED", "Failed to delete profile.");
     }
   });
 
-  ipcMain.handle(IPC_CHANNELS.credentials.isAvailable, (): IpcResponse<{ available: boolean }> => {
-    return { ok: true, data: { available: credentialService.isStorageAvailable() } };
+  registerChannel(IPC_CHANNELS.credentials.isAvailable, (): IpcResponse<{ available: boolean }> => {
+    return ok({ available: credentialService.isStorageAvailable() });
   });
 
-  ipcMain.handle(IPC_CHANNELS.system.copyText, (_event, request: { text: string }) => {
-    clipboard.writeText(request.text ?? "");
+  registerChannel(IPC_CHANNELS.system.copyText, (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "SYSTEM_INVALID_INPUT", "Invalid system:copyText request.");
+      const text = requiredString(body.text, "text", "SYSTEM_INVALID_INPUT");
+      clipboard.writeText(text);
+      return ok({ copied: true as const });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_INVALID_INPUT", "Failed to copy text.");
+    }
   });
 }
 
-export async function disconnectAllRemoteConnections(): Promise<void> {
+export async function shutdownMainProcessResources(): Promise<void> {
+  transferOff?.();
+  transferOff = null;
+  for (const channel of registeredChannels) {
+    ipcMain.removeHandler(channel);
+  }
+  registeredChannels.length = 0;
+  isRegistered = false;
+  await transferQueueService.shutdown();
   await connectionManager.disconnectAll();
 }
 
@@ -243,7 +336,6 @@ async function listProfilesWithCredentialFlags(): Promise<ServerProfile[]> {
 }
 
 async function upsertProfile(body: ProfileUpsertPayload): Promise<ServerProfile> {
-  validateProfileUpsert(body);
   const now = Date.now();
   const id = body.id?.trim() ? body.id.trim() : randomUUID();
   const existingList = await profileRepository.loadAll();
@@ -314,114 +406,18 @@ async function deleteProfileById(id: string): Promise<void> {
   await profileRepository.delete(trimmed);
 }
 
-function validateProfileUpsert(body: ProfileUpsertPayload): void {
-  if (!body.host?.trim()) {
-    const err = new Error("Host is required.");
-    (err as Error & { code?: string }).code = "PROFILE_INVALID";
-    throw err;
-  }
-  if (!body.username?.trim()) {
-    const err = new Error("Username is required.");
-    (err as Error & { code?: string }).code = "PROFILE_INVALID";
-    throw err;
-  }
-  if (!Number.isInteger(body.port) || body.port <= 0 || body.port > 65535) {
-    const err = new Error("Port must be between 1 and 65535.");
-    (err as Error & { code?: string }).code = "PROFILE_INVALID";
-    throw err;
-  }
-}
-
-function toProfileCredentialIpcError(error: unknown): IpcFailureResponse {
-  if (typeof error === "object" && error !== null && "code" in error && "message" in error) {
-    const code = String((error as { code: unknown }).code);
-    const message = String((error as { message: unknown }).message);
-    const detail = "detail" in error ? String((error as { detail?: unknown }).detail) : undefined;
-    const mapped =
-      code === "CREDENTIAL_UNAVAILABLE"
-        ? "CREDENTIAL_UNAVAILABLE"
-        : code === "CREDENTIAL_SAVE_FAILED"
-          ? "CREDENTIAL_SAVE_FAILED"
-          : code === "CREDENTIAL_DELETE_FAILED"
-            ? "CREDENTIAL_DELETE_FAILED"
-            : code === "PROFILE_INVALID"
-              ? "PROFILE_INVALID"
-              : "PROFILE_SAVE_FAILED";
-    return {
-      ok: false,
-      error: {
-        code: mapped,
-        message,
-        detail
-      }
-    };
-  }
+function validateProfileUpsertPayload(input: unknown): ProfileUpsertPayload {
+  const body = asRecord(input, "PROFILE_INVALID", "Invalid profile payload.");
   return {
-    ok: false,
-    error: { code: "PROFILE_SAVE_FAILED", message: "Unexpected profile save error." }
-  };
-}
-
-function toIpcError(error: unknown): Error {
-  const payload: LocalErrorPayload = {
-    code: "UNKNOWN",
-    message: "Unexpected local operation failure."
-  };
-  if (typeof error === "object" && error !== null && "code" in error && "message" in error) {
-    payload.code = String(error.code) as LocalErrorPayload["code"];
-    payload.message = String(error.message);
-  }
-  return new Error(JSON.stringify(payload));
-}
-
-function toIpcResponseError(error: unknown): IpcFailureResponse {
-  const base: IpcFailureResponse = {
-    ok: false,
-    error: {
-      code: "REMOTE_UNKNOWN_ERROR",
-      message: "Unexpected remote error."
-    }
-  };
-  if (typeof error === "object" && error !== null && "code" in error && "message" in error) {
-    return {
-      ok: false,
-      error: {
-        code: String(error.code) as IpcFailureResponse["error"]["code"],
-        message: String(error.message),
-        detail: "detail" in error ? String((error as { detail?: unknown }).detail) : undefined
-      }
-    };
-  }
-  return base;
-}
-
-function toTransferIpcError(error: unknown): IpcFailureResponse {
-  if (typeof error === "object" && error !== null && "code" in error && "message" in error) {
-    const code = String((error as { code: unknown }).code);
-    const mapped =
-      code === "TRANSFER_INVALID_REQUEST"
-        ? "TRANSFER_INVALID_REQUEST"
-        : code === "TRANSFER_PRECHECK_FAILED"
-          ? "TRANSFER_PRECHECK_FAILED"
-          : code === "TRANSFER_NOT_FOUND"
-            ? "TRANSFER_NOT_FOUND"
-            : code === "TRANSFER_NOT_RUNNING"
-              ? "TRANSFER_NOT_RUNNING"
-              : "TRANSFER_QUEUE_ERROR";
-    return {
-      ok: false,
-      error: {
-        code: mapped,
-        message: String((error as { message: unknown }).message),
-        detail: "detail" in error ? String((error as { detail?: unknown }).detail) : undefined
-      }
-    };
-  }
-  return {
-    ok: false,
-    error: {
-      code: "TRANSFER_QUEUE_ERROR",
-      message: "Unexpected transfer queue error."
-    }
+    id: optionalString(body.id),
+    alias: optionalString(body.alias) ?? "",
+    host: requiredHost(body.host, "PROFILE_INVALID"),
+    port: requiredPort(body.port, "PROFILE_INVALID"),
+    username: requiredUsername(body.username, "PROFILE_INVALID"),
+    defaultRemotePath: optionalString(body.defaultRemotePath),
+    authType: body.authType === "privateKey" ? "privateKey" : "password",
+    privateKeyPath: optionalString(body.privateKeyPath),
+    password: optionalString(body.password),
+    savePassword: Boolean(body.savePassword)
   };
 }

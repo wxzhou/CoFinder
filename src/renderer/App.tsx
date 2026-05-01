@@ -5,7 +5,6 @@ import { applyRowSelection, normalizeContextSelection, selectAllRows, stringifyS
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
-  LocalErrorPayload,
   ProfileUpsertPayload,
   RemoteConnectRequest,
   TransferUpdatePayload
@@ -78,7 +77,6 @@ type UiTabState = {
   remotePane: RemotePaneState;
 };
 
-const HOME_FALLBACK = "";
 const AUTO_HIDE_DELAY_MS = 10_000;
 
 type QueuePanelState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
@@ -105,15 +103,31 @@ export function App() {
   const [queueError, setQueueError] = useState<string>("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
+  const [localHomePath, setLocalHomePath] = useState<string>("");
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const localPane = activeTab.localPane;
   const remotePane = activeTab.remotePane;
 
   useEffect(() => {
-    void navigateLocal(tabState.firstTabId, "", "replace");
+    void initializeLocalHome(tabState.firstTabId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  async function initializeLocalHome(tabId: string): Promise<void> {
+    const homeRes = await window.cofinder.local.getHomePath();
+    if (!homeRes.ok) {
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId ? { ...tab, localPane: { ...tab.localPane, error: homeRes.error.message } } : tab
+        )
+      );
+      return;
+    }
+    const homePath = homeRes.data.homePath;
+    setLocalHomePath(homePath);
+    await navigateLocal(tabId, homePath, "replace");
+  }
+
 
   useEffect(() => {
     const off = window.cofinder.transfer.onUpdate((payload: TransferUpdatePayload) => {
@@ -203,29 +217,8 @@ export function App() {
     mode: "push" | "replace" | "back" | "forward" = "push"
   ): Promise<void> {
     const previousPath = tabs.find((tab) => tab.id === tabId)?.localPane.currentPath ?? "";
-    try {
-      const response = await window.cofinder.local.listDirectory({ path: targetPath });
-      setTabs((prev) =>
-        prev.map((tab) => {
-          if (tab.id !== tabId) return tab;
-          const nextHistory = computeHistory(tab.localPane.history, mode, previousPath, response.path);
-          return {
-            ...tab,
-            localPane: {
-              ...tab.localPane,
-              error: "",
-              entries: response.entries,
-              currentPath: response.path,
-              pathInput: response.path,
-              selectedFullPaths: [],
-              selectionAnchorFullPath: null,
-              history: nextHistory
-            }
-          };
-        })
-      );
-    } catch (error) {
-      const localError = parseLocalError(error);
+    const response = await window.cofinder.local.listDirectory({ path: targetPath });
+    if (!response.ok) {
       setTabs((prev) =>
         prev.map((tab) =>
           tab.id !== tabId
@@ -234,13 +227,33 @@ export function App() {
                 ...tab,
                 localPane: {
                   ...tab.localPane,
-                  error: localError.message,
+                  error: response.error.message,
                   pathInput: previousPath
                 }
               }
         )
       );
+      return;
     }
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        const nextHistory = computeHistory(tab.localPane.history, mode, previousPath, response.data.path);
+        return {
+          ...tab,
+          localPane: {
+            ...tab.localPane,
+            error: "",
+            entries: response.data.entries,
+            currentPath: response.data.path,
+            pathInput: response.data.path,
+            selectedFullPaths: [],
+            selectionAnchorFullPath: null,
+            history: nextHistory
+          }
+        };
+      })
+    );
   }
 
   const queueStats = useMemo(() => {
@@ -324,17 +337,16 @@ export function App() {
       await navigateLocal(tabId, entry.fullPath);
       return;
     }
-    try {
-      await window.cofinder.local.openPath({ path: entry.fullPath });
+    const response = await window.cofinder.local.openPath({ path: entry.fullPath });
+    if (!response.ok) {
       setTabs((prev) =>
-        prev.map((tab) => (tab.id === tabId ? { ...tab, localPane: { ...tab.localPane, error: "" } } : tab))
+        prev.map((tab) => (tab.id === tabId ? { ...tab, localPane: { ...tab.localPane, error: response.error.message } } : tab))
       );
-    } catch (error) {
-      const localError = parseLocalError(error);
-      setTabs((prev) =>
-        prev.map((tab) => (tab.id === tabId ? { ...tab, localPane: { ...tab.localPane, error: localError.message } } : tab))
-      );
+      return;
     }
+    setTabs((prev) =>
+      prev.map((tab) => (tab.id === tabId ? { ...tab, localPane: { ...tab.localPane, error: "" } } : tab))
+    );
   }
 
   function handleSort(tabId: string, nextKey: SortKey): void {
@@ -1088,7 +1100,8 @@ export function App() {
         ? stringifySelection(tab.localPane.selectedFullPaths, tab.localPane.entries, mode)
         : stringifySelection(tab.remotePane.selectedFullPaths, tab.remotePane.entries, mode);
     if (!text) return;
-    await window.cofinder.system.copyText({ text });
+    const result = await window.cofinder.system.copyText({ text });
+    if (!result.ok) setQueueError(result.error.message);
   }
 
   async function disconnectRemote(tabId: string): Promise<void> {
@@ -1111,7 +1124,8 @@ export function App() {
     const id = createId();
     setTabs((prev) => [...prev, createTabState(id, prev.length + 1)]);
     setActiveTabId(id);
-    void navigateLocal(id, "", "replace");
+    if (localHomePath) void navigateLocal(id, localHomePath, "replace");
+    else void initializeLocalHome(id);
   }
 
   async function closeTab(tabId: string): Promise<void> {
@@ -1126,7 +1140,8 @@ export function App() {
       const next = prev.filter((tab) => tab.id !== tabId);
       if (next.length === 0) {
         const newId = createId();
-        void navigateLocal(newId, "", "replace");
+        if (localHomePath) void navigateLocal(newId, localHomePath, "replace");
+        else void initializeLocalHome(newId);
         setActiveTabId(newId);
         return [createTabState(newId, 1)];
       }
@@ -1202,7 +1217,13 @@ export function App() {
               className="nav-btn"
               aria-label="Home"
               title="Home"
-              onClick={() => void navigateLocal(activeTab.id, HOME_FALLBACK)}
+              onClick={() => {
+                if (localHomePath) {
+                  void navigateLocal(activeTab.id, localHomePath);
+                } else {
+                  void initializeLocalHome(activeTab.id);
+                }
+              }}
             >
               ⌂
             </button>
@@ -1603,7 +1624,10 @@ export function App() {
                 onClick={async () => {
                   const tab = tabs.find((t) => t.id === contextMenu.tabId);
                   const target = tab?.localPane.selectedFullPaths[0];
-                  if (target) await window.cofinder.local.openPath({ path: target });
+                  if (target) {
+                    const result = await window.cofinder.local.openPath({ path: target });
+                    if (!result.ok) setQueueError(result.error.message);
+                  }
                   setContextMenu(null);
                 }}
               >
@@ -1630,7 +1654,10 @@ export function App() {
                 onClick={async () => {
                   const tab = tabs.find((t) => t.id === contextMenu.tabId);
                   const target = tab?.localPane.selectedFullPaths[0];
-                  if (target) await window.cofinder.local.revealPath({ path: target });
+                  if (target) {
+                    const result = await window.cofinder.local.revealPath({ path: target });
+                    if (!result.ok) setQueueError(result.error.message);
+                  }
                   setContextMenu(null);
                 }}
               >
@@ -1764,28 +1791,6 @@ function formatTime(isoString: string): string {
   if (Number.isNaN(date.getTime())) return "-";
   return date.toLocaleString();
 }
-
-function parseLocalError(error: unknown): LocalErrorPayload {
-  const rawMessage = error instanceof Error ? error.message : "Unknown local operation error";
-  try {
-    return JSON.parse(rawMessage) as LocalErrorPayload;
-  } catch {
-    const start = rawMessage.indexOf("{");
-    const end = rawMessage.lastIndexOf("}");
-    if (start >= 0 && end > start) {
-      try {
-        return JSON.parse(rawMessage.slice(start, end + 1)) as LocalErrorPayload;
-      } catch {
-        // no-op: fallback below
-      }
-    }
-    return {
-      code: "UNKNOWN",
-      message: rawMessage
-    };
-  }
-}
-
 
 function sortMark(direction: SortDirection): string {
   return direction === "asc" ? "^" : "v";

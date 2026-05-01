@@ -5,15 +5,14 @@ import path from "node:path";
 import { posix as posixPath } from "node:path";
 import type { EnqueueDownloadRequest, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
 import type { TransferTask } from "../../shared/types/models";
+import { buildProcessEnv } from "../utils/processEnv";
+import { assertSafeRemotePath, isSafeHostOrUsername } from "../utils/pathSafety";
 
 type TransferServiceErrorCode = "TRANSFER_INVALID_REQUEST" | "TRANSFER_PRECHECK_FAILED" | "TRANSFER_NOT_FOUND" | "TRANSFER_NOT_RUNNING";
 type TransferServiceError = Error & { code: TransferServiceErrorCode; detail?: string };
 type CommandCheckResult = { ok: true } | { ok: false; message: string; detail?: string };
 type RunCommand = (command: string, args: string[], notFoundMessage: string) => Promise<CommandCheckResult>;
 type SpawnProcess = (command: string, args: string[]) => ChildProcess;
-
-const SAFE_REMOTE_PATH = /^[A-Za-z0-9._/\-@+=,: ]+$/;
-const SAFE_HOST_USER = /^[A-Za-z0-9._-]+$/;
 
 type RunningContext = {
   taskId: string;
@@ -149,6 +148,20 @@ export class TransferQueueService {
     const cleared = before - this.tasks.length;
     if (cleared > 0) this.emit();
     return { cleared };
+  }
+
+  async shutdown(): Promise<void> {
+    if (!this.running) return;
+    const runningTask = this.tasks.find((task) => task.id === this.running?.taskId);
+    if (runningTask && runningTask.status === "running") {
+      runningTask.status = "stopped";
+      runningTask.finishedAt = this.deps.now();
+      runningTask.error = "Transfer stopped because application is quitting.";
+      this.appendLog(runningTask, "Stopping transfer due to application shutdown.");
+    }
+    this.running.child.kill("SIGTERM");
+    this.running = null;
+    this.emit();
   }
 
   private makeTask(input: Omit<TransferTask, "id" | "status" | "rawLog" | "createdAt">): TransferTask {
@@ -306,8 +319,8 @@ function validateCommonRequest(request: {
   username: string;
 }): void {
   if (!request.tabId.trim()) throw transferError("TRANSFER_INVALID_REQUEST", "Tab id is required.");
-  if (!SAFE_HOST_USER.test(request.host)) throw transferError("TRANSFER_INVALID_REQUEST", "Invalid host for rsync transfer.");
-  if (!SAFE_HOST_USER.test(request.username)) {
+  if (!isSafeHostOrUsername(request.host)) throw transferError("TRANSFER_INVALID_REQUEST", "Invalid host for rsync transfer.");
+  if (!isSafeHostOrUsername(request.username)) {
     throw transferError("TRANSFER_INVALID_REQUEST", "Invalid username for rsync transfer.");
   }
   if (!Number.isInteger(request.port) || request.port <= 0 || request.port > 65535) {
@@ -326,18 +339,18 @@ export function validateRsyncPath(input: string): string {
   if (/\u0000|\n|\r/.test(value)) {
     throw transferError("TRANSFER_INVALID_REQUEST", "Remote path contains unsupported characters.");
   }
-  if (!SAFE_REMOTE_PATH.test(value)) {
+  try {
+    return assertSafeRemotePath(value);
+  } catch {
     throw transferError(
       "TRANSFER_INVALID_REQUEST",
       "Path contains unsupported characters for rsync transfer in this version."
     );
   }
-  const normalized = posixPath.normalize(value);
-  return normalized.startsWith("/") ? normalized : `/${normalized}`;
 }
 
 export function buildRsyncRemoteSpec(username: string, host: string, remotePath: string): string {
-  if (!SAFE_HOST_USER.test(username) || !SAFE_HOST_USER.test(host)) {
+  if (!isSafeHostOrUsername(username) || !isSafeHostOrUsername(host)) {
     throw transferError("TRANSFER_INVALID_REQUEST", "Invalid username or host for rsync transfer.");
   }
   return `${username}@${host}:${remotePath}`;
@@ -387,7 +400,7 @@ async function runSimpleCommand(
   notFoundMessage: string
 ): Promise<{ ok: true } | { ok: false; message: string; detail?: string }> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"], env: buildProcessEnv() });
     let stderr = "";
     child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
@@ -408,7 +421,7 @@ async function runSimpleCommand(
 }
 
 function defaultSpawnProcess(command: string, args: string[]): ChildProcess {
-  return spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+  return spawn(command, args, { stdio: ["ignore", "pipe", "pipe"], env: buildProcessEnv() });
 }
 
 async function defaultPathExists(fullPath: string): Promise<boolean> {

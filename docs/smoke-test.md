@@ -79,4 +79,13 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 
 - Build: `npm run build`
 - Unit tests: `npm test`
+- Package (unpacked app): `npm run package`
+- Dist artifacts (dmg/zip): `npm run dist`
 - Secret leak helper: `npm run check:secrets -- --user-data "$HOME/Library/Application Support/CoFinder"`
+
+## Packaging Smoke (M5)
+
+- Launch packaged app from `release/` and verify local pane browsing works.
+- Open Site Manager and login with an existing profile.
+- Verify remote browsing, one upload, and one download succeed.
+- Quit app and verify no orphan `rsync` / `ssh` processes remain.

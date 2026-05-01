@@ -2,7 +2,8 @@ export const IPC_CHANNELS = {
   local: {
     listDirectory: "local:listDirectory",
     openPath: "local:openPath",
-    revealPath: "local:revealPath"
+    revealPath: "local:revealPath",
+    getHomePath: "local:getHomePath"
   },
   remote: {
     connect: "remote:connect",
