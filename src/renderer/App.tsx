@@ -114,6 +114,7 @@ type PlainClickRecord = {
 };
 
 export function App() {
+  const [appVersion, setAppVersion] = useState("unknown");
   const [tabState] = useState(() => {
     const firstTabId = createId();
     return {
@@ -149,6 +150,14 @@ export function App() {
   useEffect(() => {
     void initializeLocalHome(tabState.firstTabId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    void (async () => {
+      const result = await window.cofinder.system.getAppVersion();
+      if (result.ok) {
+        setAppVersion(result.data.version);
+      }
+    })();
   }, []);
   async function initializeLocalHome(tabId: string): Promise<void> {
     const homeRes = await window.cofinder.local.getHomePath();
@@ -1567,6 +1576,9 @@ export function App() {
       <header className="top-bar">
         <div className="title-group">
           <strong>CoFinder</strong>
+        </div>
+        <div className="top-version" aria-label="App version">
+          Version {appVersion}
         </div>
       </header>
       <TabBar

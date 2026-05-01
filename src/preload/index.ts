@@ -49,7 +49,8 @@ const api: IpcApi = {
   },
   system: {
     copyText: (request) => ipcRenderer.invoke("system:copyText", request),
-    quickLook: (request) => ipcRenderer.invoke("system:quickLook", request)
+    quickLook: (request) => ipcRenderer.invoke("system:quickLook", request),
+    getAppVersion: () => ipcRenderer.invoke("system:getAppVersion")
   }
 };
 

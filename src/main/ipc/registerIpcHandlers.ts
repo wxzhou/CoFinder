@@ -405,6 +405,14 @@ export function registerIpcHandlers(): void {
       return toIpcError(error, "SYSTEM_PREVIEW_FAILED", "Failed to open Quick Look preview.");
     }
   });
+
+  registerChannel(IPC_CHANNELS.system.getAppVersion, () => {
+    try {
+      return ok({ version: app.getVersion() });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_VERSION_FAILED", "Failed to resolve app version.");
+    }
+  });
 }
 
 export async function shutdownMainProcessResources(): Promise<void> {

@@ -41,6 +41,7 @@ export const IPC_CHANNELS = {
   },
   system: {
     copyText: "system:copyText",
-    quickLook: "system:quickLook"
+    quickLook: "system:quickLook",
+    getAppVersion: "system:getAppVersion"
   }
 } as const;
