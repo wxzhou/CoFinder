@@ -5,6 +5,16 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on 
 ## V1 Status
 
 - **V1 is complete.** Current milestone: **M5 completed (release hardening + packaging + documentation)**
+- **V1.1 is in progress.** Current milestone: **M1 completed (local/remote rename)**
+
+### Implemented in V1.1 (ongoing)
+
+- **M1 — rename (local + remote):**
+  - Context menu `Rename` for local and remote file lists
+  - In-place (inline) rename editing in the list row (no popup dialog)
+  - Enter to submit, Escape to cancel, blur to submit
+  - Finder/Explorer-style delayed second click on selected item to trigger inline rename
+  - Main-process IPC + validation for `local:rename` and `remote:rename`
 
 ### Implemented in V1
 
@@ -24,7 +34,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on 
 
 - Remote edit auto-sync workflow
 - Quick Look for remote files
-- Delete/rename operations
+- Delete operations
 - Drag selection
 - Drag-and-drop upload/download
 - Full Preferences UI
