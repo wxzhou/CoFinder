@@ -56,6 +56,15 @@ type ContextMenuState = {
   y: number;
 };
 
+type InlineRenameState = {
+  pane: "local" | "remote";
+  tabId: string;
+  connectionId: string | null;
+  sourcePath: string;
+  currentName: string;
+  draftName: string;
+};
+
 type ActivePane = "local" | "remote";
 
 type SiteManagerTabState = {
@@ -78,8 +87,16 @@ type UiTabState = {
 };
 
 const AUTO_HIDE_DELAY_MS = 10_000;
+const INLINE_RENAME_CLICK_MIN_MS = 350;
+const INLINE_RENAME_CLICK_MAX_MS = 1500;
 
 type QueuePanelState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
+type PlainClickRecord = {
+  pane: "local" | "remote";
+  tabId: string;
+  path: string;
+  at: number;
+};
 
 export function App() {
   const [tabState] = useState(() => {
@@ -102,6 +119,8 @@ export function App() {
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
   const [queueError, setQueueError] = useState<string>("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
+  const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [localHomePath, setLocalHomePath] = useState<string>("");
 
@@ -1092,6 +1111,23 @@ export function App() {
     setContextMenu({ pane, tabId, x: event.clientX, y: event.clientY });
   }
 
+  function shouldStartInlineRenameFromClick(
+    pane: "local" | "remote",
+    tabId: string,
+    entryPath: string,
+    selectedFullPaths: string[],
+    event: { metaKey: boolean; shiftKey: boolean }
+  ): boolean {
+    if (event.metaKey || event.shiftKey) return false;
+    if (inlineRename) return false;
+    if (selectedFullPaths.length !== 1 || selectedFullPaths[0] !== entryPath) return false;
+    const last = lastPlainClickRef.current;
+    if (!last) return false;
+    if (last.pane !== pane || last.tabId !== tabId || last.path !== entryPath) return false;
+    const elapsed = Date.now() - last.at;
+    return elapsed >= INLINE_RENAME_CLICK_MIN_MS && elapsed <= INLINE_RENAME_CLICK_MAX_MS;
+  }
+
   async function copySelection(tabId: string, pane: "local" | "remote", mode: "name" | "path"): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
@@ -1102,6 +1138,132 @@ export function App() {
     if (!text) return;
     const result = await window.cofinder.system.copyText({ text });
     if (!result.ok) setQueueError(result.error.message);
+  }
+
+  async function renameLocalSelection(tabId: string, targetPath: string, nextName: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const result = await window.cofinder.local.rename({ path: targetPath, newName: nextName });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+
+    await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id !== tabId
+          ? item
+          : {
+              ...item,
+              localPane: {
+                ...item.localPane,
+                error: "",
+                selectedFullPaths: [result.data.newPath],
+                selectionAnchorFullPath: result.data.newPath
+              }
+            }
+      )
+    );
+  }
+
+  async function renameRemoteSelection(tabId: string, connectionId: string, targetPath: string, nextName: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const result = await window.cofinder.remote.rename({
+      connectionId,
+      path: targetPath,
+      newName: nextName
+    });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+
+    await listRemotePath(connectionId, tab.remotePane.currentPath, "replace", tabId);
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id !== tabId
+          ? item
+          : {
+              ...item,
+              remotePane: {
+                ...item.remotePane,
+                error: "",
+                selectedFullPaths: [result.data.newPath],
+                selectionAnchorFullPath: result.data.newPath
+              }
+            }
+      )
+    );
+  }
+
+  function openInlineRename(tabId: string, pane: "local" | "remote"): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "local") {
+      if (tab.localPane.selectedFullPaths.length !== 1) return;
+      const sourcePath = tab.localPane.selectedFullPaths[0];
+      const currentName = getEntryNameFromPath(sourcePath);
+      setInlineRename({
+        pane,
+        tabId,
+        connectionId: null,
+        sourcePath,
+        currentName,
+        draftName: currentName
+      });
+      return;
+    }
+    if (!tab.remotePane.connectionId || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const sourcePath = tab.remotePane.selectedFullPaths[0];
+    const currentName = getEntryNameFromPath(sourcePath);
+    setInlineRename({
+      pane,
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      sourcePath,
+      currentName,
+      draftName: currentName
+    });
+  }
+
+  async function submitInlineRename(): Promise<void> {
+    if (!inlineRename) return;
+    const trimmedName = inlineRename.draftName.trim();
+    if (!trimmedName) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id !== inlineRename.tabId
+            ? item
+            : inlineRename.pane === "local"
+              ? { ...item, localPane: { ...item.localPane, error: "New name is required." } }
+              : { ...item, remotePane: { ...item.remotePane, error: "New name is required." } }
+        )
+      );
+      return;
+    }
+    if (trimmedName === inlineRename.currentName) {
+      setInlineRename(null);
+      return;
+    }
+
+    if (inlineRename.pane === "local") {
+      await renameLocalSelection(inlineRename.tabId, inlineRename.sourcePath, trimmedName);
+      setInlineRename(null);
+      return;
+    }
+    if (!inlineRename.connectionId) return;
+    await renameRemoteSelection(inlineRename.tabId, inlineRename.connectionId, inlineRename.sourcePath, trimmedName);
+    setInlineRename(null);
   }
 
   async function disconnectRemote(tabId: string): Promise<void> {
@@ -1303,20 +1465,67 @@ export function App() {
                   <tr
                     key={entry.fullPath}
                     className={localPane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
-                    onClick={(event) =>
-                      handleLocalRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey })
-                    }
+                    onClick={(event) => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      if (
+                        shouldStartInlineRenameFromClick("local", activeTab.id, entry.fullPath, localPane.selectedFullPaths, {
+                          metaKey: event.metaKey,
+                          shiftKey: event.shiftKey
+                        })
+                      ) {
+                        openInlineRename(activeTab.id, "local");
+                        lastPlainClickRef.current = null;
+                        return;
+                      }
+                      handleLocalRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                      if (!event.metaKey && !event.shiftKey) {
+                        lastPlainClickRef.current = { pane: "local", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+                      } else {
+                        lastPlainClickRef.current = null;
+                      }
+                    }}
                     onContextMenu={(event) => {
                       event.preventDefault();
                       openContextMenu(activeTab.id, "local", entry.fullPath, event);
                     }}
-                    onDoubleClick={() => void handleRowDoubleClick(activeTab.id, entry)}
+                    onDoubleClick={() => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      void handleRowDoubleClick(activeTab.id, entry);
+                    }}
                   >
                     <td className="name-cell" title={entry.name}>
                       <span className={`file-kind kind-${entry.type}`} aria-hidden="true">
                         {entry.type === "directory" ? "▸" : "·"}
                       </span>
-                      <span className="name-text">{entry.name}</span>
+                      {inlineRename &&
+                      inlineRename.pane === "local" &&
+                      inlineRename.tabId === activeTab.id &&
+                      inlineRename.sourcePath === entry.fullPath ? (
+                        <input
+                          className="name-inline-input"
+                          autoFocus
+                          value={inlineRename.draftName}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) =>
+                            setInlineRename((prev) => (prev ? { ...prev, draftName: event.target.value } : prev))
+                          }
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => event.stopPropagation()}
+                          onDoubleClick={(event) => event.stopPropagation()}
+                          onBlur={() => void submitInlineRename()}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void submitInlineRename();
+                            } else if (event.key === "Escape") {
+                              event.preventDefault();
+                              setInlineRename(null);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span className="name-text">{entry.name}</span>
+                      )}
                     </td>
                     <td className="size-cell">{entry.type === "directory" ? "—" : formatSize(entry.size)}</td>
                     <td className="mtime-cell">{formatTime(entry.mtime)}</td>
@@ -1479,20 +1688,67 @@ export function App() {
                       <tr
                         key={entry.fullPath}
                         className={remotePane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
-                        onClick={(event) =>
-                          handleRemoteRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey })
-                        }
+                        onClick={(event) => {
+                          if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                          if (
+                            shouldStartInlineRenameFromClick("remote", activeTab.id, entry.fullPath, remotePane.selectedFullPaths, {
+                              metaKey: event.metaKey,
+                              shiftKey: event.shiftKey
+                            })
+                          ) {
+                            openInlineRename(activeTab.id, "remote");
+                            lastPlainClickRef.current = null;
+                            return;
+                          }
+                          handleRemoteRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                          if (!event.metaKey && !event.shiftKey) {
+                            lastPlainClickRef.current = { pane: "remote", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+                          } else {
+                            lastPlainClickRef.current = null;
+                          }
+                        }}
                         onContextMenu={(event) => {
                           event.preventDefault();
                           openContextMenu(activeTab.id, "remote", entry.fullPath, event);
                         }}
-                        onDoubleClick={() => void handleRemoteDoubleClick(activeTab.id, entry)}
+                        onDoubleClick={() => {
+                          if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                          void handleRemoteDoubleClick(activeTab.id, entry);
+                        }}
                       >
                         <td className="name-cell" title={entry.name}>
                           <span className={`file-kind kind-${entry.type}`} aria-hidden="true">
                             {entry.type === "directory" ? "▸" : "·"}
                           </span>
-                          <span className="name-text">{entry.name}</span>
+                          {inlineRename &&
+                          inlineRename.pane === "remote" &&
+                          inlineRename.tabId === activeTab.id &&
+                          inlineRename.sourcePath === entry.fullPath ? (
+                            <input
+                              className="name-inline-input"
+                              autoFocus
+                              value={inlineRename.draftName}
+                              onFocus={(event) => event.currentTarget.select()}
+                              onChange={(event) =>
+                                setInlineRename((prev) => (prev ? { ...prev, draftName: event.target.value } : prev))
+                              }
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onClick={(event) => event.stopPropagation()}
+                              onDoubleClick={(event) => event.stopPropagation()}
+                              onBlur={() => void submitInlineRename()}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void submitInlineRename();
+                                } else if (event.key === "Escape") {
+                                  event.preventDefault();
+                                  setInlineRename(null);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <span className="name-text">{entry.name}</span>
+                          )}
                         </td>
                         <td className="size-cell">{entry.type === "directory" ? "—" : formatSize(entry.size)}</td>
                         <td className="mtime-cell">{formatTime(entry.mtime)}</td>
@@ -1621,6 +1877,17 @@ export function App() {
                 type="button"
                 className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={() => {
+                  openInlineRename(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
                 onClick={async () => {
                   const tab = tabs.find((t) => t.id === contextMenu.tabId);
                   const target = tab?.localPane.selectedFullPaths[0];
@@ -1714,6 +1981,17 @@ export function App() {
               <button
                 type="button"
                 className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={() => {
+                  openInlineRename(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 onClick={async () => {
                   await copySelection(contextMenu.tabId, "remote", "name");
                   setContextMenu(null);
@@ -1798,6 +2076,12 @@ function sortMark(direction: SortDirection): string {
 
 function createId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function getEntryNameFromPath(fullPath: string): string {
+  const normalized = fullPath.replace(/\/+$/, "");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts[parts.length - 1] ?? fullPath;
 }
 
 function createLocalPaneState(): LocalPaneState {

@@ -109,6 +109,18 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.rename, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:rename request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const newName = requiredString(body.newName, "newName", "LOCAL_INVALID_INPUT");
+      const newPath = await localFileService.renamePath(targetPath, newName);
+      return ok({ renamed: true as const, newPath });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_RENAME_FAILED", "Failed to rename local path.");
+    }
+  });
+
   registerChannel(
     IPC_CHANNELS.remote.connect,
     async (_event, request: unknown): Promise<IpcResponse<RemoteConnectResponse>> => {
@@ -179,6 +191,19 @@ export function registerIpcHandlers(): void {
       return ok({ disconnected: true as const });
     } catch (error) {
       return toIpcError(error, "REMOTE_UNKNOWN_ERROR", "Unexpected remote error.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.rename, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:rename request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const newName = requiredString(body.newName, "newName", "REMOTE_INVALID_INPUT");
+      const newPath = await remoteFileService.renamePath(connectionId, targetPath, newName);
+      return ok({ renamed: true as const, newPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_RENAME_FAILED", "Failed to rename remote path.");
     }
   });
 

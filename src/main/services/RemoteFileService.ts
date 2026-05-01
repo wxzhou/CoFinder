@@ -134,6 +134,30 @@ export class RemoteFileService {
     await this.connectionManager.disconnect(connectionId);
   }
 
+  async renamePath(connectionId: string, targetPath: string, newName: string): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+
+    const trimmedName = newName.trim();
+    if (!trimmedName || trimmedName === "." || trimmedName === "..") {
+      throw new RemoteServiceError("REMOTE_INVALID_INPUT", "New name is invalid.");
+    }
+    if (trimmedName.includes("/") || trimmedName.includes("\\")) {
+      throw new RemoteServiceError("REMOTE_INVALID_INPUT", "New name cannot contain path separators.");
+    }
+
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const destinationPath = posixPath.join(posixPath.dirname(normalizedPath), trimmedName);
+
+    try {
+      const clientWithRename = connection.client as unknown as { rename: (from: string, to: string) => Promise<unknown> };
+      await clientWithRename.rename(normalizedPath, destinationPath);
+      return destinationPath;
+    } catch (error) {
+      throw this.mapRenameError(error);
+    }
+  }
+
   private normalizeRemotePath(inputPath: string): string {
     return normalizeRemotePosixPath(inputPath.trim() || "/");
   }
@@ -187,6 +211,24 @@ export class RemoteFileService {
       return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
     }
     return new RemoteServiceError("REMOTE_LIST_FAILED", "Failed to list remote directory.", message);
+  }
+
+  private mapRenameError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote rename failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/already exists|EEXIST/i.test(message)) {
+      return new RemoteServiceError("REMOTE_RENAME_FAILED", "A file or folder with the same name already exists.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_RENAME_FAILED", "Failed to rename remote path.", message);
   }
 
   private extractRawError(error: unknown): { name: string; code: string; message: string } {

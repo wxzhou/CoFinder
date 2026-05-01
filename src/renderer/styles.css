@@ -752,3 +752,16 @@ body,
 .context-item:disabled {
   opacity: 0.45;
 }
+
+.name-inline-input {
+  width: 100%;
+  min-width: 120px;
+  max-width: 100%;
+  min-height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--accent);
+  background: #fff;
+  font-size: 12px;
+  line-height: 1.2;
+  padding: 0 6px;
+}

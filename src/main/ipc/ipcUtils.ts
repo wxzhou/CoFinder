@@ -111,6 +111,7 @@ function mapErrorCode(rawCode: string, fallbackCode: RemoteErrorCode): RemoteErr
   if (rawCode === "PERMISSION_DENIED") return "LOCAL_PERMISSION_DENIED";
   if (rawCode === "NOT_DIRECTORY") return "LOCAL_NOT_DIRECTORY";
   if (rawCode === "OPEN_FAILED") return "LOCAL_OPEN_FAILED";
+  if (rawCode === "RENAME_FAILED") return "LOCAL_RENAME_FAILED";
   if (rawCode === "UNKNOWN") return "LOCAL_UNKNOWN_ERROR";
   return rawCode as RemoteErrorCode;
 }

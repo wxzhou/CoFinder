@@ -72,6 +72,34 @@ export class LocalFileService {
     shell.showItemInFolder(normalizedPath);
   }
 
+  async renamePath(targetPath: string, newName: string): Promise<string> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const trimmedName = newName.trim();
+    if (!trimmedName || trimmedName === "." || trimmedName === "..") {
+      throw new LocalFileServiceError("RENAME_FAILED", "New name is invalid.");
+    }
+    if (trimmedName.includes("/") || trimmedName.includes("\\")) {
+      throw new LocalFileServiceError("RENAME_FAILED", "New name cannot contain path separators.");
+    }
+
+    const destinationPath = normalizeLocalPath(path.join(path.dirname(normalizedPath), trimmedName));
+    if (destinationPath === normalizedPath) return normalizedPath;
+    try {
+      await fs.stat(destinationPath);
+      throw new LocalFileServiceError("RENAME_FAILED", "A file or folder with the same name already exists.");
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      if (error instanceof LocalFileServiceError) throw error;
+      if (code && code !== "ENOENT") throw this.mapRenameError(error, normalizedPath);
+    }
+    try {
+      await fs.rename(normalizedPath, destinationPath);
+      return destinationPath;
+    } catch (error) {
+      throw this.mapRenameError(error, normalizedPath);
+    }
+  }
+
   private mapEntryType(dirent: { isDirectory: () => boolean; isFile: () => boolean; isSymbolicLink: () => boolean }) {
     if (dirent.isDirectory()) return "directory";
     if (dirent.isFile()) return "file";
@@ -86,5 +114,17 @@ export class LocalFileService {
       return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
     }
     return new LocalFileServiceError("UNKNOWN", `Failed to access path: ${requestedPath}`);
+  }
+
+  private mapRenameError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") {
+      return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    }
+    if (code === "EEXIST") {
+      return new LocalFileServiceError("RENAME_FAILED", "A file or folder with the same name already exists.");
+    }
+    return new LocalFileServiceError("RENAME_FAILED", `Failed to rename path: ${requestedPath}`);
   }
 }

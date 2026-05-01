@@ -6,13 +6,15 @@ const api: IpcApi = {
     listDirectory: (request) => ipcRenderer.invoke("local:listDirectory", request),
     openPath: (request) => ipcRenderer.invoke("local:openPath", request),
     revealPath: (request) => ipcRenderer.invoke("local:revealPath", request),
-    getHomePath: () => ipcRenderer.invoke("local:getHomePath")
+    getHomePath: () => ipcRenderer.invoke("local:getHomePath"),
+    rename: (request) => ipcRenderer.invoke("local:rename", request)
   },
   remote: {
     connect: (request) => ipcRenderer.invoke("remote:connect", request),
     listDirectory: (request) => ipcRenderer.invoke("remote:listDirectory", request),
     disconnect: (request) => ipcRenderer.invoke("remote:disconnect", request),
-    getHomeDirectory: (request) => ipcRenderer.invoke("remote:getHomeDirectory", request)
+    getHomeDirectory: (request) => ipcRenderer.invoke("remote:getHomeDirectory", request),
+    rename: (request) => ipcRenderer.invoke("remote:rename", request)
   },
   transfer: {
     enqueueUpload: (request) => ipcRenderer.invoke("transfer:enqueueUpload", request),
