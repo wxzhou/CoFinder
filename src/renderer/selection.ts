@@ -59,6 +59,13 @@ export function normalizeContextSelection(currentSelected: string[], clickedPath
   return [clickedPath];
 }
 
+export function clearSelectionState(): SelectionState {
+  return {
+    selectedFullPaths: [],
+    selectionAnchorFullPath: null
+  };
+}
+
 export function stringifySelection(
   fullPaths: string[],
   entries: Array<{ fullPath: string; name: string }>,

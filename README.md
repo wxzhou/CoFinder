@@ -5,7 +5,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on 
 ## V1 Status
 
 - **V1 is complete.** Current milestone: **M5 completed (release hardening + packaging + documentation)**
-- **V1.1 is in progress.** Current milestone: **M5 completed (Quick Look MVP)**
+- **V1.1 is complete.** Current milestone: **M6 completed (hardening + docs + release verification)**
 
 ### Implemented in V1.1 (ongoing)
 
@@ -37,6 +37,11 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on 
   - Local single-file preview via macOS Quick Look (`qlmanage -p`) through main-process IPC
   - Optional `Space` shortcut to trigger Quick Look for current local single selection
   - Explicit fallback message for remote Quick Look (not supported in M5)
+- **M6 — hardening + docs + release verification:**
+  - Regression hardening for selection behavior (blank-area clear selection + stable Shift range semantics)
+  - Added focused regression tests for selection and quick look guardrails
+  - Updated smoke and release checklists to match shipped V1.1 behavior
+  - Completed full verification flow (`npm test`, `npm run build`, packaging checks)
 
 ### Implemented in V1
 

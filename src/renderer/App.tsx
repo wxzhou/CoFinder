@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
-import { applyRowSelection, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
+import { applyRowSelection, clearSelectionState, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -1112,8 +1112,7 @@ export function App() {
               ...tab,
               localPane: {
                 ...tab.localPane,
-                selectedFullPaths: [],
-                selectionAnchorFullPath: null
+                ...clearSelectionState()
               }
             }
           : tab
@@ -1129,8 +1128,7 @@ export function App() {
               ...tab,
               remotePane: {
                 ...tab.remotePane,
-                selectedFullPaths: [],
-                selectionAnchorFullPath: null
+                ...clearSelectionState()
               }
             }
           : tab

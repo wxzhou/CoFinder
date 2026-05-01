@@ -1,4 +1,4 @@
-# CoFinder Smoke Test Checklist (V1.1 M5)
+# CoFinder Smoke Test Checklist (V1.1 M6)
 
 Use this checklist before a release candidate. Prefer an isolated test workspace.
 
@@ -74,6 +74,13 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 - In local pane, select a directory and trigger `Quick Look`; verify operation is rejected with a clear error message.
 - In remote pane, trigger context menu `Quick Look`; verify clear fallback message indicates remote Quick Look is not supported in M5.
 
+## Selection Regression Smoke (V1.1 M6)
+
+- In local pane, select one row, then click blank area inside table container; verify selection clears.
+- In remote pane, select one row, then click blank area inside table container; verify selection clears.
+- In local pane, create a non-contiguous selection with `Cmd-click`, then `Shift-click`; verify final selection is strict anchor range only.
+- Repeat the same non-contiguous + `Shift-click` check in remote pane.
+
 ## Select All Hotkey + Text Selection Guard (M4.6.1)
 
 - Click anywhere inside the local file list pane (not the path input). Press `Cmd+A` and verify all local entries in the current directory are selected.
@@ -97,7 +104,7 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 - Dist artifacts (dmg/zip): `npm run dist`
 - Secret leak helper: `npm run check:secrets -- --user-data "$HOME/Library/Application Support/CoFinder"`
 
-## Packaging Smoke (M5)
+## Packaging Smoke (M6)
 
 - Launch packaged app from `release/` and verify local pane browsing works.
 - Open Site Manager and login with an existing profile.

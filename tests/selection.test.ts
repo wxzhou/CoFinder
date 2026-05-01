@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyRowSelection, normalizeContextSelection, selectAllRows, stringifySelection } from "../src/renderer/selection";
+import { applyRowSelection, clearSelectionState, normalizeContextSelection, selectAllRows, stringifySelection } from "../src/renderer/selection";
 
 const rows = [
   { fullPath: "/a", name: "a" },
@@ -48,6 +48,13 @@ describe("selection helpers", () => {
   it("context menu click selects only clicked item when outside selection", () => {
     expect(normalizeContextSelection(["/a", "/b"], "/c")).toEqual(["/c"]);
     expect(normalizeContextSelection(["/a", "/b"], "/a")).toEqual(["/a", "/b"]);
+  });
+
+  it("clearSelectionState clears both selection and anchor", () => {
+    expect(clearSelectionState()).toEqual({
+      selectedFullPaths: [],
+      selectionAnchorFullPath: null
+    });
   });
 
   it("stringifies names and paths for copy action", () => {
