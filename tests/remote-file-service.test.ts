@@ -93,4 +93,47 @@ describe("RemoteFileService path/list behavior", () => {
 
     await expect(service.renamePath("c1", "/a/old.txt", "new.txt")).rejects.toMatchObject({ code: "REMOTE_RENAME_FAILED" });
   });
+
+  it("deletes remote file and directory recursively", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/dir") return { type: "d" };
+      if (target === "/dir/child.txt") return { type: "-" };
+      if (target === "/file.txt") return { type: "-" };
+      throw new Error("No such file");
+    });
+    const list = vi.fn(async (target: string) => {
+      if (target === "/dir") return [{ name: "child.txt", type: "-", size: 1, modifyTime: Date.now() }];
+      return [];
+    });
+    const del = vi.fn().mockResolvedValue(undefined);
+    const rmdir = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, list, delete: del, rmdir }
+      })
+    } as any);
+
+    await expect(service.deletePaths("c1", ["/file.txt", "/dir"])).resolves.toBe(2);
+    expect(del).toHaveBeenCalledWith("/file.txt");
+    expect(del).toHaveBeenCalledWith("/dir/child.txt");
+    expect(rmdir).toHaveBeenCalledWith("/dir");
+  });
+
+  it("maps remote delete missing path to REMOTE_NOT_FOUND", async () => {
+    const stat = vi.fn().mockRejectedValue(new Error("No such file or directory"));
+    const list = vi.fn().mockResolvedValue([]);
+    const del = vi.fn().mockResolvedValue(undefined);
+    const rmdir = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, list, delete: del, rmdir }
+      })
+    } as any);
+
+    await expect(service.deletePaths("c1", ["/missing"])).rejects.toMatchObject({ code: "REMOTE_NOT_FOUND" });
+  });
 });

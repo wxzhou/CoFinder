@@ -158,6 +158,26 @@ export class RemoteFileService {
     }
   }
 
+  async deletePaths(connectionId: string, paths: string[]): Promise<number> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    if (paths.length === 0) {
+      throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Select at least one remote path to delete.");
+    }
+
+    const normalizedPaths = unique(paths.map((item) => this.normalizeRemotePath(item)));
+    let deleted = 0;
+    for (const targetPath of normalizedPaths) {
+      try {
+        await this.deleteRemotePathRecursive(connection.client as unknown as RemoteDeleteClient, targetPath);
+        deleted += 1;
+      } catch (error) {
+        throw this.mapDeleteError(error);
+      }
+    }
+    return deleted;
+  }
+
   private normalizeRemotePath(inputPath: string): string {
     return normalizeRemotePosixPath(inputPath.trim() || "/");
   }
@@ -231,6 +251,36 @@ export class RemoteFileService {
     return new RemoteServiceError("REMOTE_RENAME_FAILED", "Failed to rename remote path.", message);
   }
 
+  private async deleteRemotePathRecursive(client: RemoteDeleteClient, targetPath: string): Promise<void> {
+    const stat = await client.stat(targetPath);
+    if (stat.type === "d") {
+      const entries = (await client.list(targetPath)) as RemoteListItem[];
+      for (const entry of entries) {
+        if (entry.name === "." || entry.name === "..") continue;
+        const fullPath = targetPath === "/" ? `/${entry.name}` : posixPath.join(targetPath, entry.name);
+        await this.deleteRemotePathRecursive(client, fullPath);
+      }
+      await client.rmdir(targetPath);
+      return;
+    }
+    await client.delete(targetPath);
+  }
+
+  private mapDeleteError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote delete failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_DELETE_FAILED", "Failed to delete remote path.", message);
+  }
+
   private extractRawError(error: unknown): { name: string; code: string; message: string } {
     const err = error as { name?: unknown; code?: unknown; message?: unknown };
     return {
@@ -244,4 +294,22 @@ export class RemoteFileService {
     // Keep diagnostics focused; never include credentials.
     console.info(`[RemoteFileService] ${message}`, payload);
   }
+}
+
+type RemoteDeleteClient = {
+  stat: (path: string) => Promise<{ type: string }>;
+  list: (path: string) => Promise<unknown[]>;
+  delete: (path: string) => Promise<unknown>;
+  rmdir: (path: string) => Promise<unknown>;
+};
+
+function unique(items: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
+  return out;
 }

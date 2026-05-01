@@ -765,3 +765,66 @@ body,
   line-height: 1.2;
   padding: 0 6px;
 }
+
+.delete-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  background: color-mix(in srgb, #000 20%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.delete-confirm-dialog {
+  width: min(460px, calc(100vw - 36px));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 18px 42px color-mix(in srgb, #000 18%, transparent);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.delete-confirm-dialog h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.delete-confirm-dialog p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.delete-confirm-list {
+  max-height: 160px;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+  border-radius: var(--radius-sm);
+  background: #fafafa;
+  padding: 6px 8px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.delete-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.toolbar-button.danger {
+  border-color: #e7b1b1;
+  color: #9b1c1c;
+  background: #fff4f4;
+}
+
+.toolbar-button.danger:hover {
+  background: #ffe9e9;
+  border-color: #df8d8d;
+}

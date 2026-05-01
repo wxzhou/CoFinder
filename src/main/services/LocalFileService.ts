@@ -100,6 +100,23 @@ export class LocalFileService {
     }
   }
 
+  async deletePaths(paths: string[]): Promise<number> {
+    if (paths.length === 0) {
+      throw new LocalFileServiceError("DELETE_FAILED", "Select at least one local path to delete.");
+    }
+    const normalized = unique(paths.map((item) => normalizeLocalPath(item)));
+    let deleted = 0;
+    for (const targetPath of normalized) {
+      try {
+        await fs.rm(targetPath, { recursive: true, force: false });
+        deleted += 1;
+      } catch (error) {
+        throw this.mapDeleteError(error, targetPath);
+      }
+    }
+    return deleted;
+  }
+
   private mapEntryType(dirent: { isDirectory: () => boolean; isFile: () => boolean; isSymbolicLink: () => boolean }) {
     if (dirent.isDirectory()) return "directory";
     if (dirent.isFile()) return "file";
@@ -127,4 +144,24 @@ export class LocalFileService {
     }
     return new LocalFileServiceError("RENAME_FAILED", `Failed to rename path: ${requestedPath}`);
   }
+
+  private mapDeleteError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") {
+      return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    }
+    return new LocalFileServiceError("DELETE_FAILED", `Failed to delete path: ${requestedPath}`);
+  }
+}
+
+function unique(items: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
+  return out;
 }

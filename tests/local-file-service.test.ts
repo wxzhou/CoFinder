@@ -49,3 +49,26 @@ describe("LocalFileService renamePath", () => {
     await expect(service.renamePath(source, "new.txt")).rejects.toMatchObject({ code: "RENAME_FAILED" });
   });
 });
+
+describe("LocalFileService deletePaths", () => {
+  it("deletes multiple local entries including directory", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const filePath = path.join(dir, "a.txt");
+    const folderPath = path.join(dir, "folder");
+    const nested = path.join(folderPath, "b.txt");
+    await fs.writeFile(filePath, "a");
+    await fs.mkdir(folderPath, { recursive: true });
+    await fs.writeFile(nested, "b");
+
+    const deleted = await service.deletePaths([filePath, folderPath]);
+    expect(deleted).toBe(2);
+    await expect(fs.stat(filePath)).rejects.toBeTruthy();
+    await expect(fs.stat(folderPath)).rejects.toBeTruthy();
+  });
+
+  it("rejects empty delete request", async () => {
+    const service = new LocalFileService();
+    await expect(service.deletePaths([])).rejects.toMatchObject({ code: "DELETE_FAILED" });
+  });
+});

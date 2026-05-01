@@ -121,6 +121,20 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.delete, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:delete request.");
+      if (!Array.isArray(body.paths) || body.paths.length === 0) {
+        throw new AppError("LOCAL_INVALID_INPUT", "Select at least one local path.");
+      }
+      const paths = body.paths.map((item) => validateLocalPathInput(item, "LOCAL_INVALID_INPUT", "path"));
+      const deleted = await localFileService.deletePaths(paths);
+      return ok({ deleted });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_DELETE_FAILED", "Failed to delete local paths.");
+    }
+  });
+
   registerChannel(
     IPC_CHANNELS.remote.connect,
     async (_event, request: unknown): Promise<IpcResponse<RemoteConnectResponse>> => {
@@ -204,6 +218,21 @@ export function registerIpcHandlers(): void {
       return ok({ renamed: true as const, newPath });
     } catch (error) {
       return toIpcError(error, "REMOTE_RENAME_FAILED", "Failed to rename remote path.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.delete, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:delete request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      if (!Array.isArray(body.paths) || body.paths.length === 0) {
+        throw new AppError("REMOTE_INVALID_INPUT", "Select at least one remote path.");
+      }
+      const paths = body.paths.map((item) => normalizeRemotePathInput(item, "REMOTE_INVALID_INPUT", "path"));
+      const deleted = await remoteFileService.deletePaths(connectionId, paths);
+      return ok({ deleted });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_DELETE_FAILED", "Failed to delete remote paths.");
     }
   });
 

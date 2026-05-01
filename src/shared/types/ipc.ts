@@ -1,7 +1,14 @@
 import type { ConnectionConfig, RemoteFileEntry, ServerProfile, TransferTask } from "./models";
 import type { LocalFileEntry } from "./models";
 
-export type LocalErrorCode = "NOT_FOUND" | "PERMISSION_DENIED" | "NOT_DIRECTORY" | "OPEN_FAILED" | "RENAME_FAILED" | "UNKNOWN";
+export type LocalErrorCode =
+  | "NOT_FOUND"
+  | "PERMISSION_DENIED"
+  | "NOT_DIRECTORY"
+  | "OPEN_FAILED"
+  | "RENAME_FAILED"
+  | "DELETE_FAILED"
+  | "UNKNOWN";
 
 export interface LocalErrorPayload {
   code: LocalErrorCode;
@@ -20,6 +27,7 @@ export type RemoteErrorCode =
   | "LOCAL_NOT_DIRECTORY"
   | "LOCAL_OPEN_FAILED"
   | "LOCAL_RENAME_FAILED"
+  | "LOCAL_DELETE_FAILED"
   | "LOCAL_UNKNOWN_ERROR"
   | "SYSTEM_INVALID_INPUT"
   | "REMOTE_AUTH_FAILED"
@@ -29,6 +37,7 @@ export type RemoteErrorCode =
   | "REMOTE_NOT_DIRECTORY"
   | "REMOTE_LIST_FAILED"
   | "REMOTE_RENAME_FAILED"
+  | "REMOTE_DELETE_FAILED"
   | "REMOTE_DISCONNECTED"
   | "REMOTE_UNKNOWN_ERROR"
   | "REMOTE_INVALID_INPUT"
@@ -133,6 +142,7 @@ export interface IpcApi {
     revealPath: (request: { path: string }) => Promise<IpcResponse<{ revealed: true }>>;
     getHomePath: () => Promise<IpcResponse<{ homePath: string }>>;
     rename: (request: { path: string; newName: string }) => Promise<IpcResponse<{ renamed: true; newPath: string }>>;
+    delete: (request: { paths: string[] }) => Promise<IpcResponse<{ deleted: number }>>;
   };
   remote: {
     connect: (request: RemoteConnectRequest) => Promise<IpcResponse<RemoteConnectResponse>>;
@@ -144,6 +154,7 @@ export interface IpcApi {
       path: string;
       newName: string;
     }) => Promise<IpcResponse<{ renamed: true; newPath: string }>>;
+    delete: (request: { connectionId: string; paths: string[] }) => Promise<IpcResponse<{ deleted: number }>>;
   };
   transfer: {
     enqueueUpload: (request: EnqueueUploadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;

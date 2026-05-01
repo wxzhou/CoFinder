@@ -5,7 +5,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on 
 ## V1 Status
 
 - **V1 is complete.** Current milestone: **M5 completed (release hardening + packaging + documentation)**
-- **V1.1 is in progress.** Current milestone: **M1 completed (local/remote rename)**
+- **V1.1 is in progress.** Current milestone: **M2 completed (local/remote delete)**
 
 ### Implemented in V1.1 (ongoing)
 
@@ -15,6 +15,12 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on 
   - Enter to submit, Escape to cancel, blur to submit
   - Finder/Explorer-style delayed second click on selected item to trigger inline rename
   - Main-process IPC + validation for `local:rename` and `remote:rename`
+- **M2 — delete (local + remote):**
+  - Context menu `Delete` for local and remote file lists
+  - Supports single and multi-selection delete requests
+  - Explicit confirmation dialog before destructive action
+  - Main-process IPC + validation for `local:delete` and `remote:delete`
+  - Local recursive delete + remote recursive delete with stable error mapping
 
 ### Implemented in V1
 

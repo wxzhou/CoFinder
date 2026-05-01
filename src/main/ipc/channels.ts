@@ -4,14 +4,16 @@ export const IPC_CHANNELS = {
     openPath: "local:openPath",
     revealPath: "local:revealPath",
     getHomePath: "local:getHomePath",
-    rename: "local:rename"
+    rename: "local:rename",
+    delete: "local:delete"
   },
   remote: {
     connect: "remote:connect",
     listDirectory: "remote:listDirectory",
     disconnect: "remote:disconnect",
     getHomeDirectory: "remote:getHomeDirectory",
-    rename: "remote:rename"
+    rename: "remote:rename",
+    delete: "remote:delete"
   },
   transfer: {
     enqueueUpload: "transfer:enqueueUpload",

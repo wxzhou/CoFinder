@@ -7,14 +7,16 @@ const api: IpcApi = {
     openPath: (request) => ipcRenderer.invoke("local:openPath", request),
     revealPath: (request) => ipcRenderer.invoke("local:revealPath", request),
     getHomePath: () => ipcRenderer.invoke("local:getHomePath"),
-    rename: (request) => ipcRenderer.invoke("local:rename", request)
+    rename: (request) => ipcRenderer.invoke("local:rename", request),
+    delete: (request) => ipcRenderer.invoke("local:delete", request)
   },
   remote: {
     connect: (request) => ipcRenderer.invoke("remote:connect", request),
     listDirectory: (request) => ipcRenderer.invoke("remote:listDirectory", request),
     disconnect: (request) => ipcRenderer.invoke("remote:disconnect", request),
     getHomeDirectory: (request) => ipcRenderer.invoke("remote:getHomeDirectory", request),
-    rename: (request) => ipcRenderer.invoke("remote:rename", request)
+    rename: (request) => ipcRenderer.invoke("remote:rename", request),
+    delete: (request) => ipcRenderer.invoke("remote:delete", request)
   },
   transfer: {
     enqueueUpload: (request) => ipcRenderer.invoke("transfer:enqueueUpload", request),

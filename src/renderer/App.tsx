@@ -65,6 +65,14 @@ type InlineRenameState = {
   draftName: string;
 };
 
+type DeleteConfirmState = {
+  pane: "local" | "remote";
+  tabId: string;
+  connectionId: string | null;
+  paths: string[];
+  names: string[];
+};
+
 type ActivePane = "local" | "remote";
 
 type SiteManagerTabState = {
@@ -120,6 +128,7 @@ export function App() {
   const [queueError, setQueueError] = useState<string>("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [localHomePath, setLocalHomePath] = useState<string>("");
@@ -1266,6 +1275,76 @@ export function App() {
     setInlineRename(null);
   }
 
+  function openDeleteConfirm(tabId: string, pane: "local" | "remote"): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "local") {
+      const paths = tab.localPane.selectedFullPaths;
+      if (paths.length === 0) return;
+      const entryMap = new Map(tab.localPane.entries.map((entry) => [entry.fullPath, entry.name]));
+      const names = paths.map((fullPath) => entryMap.get(fullPath) ?? getEntryNameFromPath(fullPath));
+      setDeleteConfirm({
+        pane,
+        tabId,
+        connectionId: null,
+        paths,
+        names
+      });
+      return;
+    }
+
+    if (!tab.remotePane.connectionId) return;
+    const paths = tab.remotePane.selectedFullPaths;
+    if (paths.length === 0) return;
+    const entryMap = new Map(tab.remotePane.entries.map((entry) => [entry.fullPath, entry.name]));
+    const names = paths.map((fullPath) => entryMap.get(fullPath) ?? getEntryNameFromPath(fullPath));
+    setDeleteConfirm({
+      pane,
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      paths,
+      names
+    });
+  }
+
+  async function submitDeleteConfirm(): Promise<void> {
+    if (!deleteConfirm) return;
+    if (deleteConfirm.pane === "local") {
+      const tab = tabs.find((item) => item.id === deleteConfirm.tabId);
+      if (!tab) return;
+      const result = await window.cofinder.local.delete({ paths: deleteConfirm.paths });
+      if (!result.ok) {
+        setTabs((prev) =>
+          prev.map((item) =>
+            item.id === deleteConfirm.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+          )
+        );
+        return;
+      }
+      await navigateLocal(deleteConfirm.tabId, tab.localPane.currentPath, "replace");
+      setDeleteConfirm(null);
+      return;
+    }
+
+    if (!deleteConfirm.connectionId) return;
+    const tab = tabs.find((item) => item.id === deleteConfirm.tabId);
+    if (!tab) return;
+    const result = await window.cofinder.remote.delete({
+      connectionId: deleteConfirm.connectionId,
+      paths: deleteConfirm.paths
+    });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === deleteConfirm.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+    await listRemotePath(deleteConfirm.connectionId, tab.remotePane.currentPath, "replace", deleteConfirm.tabId);
+    setDeleteConfirm(null);
+  }
+
   async function disconnectRemote(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId) return;
@@ -1887,6 +1966,17 @@ export function App() {
               <button
                 type="button"
                 className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) === 0}
+                onClick={() => {
+                  openDeleteConfirm(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
                 onClick={async () => {
                   const tab = tabs.find((t) => t.id === contextMenu.tabId);
@@ -1981,6 +2071,17 @@ export function App() {
               <button
                 type="button"
                 className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) === 0}
+                onClick={() => {
+                  openDeleteConfirm(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
                 onClick={() => {
                   openInlineRename(contextMenu.tabId, "remote");
@@ -2024,6 +2125,31 @@ export function App() {
               </button>
             </>
           )}
+        </div>
+      ) : null}
+      {deleteConfirm ? (
+        <div className="delete-confirm-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setDeleteConfirm(null)}>
+          <div className="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+            <h3 id="delete-confirm-title">Confirm Delete</h3>
+            <p>
+              Delete {deleteConfirm.paths.length} {deleteConfirm.paths.length === 1 ? "item" : "items"} from{" "}
+              {deleteConfirm.pane === "local" ? "local" : "remote"}?
+            </p>
+            <div className="delete-confirm-list">
+              {deleteConfirm.names.slice(0, 8).map((name, index) => (
+                <div key={`${name}-${index}`}>{name}</div>
+              ))}
+              {deleteConfirm.names.length > 8 ? <div>...and {deleteConfirm.names.length - 8} more</div> : null}
+            </div>
+            <div className="delete-confirm-actions">
+              <button type="button" className="toolbar-button" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </button>
+              <button type="button" className="toolbar-button danger" onClick={() => void submitDeleteConfirm()}>
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
       {activeSiteManager?.open ? (
