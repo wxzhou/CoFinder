@@ -10,6 +10,7 @@ let processDiagnosticsRegistered = false;
 function createMainWindow(): BrowserWindow {
   const preloadPath = path.join(__dirname, "../preload/index.js");
   const indexPath = path.join(__dirname, "../../dist/index.html");
+  const appIconPath = getAppIconPath();
   logBoot("window-paths", {
     isDev,
     isPackaged: app.isPackaged,
@@ -19,7 +20,9 @@ function createMainWindow(): BrowserWindow {
     preloadPath,
     preloadExists: fs.existsSync(preloadPath),
     indexPath,
-    indexExists: fs.existsSync(indexPath)
+    indexExists: fs.existsSync(indexPath),
+    appIconPath,
+    appIconExists: !!appIconPath && fs.existsSync(appIconPath)
   });
 
   const mainWindow = new BrowserWindow({
@@ -28,6 +31,7 @@ function createMainWindow(): BrowserWindow {
     minWidth: 1024,
     minHeight: 680,
     show: false,
+    icon: appIconPath,
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -113,6 +117,12 @@ function safeGetUserDataPath(): string {
   } catch {
     return path.join(process.cwd(), ".cofinder-debug");
   }
+}
+
+function getAppIconPath(): string | undefined {
+  const base = app.isPackaged ? process.resourcesPath : app.getAppPath();
+  const iconPath = path.join(base, "assets", "icon", "icon.png");
+  return fs.existsSync(iconPath) ? iconPath : undefined;
 }
 
 function registerProcessDiagnostics(): void {
