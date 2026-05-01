@@ -1094,6 +1094,40 @@ export function App() {
     );
   }
 
+  function clearLocalSelection(tabId: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              localPane: {
+                ...tab.localPane,
+                selectedFullPaths: [],
+                selectionAnchorFullPath: null
+              }
+            }
+          : tab
+      )
+    );
+  }
+
+  function clearRemoteSelection(tabId: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              remotePane: {
+                ...tab.remotePane,
+                selectedFullPaths: [],
+                selectionAnchorFullPath: null
+              }
+            }
+          : tab
+      )
+    );
+  }
+
   function openContextMenu(
     tabId: string,
     pane: "local" | "remote",
@@ -1506,7 +1540,7 @@ export function App() {
         onClose={(tabId) => void closeTab(tabId)}
       />
       <main className="pane-layout">
-        <section className="pane local-pane">
+        <section className={`pane local-pane ${activePane === "local" ? "pane-active" : ""}`}>
           <div className="pane-toolbar">
             <button
               type="button"
@@ -1603,9 +1637,13 @@ export function App() {
           {localPane.error ? <div className="error-banner">{localPane.error}</div> : null}
 
           <div
-            className="table-wrap"
-            onMouseDown={() => {
+            className={`table-wrap ${activePane === "local" ? "table-wrap-active" : ""}`}
+            onMouseDown={(event) => {
               setActivePane("local");
+              const target = event.target as HTMLElement | null;
+              if (!target?.closest("tbody tr")) {
+                clearLocalSelection(activeTab.id);
+              }
             }}
           >
             <table className="file-table">
@@ -1713,7 +1751,7 @@ export function App() {
           </div>
         </section>
         <section className="splitter" />
-        <section className="pane remote-pane">
+        <section className={`pane remote-pane ${activePane === "remote" ? "pane-active" : ""}`}>
           {!(remotePane.connectionStatus === "connected" && remotePane.connectionId) ? (
             <div className="remote-disconnected-wrap">
               <div className="placeholder-pane">
@@ -1826,9 +1864,13 @@ export function App() {
               {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
 
               <div
-                className="table-wrap"
-                onMouseDown={() => {
+                className={`table-wrap ${activePane === "remote" ? "table-wrap-active" : ""}`}
+                onMouseDown={(event) => {
                   setActivePane("remote");
+                  const target = event.target as HTMLElement | null;
+                  if (!target?.closest("tbody tr")) {
+                    clearRemoteSelection(activeTab.id);
+                  }
                 }}
               >
                 <table className="file-table">

@@ -37,6 +37,14 @@ describe("selection helpers", () => {
     expect(next.selectedFullPaths).toEqual(["/b", "/c", "/d"]);
   });
 
+  it("shift-click replaces previous non-range selections", () => {
+    const next = applyRowSelection(rows, { selectedFullPaths: ["/a", "/d"], selectionAnchorFullPath: "/b" }, "/c", {
+      metaKey: false,
+      shiftKey: true
+    });
+    expect(next.selectedFullPaths).toEqual(["/b", "/c"]);
+  });
+
   it("context menu click selects only clicked item when outside selection", () => {
     expect(normalizeContextSelection(["/a", "/b"], "/c")).toEqual(["/c"]);
     expect(normalizeContextSelection(["/a", "/b"], "/a")).toEqual(["/a", "/b"]);

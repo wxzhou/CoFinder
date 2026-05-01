@@ -1,4 +1,4 @@
-# CoFinder Smoke Test Checklist (M4.6)
+# CoFinder Smoke Test Checklist (V1.1 M4)
 
 Use this checklist before a release candidate. Prefer an isolated test workspace.
 
@@ -59,6 +59,13 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 10. Confirm remote status bar selected count/size reflects multiple selected rows.
 11. Right-click remote item and verify menu shows: Download / Copy Name / Copy Full Path / Refresh.
 12. Use remote context `Download` on multi-selection and verify queue creates one task per selected source.
+
+## UI Polish Smoke (V1.1 M4)
+
+- Click local pane table, then remote pane table; verify active pane highlight switches clearly and `Cmd+A` behavior remains unchanged.
+- Verify selected rows still have clear contrast in both panes and hover does not hide selection state.
+- Open transfer queue with mixed states (`pending`, `running`, `success`, `failed`) and verify status chips are distinct/readable.
+- Open local and remote context menus; verify item spacing/readability improves and disabled items remain clearly disabled.
 
 ## Select All Hotkey + Text Selection Guard (M4.6.1)
 

@@ -5,7 +5,7 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on 
 ## V1 Status
 
 - **V1 is complete.** Current milestone: **M5 completed (release hardening + packaging + documentation)**
-- **V1.1 is in progress.** Current milestone: **M3 completed (local/remote Get Info)**
+- **V1.1 is in progress.** Current milestone: **M4 completed (macOS-style UI polish A)**
 
 ### Implemented in V1.1 (ongoing)
 
@@ -27,6 +27,11 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on 
   - Human-readable permissions format (`rwxrwxrwx`) for local and remote entries
   - Robust remote type resolution (`file` / `directory` / `symlink`) from varied SFTP `stat` responses
   - For directories, dialog opens immediately and size is calculated asynchronously with a loading spinner
+- **M4 — macOS-style UI polish A:**
+  - Clear active pane visual highlight for keyboard-selection context
+  - Stronger row selection contrast while preserving current selection behavior
+  - Improved transfer queue status readability with status chips
+  - Improved context menu spacing/readability (no behavior changes)
 
 ### Implemented in V1
 
