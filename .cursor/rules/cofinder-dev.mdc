@@ -71,6 +71,7 @@ Follow these rules for every CoFinder V1.1 task:
 
 6. Verification:
    - Run `npm test` and `npm run build` after substantive edits.
+   - Run `npm run dev` and verify dev startup before claiming a feature is complete.
    - Add/update tests for newly added logic.
    - Update smoke checklist/doc notes when behavior changes.
 

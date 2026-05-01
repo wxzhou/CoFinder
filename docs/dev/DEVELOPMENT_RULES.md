@@ -41,6 +41,7 @@ After any substantive change:
 
 - Run `npm test`.
 - Run `npm run build`.
+- Run `npm run dev` and confirm dev mode starts cleanly before claiming feature completion.
 - Execute relevant smoke subset from `docs/smoke-test.md`.
 - For release-impacting changes, also verify `docs/release-checklist.md`.
 
