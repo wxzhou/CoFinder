@@ -828,3 +828,83 @@ body,
   background: #ffe9e9;
   border-color: #df8d8d;
 }
+
+.info-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1450;
+  background: color-mix(in srgb, #000 18%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.info-dialog {
+  width: min(560px, calc(100vw - 40px));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 18px 42px color-mix(in srgb, #000 18%, transparent);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.info-dialog h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: 90px 1fr;
+  row-gap: 6px;
+  column-gap: 10px;
+  margin: 0;
+}
+
+.info-grid dt {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.info-grid dd {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.info-path {
+  word-break: break-all;
+}
+
+.info-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.info-size-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #6a6f7b;
+}
+
+.info-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid #d0d6e0;
+  border-top-color: #4a7aff;
+  border-radius: 50%;
+  animation: info-spin 0.8s linear infinite;
+}
+
+@keyframes info-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

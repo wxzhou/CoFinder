@@ -136,4 +136,88 @@ describe("RemoteFileService path/list behavior", () => {
 
     await expect(service.deletePaths("c1", ["/missing"])).rejects.toMatchObject({ code: "REMOTE_NOT_FOUND" });
   });
+
+  it("returns remote path info", async () => {
+    const stat = vi.fn().mockResolvedValue({
+      type: "-",
+      size: 42,
+      modifyTime: Date.now(),
+      rights: { user: "rw", group: "r", other: "" },
+      owner: 1000,
+      group: 100
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat }
+      })
+    } as any);
+
+    const info = await service.getPathInfo("c1", "/a/file.txt");
+    expect(info.name).toBe("file.txt");
+    expect(info.fullPath).toBe("/a/file.txt");
+    expect(info.type).toBe("file");
+    expect(info.size).toBe(42);
+    expect(info.permissions).toBe("rw-r-----");
+    expect(info.owner).toBe("1000");
+    expect(info.group).toBe("100");
+  });
+
+  it("maps get info not found to REMOTE_NOT_FOUND", async () => {
+    const stat = vi.fn().mockRejectedValue(new Error("No such file or directory"));
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat }
+      })
+    } as any);
+
+    await expect(service.getPathInfo("c1", "/missing")).rejects.toMatchObject({ code: "REMOTE_NOT_FOUND" });
+  });
+
+  it("maps remote directory type and recursive size", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/dir") return { type: 2, mode: 0o040755, size: 0, modifyTime: Date.now() };
+      if (target === "/dir/a.txt") return { type: 1, mode: 0o100644, size: 1024, modifyTime: Date.now() };
+      throw new Error("No such file");
+    });
+    const list = vi.fn(async (target: string) => {
+      if (target === "/dir") return [{ name: "a.txt", type: "-", size: 1024, modifyTime: Date.now() }];
+      return [];
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, list }
+      })
+    } as any);
+
+    const info = await service.getPathInfo("c1", "/dir");
+    expect(info.type).toBe("directory");
+    expect(info.size).toBe(1024);
+    expect(info.permissions).toBe("rwxr-xr-x");
+  });
+
+  it("can skip recursive size calculation for remote directory", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/dir") return { type: 2, mode: 0o040755, size: 4096, modifyTime: Date.now() };
+      throw new Error("No such file");
+    });
+    const list = vi.fn().mockResolvedValue([]);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, list }
+      })
+    } as any);
+
+    const info = await service.getPathInfo("c1", "/dir", { includeDirectorySize: false });
+    expect(info.type).toBe("directory");
+    expect(info.size).toBe(4096);
+    expect(list).not.toHaveBeenCalled();
+  });
 });

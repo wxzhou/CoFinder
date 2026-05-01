@@ -8,7 +8,19 @@ export type LocalErrorCode =
   | "OPEN_FAILED"
   | "RENAME_FAILED"
   | "DELETE_FAILED"
+  | "INFO_FAILED"
   | "UNKNOWN";
+
+export type PathInfo = {
+  name: string;
+  fullPath: string;
+  type: "file" | "directory" | "symlink" | "unknown";
+  size: number;
+  mtime: string;
+  permissions?: string;
+  owner?: string;
+  group?: string;
+};
 
 export interface LocalErrorPayload {
   code: LocalErrorCode;
@@ -28,6 +40,7 @@ export type RemoteErrorCode =
   | "LOCAL_OPEN_FAILED"
   | "LOCAL_RENAME_FAILED"
   | "LOCAL_DELETE_FAILED"
+  | "LOCAL_INFO_FAILED"
   | "LOCAL_UNKNOWN_ERROR"
   | "SYSTEM_INVALID_INPUT"
   | "REMOTE_AUTH_FAILED"
@@ -38,6 +51,7 @@ export type RemoteErrorCode =
   | "REMOTE_LIST_FAILED"
   | "REMOTE_RENAME_FAILED"
   | "REMOTE_DELETE_FAILED"
+  | "REMOTE_INFO_FAILED"
   | "REMOTE_DISCONNECTED"
   | "REMOTE_UNKNOWN_ERROR"
   | "REMOTE_INVALID_INPUT"
@@ -143,6 +157,7 @@ export interface IpcApi {
     getHomePath: () => Promise<IpcResponse<{ homePath: string }>>;
     rename: (request: { path: string; newName: string }) => Promise<IpcResponse<{ renamed: true; newPath: string }>>;
     delete: (request: { paths: string[] }) => Promise<IpcResponse<{ deleted: number }>>;
+    getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
   };
   remote: {
     connect: (request: RemoteConnectRequest) => Promise<IpcResponse<RemoteConnectResponse>>;
@@ -155,6 +170,11 @@ export interface IpcApi {
       newName: string;
     }) => Promise<IpcResponse<{ renamed: true; newPath: string }>>;
     delete: (request: { connectionId: string; paths: string[] }) => Promise<IpcResponse<{ deleted: number }>>;
+    getInfo: (request: {
+      connectionId: string;
+      path: string;
+      includeDirectorySize?: boolean;
+    }) => Promise<IpcResponse<{ info: PathInfo }>>;
   };
   transfer: {
     enqueueUpload: (request: EnqueueUploadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;

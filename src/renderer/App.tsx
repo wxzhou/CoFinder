@@ -5,6 +5,7 @@ import { applyRowSelection, normalizeContextSelection, selectAllRows, stringifyS
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
+  PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
   TransferUpdatePayload
@@ -73,6 +74,12 @@ type DeleteConfirmState = {
   names: string[];
 };
 
+type InfoDialogState = {
+  pane: "local" | "remote";
+  info: PathInfo;
+  isSizeLoading: boolean;
+};
+
 type ActivePane = "local" | "remote";
 
 type SiteManagerTabState = {
@@ -129,6 +136,8 @@ export function App() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
+  const [infoDialog, setInfoDialog] = useState<InfoDialogState | null>(null);
+  const infoRequestTokenRef = useRef(0);
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [localHomePath, setLocalHomePath] = useState<string>("");
@@ -1345,6 +1354,87 @@ export function App() {
     setDeleteConfirm(null);
   }
 
+  async function openInfoDialog(tabId: string, pane: "local" | "remote"): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const token = ++infoRequestTokenRef.current;
+    if (pane === "local") {
+      const targetPath = tab.localPane.selectedFullPaths[0];
+      if (!targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
+      const result = await window.cofinder.local.getInfo({ path: targetPath, includeDirectorySize: false });
+      if (!result.ok) {
+        setTabs((prev) =>
+          prev.map((item) =>
+            item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+          )
+        );
+        return;
+      }
+      const shouldLoadSize = result.data.info.type === "directory";
+      setInfoDialog({
+        pane: "local",
+        info: result.data.info,
+        isSizeLoading: shouldLoadSize
+      });
+      if (shouldLoadSize) {
+        void (async () => {
+          const sizeRes = await window.cofinder.local.getInfo({ path: targetPath, includeDirectorySize: true });
+          if (!sizeRes.ok) return;
+          setInfoDialog((prev) => {
+            if (!prev || infoRequestTokenRef.current !== token) return prev;
+            return {
+              ...prev,
+              info: { ...prev.info, size: sizeRes.data.info.size },
+              isSizeLoading: false
+            };
+          });
+        })();
+      }
+      return;
+    }
+
+    const targetPath = tab.remotePane.selectedFullPaths[0];
+    if (!targetPath || tab.remotePane.selectedFullPaths.length !== 1 || !tab.remotePane.connectionId) return;
+    const result = await window.cofinder.remote.getInfo({
+      connectionId: tab.remotePane.connectionId,
+      path: targetPath,
+      includeDirectorySize: false
+    });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+    const shouldLoadSize = result.data.info.type === "directory";
+    setInfoDialog({
+      pane: "remote",
+      info: result.data.info,
+      isSizeLoading: shouldLoadSize
+    });
+    if (shouldLoadSize) {
+      const connectionId = tab.remotePane.connectionId;
+      void (async () => {
+        const sizeRes = await window.cofinder.remote.getInfo({
+          connectionId,
+          path: targetPath,
+          includeDirectorySize: true
+        });
+        if (!sizeRes.ok) return;
+        setInfoDialog((prev) => {
+          if (!prev || infoRequestTokenRef.current !== token) return prev;
+          return {
+            ...prev,
+            info: { ...prev.info, size: sizeRes.data.info.size },
+            isSizeLoading: false
+          };
+        });
+      })();
+    }
+  }
+
   async function disconnectRemote(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId) return;
@@ -1979,6 +2069,17 @@ export function App() {
                 className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
                 onClick={async () => {
+                  await openInfoDialog(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Get Info
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
                   const tab = tabs.find((t) => t.id === contextMenu.tabId);
                   const target = tab?.localPane.selectedFullPaths[0];
                   if (target) {
@@ -2083,6 +2184,17 @@ export function App() {
                 type="button"
                 className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await openInfoDialog(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Get Info
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
                 onClick={() => {
                   openInlineRename(contextMenu.tabId, "remote");
                   setContextMenu(null);
@@ -2147,6 +2259,45 @@ export function App() {
               </button>
               <button type="button" className="toolbar-button danger" onClick={() => void submitDeleteConfirm()}>
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {infoDialog ? (
+        <div className="info-dialog-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setInfoDialog(null)}>
+          <div className="info-dialog" role="dialog" aria-modal="true" aria-labelledby="info-dialog-title">
+            <h3 id="info-dialog-title">Get Info ({infoDialog.pane})</h3>
+            <dl className="info-grid">
+              <dt>Name</dt>
+              <dd>{infoDialog.info.name}</dd>
+              <dt>Path</dt>
+              <dd className="info-path">{infoDialog.info.fullPath}</dd>
+              <dt>Type</dt>
+              <dd>{infoDialog.info.type}</dd>
+              <dt>Size</dt>
+              <dd>
+                {infoDialog.isSizeLoading ? (
+                  <span className="info-size-loading">
+                    <span className="info-spinner" aria-hidden="true" />
+                    Calculating...
+                  </span>
+                ) : (
+                  formatSize(infoDialog.info.size)
+                )}
+              </dd>
+              <dt>Modified</dt>
+              <dd>{formatTime(infoDialog.info.mtime)}</dd>
+              <dt>Permissions</dt>
+              <dd>{infoDialog.info.permissions ?? "-"}</dd>
+              <dt>Owner</dt>
+              <dd>{infoDialog.info.owner ?? "-"}</dd>
+              <dt>Group</dt>
+              <dd>{infoDialog.info.group ?? "-"}</dd>
+            </dl>
+            <div className="info-actions">
+              <button type="button" className="toolbar-button" onClick={() => setInfoDialog(null)}>
+                Close
               </button>
             </div>
           </div>

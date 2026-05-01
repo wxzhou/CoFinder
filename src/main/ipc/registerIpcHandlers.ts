@@ -135,6 +135,19 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.getInfo, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:getInfo request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const info = await localFileService.getPathInfo(targetPath, {
+        includeDirectorySize: body.includeDirectorySize !== false
+      });
+      return ok({ info });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_INFO_FAILED", "Failed to load local path info.");
+    }
+  });
+
   registerChannel(
     IPC_CHANNELS.remote.connect,
     async (_event, request: unknown): Promise<IpcResponse<RemoteConnectResponse>> => {
@@ -233,6 +246,20 @@ export function registerIpcHandlers(): void {
       return ok({ deleted });
     } catch (error) {
       return toIpcError(error, "REMOTE_DELETE_FAILED", "Failed to delete remote paths.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.getInfo, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:getInfo request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const info = await remoteFileService.getPathInfo(connectionId, targetPath, {
+        includeDirectorySize: body.includeDirectorySize !== false
+      });
+      return ok({ info });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_INFO_FAILED", "Failed to load remote path info.");
     }
   });
 

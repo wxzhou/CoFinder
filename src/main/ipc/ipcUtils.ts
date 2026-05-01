@@ -113,6 +113,7 @@ function mapErrorCode(rawCode: string, fallbackCode: RemoteErrorCode): RemoteErr
   if (rawCode === "OPEN_FAILED") return "LOCAL_OPEN_FAILED";
   if (rawCode === "RENAME_FAILED") return "LOCAL_RENAME_FAILED";
   if (rawCode === "DELETE_FAILED") return "LOCAL_DELETE_FAILED";
+  if (rawCode === "INFO_FAILED") return "LOCAL_INFO_FAILED";
   if (rawCode === "UNKNOWN") return "LOCAL_UNKNOWN_ERROR";
   return rawCode as RemoteErrorCode;
 }

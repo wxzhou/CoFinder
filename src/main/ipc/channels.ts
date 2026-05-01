@@ -5,7 +5,8 @@ export const IPC_CHANNELS = {
     revealPath: "local:revealPath",
     getHomePath: "local:getHomePath",
     rename: "local:rename",
-    delete: "local:delete"
+    delete: "local:delete",
+    getInfo: "local:getInfo"
   },
   remote: {
     connect: "remote:connect",
@@ -13,7 +14,8 @@ export const IPC_CHANNELS = {
     disconnect: "remote:disconnect",
     getHomeDirectory: "remote:getHomeDirectory",
     rename: "remote:rename",
-    delete: "remote:delete"
+    delete: "remote:delete",
+    getInfo: "remote:getInfo"
   },
   transfer: {
     enqueueUpload: "transfer:enqueueUpload",
