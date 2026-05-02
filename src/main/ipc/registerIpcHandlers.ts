@@ -24,6 +24,7 @@ import { ConnectionManager } from "../services/ConnectionManager";
 import { CredentialService } from "../services/CredentialService";
 import { ProfileRepository, defaultCredentialsPath, defaultProfilesPath } from "../services/ProfileRepository";
 import { SafeStorageCredentialProvider } from "../services/SafeStorageCredentialProvider";
+import { QuickLookService } from "../services/QuickLookService";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -42,6 +43,7 @@ const connectionManager = new ConnectionManager();
 const remoteFileService = new RemoteFileService(connectionManager);
 const transferQueueService = new TransferQueueService();
 const settingsService = new SettingsService();
+const quickLookService = new QuickLookService();
 
 const userData = app.getPath("userData");
 const profileRepository = new ProfileRepository(defaultProfilesPath(userData));
@@ -106,6 +108,45 @@ export function registerIpcHandlers(): void {
       return ok({ homePath: app.getPath("home") });
     } catch (error) {
       return toIpcError(error, "LOCAL_UNKNOWN_ERROR", "Failed to resolve home path.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.local.rename, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:rename request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const newName = requiredString(body.newName, "newName", "LOCAL_INVALID_INPUT");
+      const newPath = await localFileService.renamePath(targetPath, newName);
+      return ok({ renamed: true as const, newPath });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_RENAME_FAILED", "Failed to rename local path.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.local.delete, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:delete request.");
+      if (!Array.isArray(body.paths) || body.paths.length === 0) {
+        throw new AppError("LOCAL_INVALID_INPUT", "Select at least one local path.");
+      }
+      const paths = body.paths.map((item) => validateLocalPathInput(item, "LOCAL_INVALID_INPUT", "path"));
+      const deleted = await localFileService.deletePaths(paths);
+      return ok({ deleted });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_DELETE_FAILED", "Failed to delete local paths.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.local.getInfo, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:getInfo request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const info = await localFileService.getPathInfo(targetPath, {
+        includeDirectorySize: body.includeDirectorySize !== false
+      });
+      return ok({ info });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_INFO_FAILED", "Failed to load local path info.");
     }
   });
 
@@ -179,6 +220,48 @@ export function registerIpcHandlers(): void {
       return ok({ disconnected: true as const });
     } catch (error) {
       return toIpcError(error, "REMOTE_UNKNOWN_ERROR", "Unexpected remote error.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.rename, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:rename request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const newName = requiredString(body.newName, "newName", "REMOTE_INVALID_INPUT");
+      const newPath = await remoteFileService.renamePath(connectionId, targetPath, newName);
+      return ok({ renamed: true as const, newPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_RENAME_FAILED", "Failed to rename remote path.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.delete, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:delete request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      if (!Array.isArray(body.paths) || body.paths.length === 0) {
+        throw new AppError("REMOTE_INVALID_INPUT", "Select at least one remote path.");
+      }
+      const paths = body.paths.map((item) => normalizeRemotePathInput(item, "REMOTE_INVALID_INPUT", "path"));
+      const deleted = await remoteFileService.deletePaths(connectionId, paths);
+      return ok({ deleted });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_DELETE_FAILED", "Failed to delete remote paths.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.getInfo, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:getInfo request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const info = await remoteFileService.getPathInfo(connectionId, targetPath, {
+        includeDirectorySize: body.includeDirectorySize !== false
+      });
+      return ok({ info });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_INFO_FAILED", "Failed to load remote path info.");
     }
   });
 
@@ -309,6 +392,25 @@ export function registerIpcHandlers(): void {
       return ok({ copied: true as const });
     } catch (error) {
       return toIpcError(error, "SYSTEM_INVALID_INPUT", "Failed to copy text.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.system.quickLook, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "SYSTEM_INVALID_INPUT", "Invalid system:quickLook request.");
+      const targetPath = validateLocalPathInput(body.path, "SYSTEM_INVALID_INPUT");
+      await quickLookService.previewLocalPath(targetPath);
+      return ok({ opened: true as const });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_PREVIEW_FAILED", "Failed to open Quick Look preview.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.system.getAppVersion, () => {
+    try {
+      return ok({ version: app.getVersion() });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_VERSION_FAILED", "Failed to resolve app version.");
     }
   });
 }

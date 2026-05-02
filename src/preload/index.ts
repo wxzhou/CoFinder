@@ -6,13 +6,19 @@ const api: IpcApi = {
     listDirectory: (request) => ipcRenderer.invoke("local:listDirectory", request),
     openPath: (request) => ipcRenderer.invoke("local:openPath", request),
     revealPath: (request) => ipcRenderer.invoke("local:revealPath", request),
-    getHomePath: () => ipcRenderer.invoke("local:getHomePath")
+    getHomePath: () => ipcRenderer.invoke("local:getHomePath"),
+    rename: (request) => ipcRenderer.invoke("local:rename", request),
+    delete: (request) => ipcRenderer.invoke("local:delete", request),
+    getInfo: (request) => ipcRenderer.invoke("local:getInfo", request)
   },
   remote: {
     connect: (request) => ipcRenderer.invoke("remote:connect", request),
     listDirectory: (request) => ipcRenderer.invoke("remote:listDirectory", request),
     disconnect: (request) => ipcRenderer.invoke("remote:disconnect", request),
-    getHomeDirectory: (request) => ipcRenderer.invoke("remote:getHomeDirectory", request)
+    getHomeDirectory: (request) => ipcRenderer.invoke("remote:getHomeDirectory", request),
+    rename: (request) => ipcRenderer.invoke("remote:rename", request),
+    delete: (request) => ipcRenderer.invoke("remote:delete", request),
+    getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request)
   },
   transfer: {
     enqueueUpload: (request) => ipcRenderer.invoke("transfer:enqueueUpload", request),
@@ -42,7 +48,9 @@ const api: IpcApi = {
     isAvailable: () => ipcRenderer.invoke("credentials:isAvailable")
   },
   system: {
-    copyText: (request) => ipcRenderer.invoke("system:copyText", request)
+    copyText: (request) => ipcRenderer.invoke("system:copyText", request),
+    quickLook: (request) => ipcRenderer.invoke("system:quickLook", request),
+    getAppVersion: () => ipcRenderer.invoke("system:getAppVersion")
   }
 };
 

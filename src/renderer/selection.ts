@@ -33,7 +33,7 @@ export function applyRowSelection<T extends RowLike>(
     const [start, end] = from <= to ? [from, to] : [to, from];
     const range = rowPaths.slice(start, end + 1);
     return {
-      selectedFullPaths: uniqueKeepOrder([...current.selectedFullPaths, ...range]),
+      selectedFullPaths: range,
       selectionAnchorFullPath: current.selectionAnchorFullPath
     };
   }
@@ -59,6 +59,13 @@ export function normalizeContextSelection(currentSelected: string[], clickedPath
   return [clickedPath];
 }
 
+export function clearSelectionState(): SelectionState {
+  return {
+    selectedFullPaths: [],
+    selectionAnchorFullPath: null
+  };
+}
+
 export function stringifySelection(
   fullPaths: string[],
   entries: Array<{ fullPath: string; name: string }>,
@@ -69,13 +76,3 @@ export function stringifySelection(
   return values.join("\n");
 }
 
-function uniqueKeepOrder(items: string[]): string[] {
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const item of items) {
-    if (seen.has(item)) continue;
-    seen.add(item);
-    out.push(item);
-  }
-  return out;
-}

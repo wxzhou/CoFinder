@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
-import { applyRowSelection, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
+import { applyRowSelection, clearSelectionState, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
+  PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
   TransferUpdatePayload
@@ -56,6 +57,29 @@ type ContextMenuState = {
   y: number;
 };
 
+type InlineRenameState = {
+  pane: "local" | "remote";
+  tabId: string;
+  connectionId: string | null;
+  sourcePath: string;
+  currentName: string;
+  draftName: string;
+};
+
+type DeleteConfirmState = {
+  pane: "local" | "remote";
+  tabId: string;
+  connectionId: string | null;
+  paths: string[];
+  names: string[];
+};
+
+type InfoDialogState = {
+  pane: "local" | "remote";
+  info: PathInfo;
+  isSizeLoading: boolean;
+};
+
 type ActivePane = "local" | "remote";
 
 type SiteManagerTabState = {
@@ -78,10 +102,19 @@ type UiTabState = {
 };
 
 const AUTO_HIDE_DELAY_MS = 10_000;
+const INLINE_RENAME_CLICK_MIN_MS = 350;
+const INLINE_RENAME_CLICK_MAX_MS = 1500;
 
 type QueuePanelState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
+type PlainClickRecord = {
+  pane: "local" | "remote";
+  tabId: string;
+  path: string;
+  at: number;
+};
 
 export function App() {
+  const [appVersion, setAppVersion] = useState("unknown");
   const [tabState] = useState(() => {
     const firstTabId = createId();
     return {
@@ -102,6 +135,11 @@ export function App() {
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
   const [queueError, setQueueError] = useState<string>("");
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
+  const [infoDialog, setInfoDialog] = useState<InfoDialogState | null>(null);
+  const infoRequestTokenRef = useRef(0);
+  const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [localHomePath, setLocalHomePath] = useState<string>("");
 
@@ -112,6 +150,14 @@ export function App() {
   useEffect(() => {
     void initializeLocalHome(tabState.firstTabId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    void (async () => {
+      const result = await window.cofinder.system.getAppVersion();
+      if (result.ok) {
+        setAppVersion(result.data.version);
+      }
+    })();
   }, []);
   async function initializeLocalHome(tabId: string): Promise<void> {
     const homeRes = await window.cofinder.local.getHomePath();
@@ -163,6 +209,16 @@ export function App() {
 
     const onKeyDown = (event: KeyboardEvent) => {
       const isSelectAll = (event.key === "a" || event.key === "A") && (event.metaKey || event.ctrlKey);
+      const isQuickLook =
+        event.key === " " && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey && !event.repeat;
+      if (isQuickLook) {
+        if (contextMenu) return;
+        if (isEditableTarget(document.activeElement)) return;
+        void quickLookSelection(activeTab.id, activePane);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (!isSelectAll) return;
       if (contextMenu) return;
       if (isEditableTarget(document.activeElement)) return;
@@ -191,7 +247,7 @@ export function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs]);
+  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs, tabs]);
 
   async function loadTransferTasks(): Promise<void> {
     const res = await window.cofinder.transfer.list();
@@ -1057,6 +1113,38 @@ export function App() {
     );
   }
 
+  function clearLocalSelection(tabId: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              localPane: {
+                ...tab.localPane,
+                ...clearSelectionState()
+              }
+            }
+          : tab
+      )
+    );
+  }
+
+  function clearRemoteSelection(tabId: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              remotePane: {
+                ...tab.remotePane,
+                ...clearSelectionState()
+              }
+            }
+          : tab
+      )
+    );
+  }
+
   function openContextMenu(
     tabId: string,
     pane: "local" | "remote",
@@ -1092,6 +1180,23 @@ export function App() {
     setContextMenu({ pane, tabId, x: event.clientX, y: event.clientY });
   }
 
+  function shouldStartInlineRenameFromClick(
+    pane: "local" | "remote",
+    tabId: string,
+    entryPath: string,
+    selectedFullPaths: string[],
+    event: { metaKey: boolean; shiftKey: boolean }
+  ): boolean {
+    if (event.metaKey || event.shiftKey) return false;
+    if (inlineRename) return false;
+    if (selectedFullPaths.length !== 1 || selectedFullPaths[0] !== entryPath) return false;
+    const last = lastPlainClickRef.current;
+    if (!last) return false;
+    if (last.pane !== pane || last.tabId !== tabId || last.path !== entryPath) return false;
+    const elapsed = Date.now() - last.at;
+    return elapsed >= INLINE_RENAME_CLICK_MIN_MS && elapsed <= INLINE_RENAME_CLICK_MAX_MS;
+  }
+
   async function copySelection(tabId: string, pane: "local" | "remote", mode: "name" | "path"): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
@@ -1102,6 +1207,312 @@ export function App() {
     if (!text) return;
     const result = await window.cofinder.system.copyText({ text });
     if (!result.ok) setQueueError(result.error.message);
+  }
+
+  async function renameLocalSelection(tabId: string, targetPath: string, nextName: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const result = await window.cofinder.local.rename({ path: targetPath, newName: nextName });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+
+    await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id !== tabId
+          ? item
+          : {
+              ...item,
+              localPane: {
+                ...item.localPane,
+                error: "",
+                selectedFullPaths: [result.data.newPath],
+                selectionAnchorFullPath: result.data.newPath
+              }
+            }
+      )
+    );
+  }
+
+  async function renameRemoteSelection(tabId: string, connectionId: string, targetPath: string, nextName: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const result = await window.cofinder.remote.rename({
+      connectionId,
+      path: targetPath,
+      newName: nextName
+    });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+
+    await listRemotePath(connectionId, tab.remotePane.currentPath, "replace", tabId);
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id !== tabId
+          ? item
+          : {
+              ...item,
+              remotePane: {
+                ...item.remotePane,
+                error: "",
+                selectedFullPaths: [result.data.newPath],
+                selectionAnchorFullPath: result.data.newPath
+              }
+            }
+      )
+    );
+  }
+
+  function openInlineRename(tabId: string, pane: "local" | "remote"): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "local") {
+      if (tab.localPane.selectedFullPaths.length !== 1) return;
+      const sourcePath = tab.localPane.selectedFullPaths[0];
+      const currentName = getEntryNameFromPath(sourcePath);
+      setInlineRename({
+        pane,
+        tabId,
+        connectionId: null,
+        sourcePath,
+        currentName,
+        draftName: currentName
+      });
+      return;
+    }
+    if (!tab.remotePane.connectionId || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const sourcePath = tab.remotePane.selectedFullPaths[0];
+    const currentName = getEntryNameFromPath(sourcePath);
+    setInlineRename({
+      pane,
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      sourcePath,
+      currentName,
+      draftName: currentName
+    });
+  }
+
+  async function submitInlineRename(): Promise<void> {
+    if (!inlineRename) return;
+    const trimmedName = inlineRename.draftName.trim();
+    if (!trimmedName) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id !== inlineRename.tabId
+            ? item
+            : inlineRename.pane === "local"
+              ? { ...item, localPane: { ...item.localPane, error: "New name is required." } }
+              : { ...item, remotePane: { ...item.remotePane, error: "New name is required." } }
+        )
+      );
+      return;
+    }
+    if (trimmedName === inlineRename.currentName) {
+      setInlineRename(null);
+      return;
+    }
+
+    if (inlineRename.pane === "local") {
+      await renameLocalSelection(inlineRename.tabId, inlineRename.sourcePath, trimmedName);
+      setInlineRename(null);
+      return;
+    }
+    if (!inlineRename.connectionId) return;
+    await renameRemoteSelection(inlineRename.tabId, inlineRename.connectionId, inlineRename.sourcePath, trimmedName);
+    setInlineRename(null);
+  }
+
+  function openDeleteConfirm(tabId: string, pane: "local" | "remote"): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "local") {
+      const paths = tab.localPane.selectedFullPaths;
+      if (paths.length === 0) return;
+      const entryMap = new Map(tab.localPane.entries.map((entry) => [entry.fullPath, entry.name]));
+      const names = paths.map((fullPath) => entryMap.get(fullPath) ?? getEntryNameFromPath(fullPath));
+      setDeleteConfirm({
+        pane,
+        tabId,
+        connectionId: null,
+        paths,
+        names
+      });
+      return;
+    }
+
+    if (!tab.remotePane.connectionId) return;
+    const paths = tab.remotePane.selectedFullPaths;
+    if (paths.length === 0) return;
+    const entryMap = new Map(tab.remotePane.entries.map((entry) => [entry.fullPath, entry.name]));
+    const names = paths.map((fullPath) => entryMap.get(fullPath) ?? getEntryNameFromPath(fullPath));
+    setDeleteConfirm({
+      pane,
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      paths,
+      names
+    });
+  }
+
+  async function submitDeleteConfirm(): Promise<void> {
+    if (!deleteConfirm) return;
+    if (deleteConfirm.pane === "local") {
+      const tab = tabs.find((item) => item.id === deleteConfirm.tabId);
+      if (!tab) return;
+      const result = await window.cofinder.local.delete({ paths: deleteConfirm.paths });
+      if (!result.ok) {
+        setTabs((prev) =>
+          prev.map((item) =>
+            item.id === deleteConfirm.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+          )
+        );
+        return;
+      }
+      await navigateLocal(deleteConfirm.tabId, tab.localPane.currentPath, "replace");
+      setDeleteConfirm(null);
+      return;
+    }
+
+    if (!deleteConfirm.connectionId) return;
+    const tab = tabs.find((item) => item.id === deleteConfirm.tabId);
+    if (!tab) return;
+    const result = await window.cofinder.remote.delete({
+      connectionId: deleteConfirm.connectionId,
+      paths: deleteConfirm.paths
+    });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === deleteConfirm.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+    await listRemotePath(deleteConfirm.connectionId, tab.remotePane.currentPath, "replace", deleteConfirm.tabId);
+    setDeleteConfirm(null);
+  }
+
+  async function openInfoDialog(tabId: string, pane: "local" | "remote"): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const token = ++infoRequestTokenRef.current;
+    if (pane === "local") {
+      const targetPath = tab.localPane.selectedFullPaths[0];
+      if (!targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
+      const result = await window.cofinder.local.getInfo({ path: targetPath, includeDirectorySize: false });
+      if (!result.ok) {
+        setTabs((prev) =>
+          prev.map((item) =>
+            item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+          )
+        );
+        return;
+      }
+      const shouldLoadSize = result.data.info.type === "directory";
+      setInfoDialog({
+        pane: "local",
+        info: result.data.info,
+        isSizeLoading: shouldLoadSize
+      });
+      if (shouldLoadSize) {
+        void (async () => {
+          const sizeRes = await window.cofinder.local.getInfo({ path: targetPath, includeDirectorySize: true });
+          if (!sizeRes.ok) return;
+          setInfoDialog((prev) => {
+            if (!prev || infoRequestTokenRef.current !== token) return prev;
+            return {
+              ...prev,
+              info: { ...prev.info, size: sizeRes.data.info.size },
+              isSizeLoading: false
+            };
+          });
+        })();
+      }
+      return;
+    }
+
+    const targetPath = tab.remotePane.selectedFullPaths[0];
+    if (!targetPath || tab.remotePane.selectedFullPaths.length !== 1 || !tab.remotePane.connectionId) return;
+    const result = await window.cofinder.remote.getInfo({
+      connectionId: tab.remotePane.connectionId,
+      path: targetPath,
+      includeDirectorySize: false
+    });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+    const shouldLoadSize = result.data.info.type === "directory";
+    setInfoDialog({
+      pane: "remote",
+      info: result.data.info,
+      isSizeLoading: shouldLoadSize
+    });
+    if (shouldLoadSize) {
+      const connectionId = tab.remotePane.connectionId;
+      void (async () => {
+        const sizeRes = await window.cofinder.remote.getInfo({
+          connectionId,
+          path: targetPath,
+          includeDirectorySize: true
+        });
+        if (!sizeRes.ok) return;
+        setInfoDialog((prev) => {
+          if (!prev || infoRequestTokenRef.current !== token) return prev;
+          return {
+            ...prev,
+            info: { ...prev.info, size: sizeRes.data.info.size },
+            isSizeLoading: false
+          };
+        });
+      })();
+    }
+  }
+
+  async function quickLookSelection(tabId: string, pane: "local" | "remote"): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "remote") {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId
+            ? { ...item, remotePane: { ...item.remotePane, error: "Quick Look for remote files is not supported in M5." } }
+            : item
+        )
+      );
+      return;
+    }
+    const selected = tab.localPane.selectedFullPaths;
+    if (selected.length !== 1) return;
+    const result = await window.cofinder.system.quickLook({ path: selected[0] });
+    if (!result.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+    setTabs((prev) =>
+      prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: "" } } : item))
+    );
   }
 
   async function disconnectRemote(tabId: string): Promise<void> {
@@ -1166,6 +1577,9 @@ export function App() {
         <div className="title-group">
           <strong>CoFinder</strong>
         </div>
+        <div className="top-version" aria-label="App version">
+          Version {appVersion}
+        </div>
       </header>
       <TabBar
         tabs={tabs}
@@ -1175,7 +1589,7 @@ export function App() {
         onClose={(tabId) => void closeTab(tabId)}
       />
       <main className="pane-layout">
-        <section className="pane local-pane">
+        <section className={`pane local-pane ${activePane === "local" ? "pane-active" : ""}`}>
           <div className="pane-toolbar">
             <button
               type="button"
@@ -1272,9 +1686,13 @@ export function App() {
           {localPane.error ? <div className="error-banner">{localPane.error}</div> : null}
 
           <div
-            className="table-wrap"
-            onMouseDown={() => {
+            className={`table-wrap ${activePane === "local" ? "table-wrap-active" : ""}`}
+            onMouseDown={(event) => {
               setActivePane("local");
+              const target = event.target as HTMLElement | null;
+              if (!target?.closest("tbody tr")) {
+                clearLocalSelection(activeTab.id);
+              }
             }}
           >
             <table className="file-table">
@@ -1303,20 +1721,67 @@ export function App() {
                   <tr
                     key={entry.fullPath}
                     className={localPane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
-                    onClick={(event) =>
-                      handleLocalRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey })
-                    }
+                    onClick={(event) => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      if (
+                        shouldStartInlineRenameFromClick("local", activeTab.id, entry.fullPath, localPane.selectedFullPaths, {
+                          metaKey: event.metaKey,
+                          shiftKey: event.shiftKey
+                        })
+                      ) {
+                        openInlineRename(activeTab.id, "local");
+                        lastPlainClickRef.current = null;
+                        return;
+                      }
+                      handleLocalRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                      if (!event.metaKey && !event.shiftKey) {
+                        lastPlainClickRef.current = { pane: "local", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+                      } else {
+                        lastPlainClickRef.current = null;
+                      }
+                    }}
                     onContextMenu={(event) => {
                       event.preventDefault();
                       openContextMenu(activeTab.id, "local", entry.fullPath, event);
                     }}
-                    onDoubleClick={() => void handleRowDoubleClick(activeTab.id, entry)}
+                    onDoubleClick={() => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      void handleRowDoubleClick(activeTab.id, entry);
+                    }}
                   >
                     <td className="name-cell" title={entry.name}>
                       <span className={`file-kind kind-${entry.type}`} aria-hidden="true">
                         {entry.type === "directory" ? "▸" : "·"}
                       </span>
-                      <span className="name-text">{entry.name}</span>
+                      {inlineRename &&
+                      inlineRename.pane === "local" &&
+                      inlineRename.tabId === activeTab.id &&
+                      inlineRename.sourcePath === entry.fullPath ? (
+                        <input
+                          className="name-inline-input"
+                          autoFocus
+                          value={inlineRename.draftName}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) =>
+                            setInlineRename((prev) => (prev ? { ...prev, draftName: event.target.value } : prev))
+                          }
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => event.stopPropagation()}
+                          onDoubleClick={(event) => event.stopPropagation()}
+                          onBlur={() => void submitInlineRename()}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void submitInlineRename();
+                            } else if (event.key === "Escape") {
+                              event.preventDefault();
+                              setInlineRename(null);
+                            }
+                          }}
+                        />
+                      ) : (
+                        <span className="name-text">{entry.name}</span>
+                      )}
                     </td>
                     <td className="size-cell">{entry.type === "directory" ? "—" : formatSize(entry.size)}</td>
                     <td className="mtime-cell">{formatTime(entry.mtime)}</td>
@@ -1335,7 +1800,7 @@ export function App() {
           </div>
         </section>
         <section className="splitter" />
-        <section className="pane remote-pane">
+        <section className={`pane remote-pane ${activePane === "remote" ? "pane-active" : ""}`}>
           {!(remotePane.connectionStatus === "connected" && remotePane.connectionId) ? (
             <div className="remote-disconnected-wrap">
               <div className="placeholder-pane">
@@ -1448,9 +1913,13 @@ export function App() {
               {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
 
               <div
-                className="table-wrap"
-                onMouseDown={() => {
+                className={`table-wrap ${activePane === "remote" ? "table-wrap-active" : ""}`}
+                onMouseDown={(event) => {
                   setActivePane("remote");
+                  const target = event.target as HTMLElement | null;
+                  if (!target?.closest("tbody tr")) {
+                    clearRemoteSelection(activeTab.id);
+                  }
                 }}
               >
                 <table className="file-table">
@@ -1479,20 +1948,67 @@ export function App() {
                       <tr
                         key={entry.fullPath}
                         className={remotePane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
-                        onClick={(event) =>
-                          handleRemoteRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey })
-                        }
+                        onClick={(event) => {
+                          if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                          if (
+                            shouldStartInlineRenameFromClick("remote", activeTab.id, entry.fullPath, remotePane.selectedFullPaths, {
+                              metaKey: event.metaKey,
+                              shiftKey: event.shiftKey
+                            })
+                          ) {
+                            openInlineRename(activeTab.id, "remote");
+                            lastPlainClickRef.current = null;
+                            return;
+                          }
+                          handleRemoteRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                          if (!event.metaKey && !event.shiftKey) {
+                            lastPlainClickRef.current = { pane: "remote", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+                          } else {
+                            lastPlainClickRef.current = null;
+                          }
+                        }}
                         onContextMenu={(event) => {
                           event.preventDefault();
                           openContextMenu(activeTab.id, "remote", entry.fullPath, event);
                         }}
-                        onDoubleClick={() => void handleRemoteDoubleClick(activeTab.id, entry)}
+                        onDoubleClick={() => {
+                          if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                          void handleRemoteDoubleClick(activeTab.id, entry);
+                        }}
                       >
                         <td className="name-cell" title={entry.name}>
                           <span className={`file-kind kind-${entry.type}`} aria-hidden="true">
                             {entry.type === "directory" ? "▸" : "·"}
                           </span>
-                          <span className="name-text">{entry.name}</span>
+                          {inlineRename &&
+                          inlineRename.pane === "remote" &&
+                          inlineRename.tabId === activeTab.id &&
+                          inlineRename.sourcePath === entry.fullPath ? (
+                            <input
+                              className="name-inline-input"
+                              autoFocus
+                              value={inlineRename.draftName}
+                              onFocus={(event) => event.currentTarget.select()}
+                              onChange={(event) =>
+                                setInlineRename((prev) => (prev ? { ...prev, draftName: event.target.value } : prev))
+                              }
+                              onMouseDown={(event) => event.stopPropagation()}
+                              onClick={(event) => event.stopPropagation()}
+                              onDoubleClick={(event) => event.stopPropagation()}
+                              onBlur={() => void submitInlineRename()}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void submitInlineRename();
+                                } else if (event.key === "Escape") {
+                                  event.preventDefault();
+                                  setInlineRename(null);
+                                }
+                              }}
+                            />
+                          ) : (
+                            <span className="name-text">{entry.name}</span>
+                          )}
                         </td>
                         <td className="size-cell">{entry.type === "directory" ? "—" : formatSize(entry.size)}</td>
                         <td className="mtime-cell">{formatTime(entry.mtime)}</td>
@@ -1621,6 +2137,50 @@ export function App() {
                 type="button"
                 className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={() => {
+                  openInlineRename(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) === 0}
+                onClick={() => {
+                  openDeleteConfirm(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await openInfoDialog(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Get Info
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await quickLookSelection(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Quick Look
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
                 onClick={async () => {
                   const tab = tabs.find((t) => t.id === contextMenu.tabId);
                   const target = tab?.localPane.selectedFullPaths[0];
@@ -1714,6 +2274,50 @@ export function App() {
               <button
                 type="button"
                 className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) === 0}
+                onClick={() => {
+                  openDeleteConfirm(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await quickLookSelection(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Quick Look
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await openInfoDialog(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Get Info
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={() => {
+                  openInlineRename(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 onClick={async () => {
                   await copySelection(contextMenu.tabId, "remote", "name");
                   setContextMenu(null);
@@ -1746,6 +2350,70 @@ export function App() {
               </button>
             </>
           )}
+        </div>
+      ) : null}
+      {deleteConfirm ? (
+        <div className="delete-confirm-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setDeleteConfirm(null)}>
+          <div className="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="delete-confirm-title">
+            <h3 id="delete-confirm-title">Confirm Delete</h3>
+            <p>
+              Delete {deleteConfirm.paths.length} {deleteConfirm.paths.length === 1 ? "item" : "items"} from{" "}
+              {deleteConfirm.pane === "local" ? "local" : "remote"}?
+            </p>
+            <div className="delete-confirm-list">
+              {deleteConfirm.names.slice(0, 8).map((name, index) => (
+                <div key={`${name}-${index}`}>{name}</div>
+              ))}
+              {deleteConfirm.names.length > 8 ? <div>...and {deleteConfirm.names.length - 8} more</div> : null}
+            </div>
+            <div className="delete-confirm-actions">
+              <button type="button" className="toolbar-button" onClick={() => setDeleteConfirm(null)}>
+                Cancel
+              </button>
+              <button type="button" className="toolbar-button danger" onClick={() => void submitDeleteConfirm()}>
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {infoDialog ? (
+        <div className="info-dialog-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setInfoDialog(null)}>
+          <div className="info-dialog" role="dialog" aria-modal="true" aria-labelledby="info-dialog-title">
+            <h3 id="info-dialog-title">Get Info ({infoDialog.pane})</h3>
+            <dl className="info-grid">
+              <dt>Name</dt>
+              <dd>{infoDialog.info.name}</dd>
+              <dt>Path</dt>
+              <dd className="info-path">{infoDialog.info.fullPath}</dd>
+              <dt>Type</dt>
+              <dd>{infoDialog.info.type}</dd>
+              <dt>Size</dt>
+              <dd>
+                {infoDialog.isSizeLoading ? (
+                  <span className="info-size-loading">
+                    <span className="info-spinner" aria-hidden="true" />
+                    Calculating...
+                  </span>
+                ) : (
+                  formatSize(infoDialog.info.size)
+                )}
+              </dd>
+              <dt>Modified</dt>
+              <dd>{formatTime(infoDialog.info.mtime)}</dd>
+              <dt>Permissions</dt>
+              <dd>{infoDialog.info.permissions ?? "-"}</dd>
+              <dt>Owner</dt>
+              <dd>{infoDialog.info.owner ?? "-"}</dd>
+              <dt>Group</dt>
+              <dd>{infoDialog.info.group ?? "-"}</dd>
+            </dl>
+            <div className="info-actions">
+              <button type="button" className="toolbar-button" onClick={() => setInfoDialog(null)}>
+                Close
+              </button>
+            </div>
+          </div>
         </div>
       ) : null}
       {activeSiteManager?.open ? (
@@ -1798,6 +2466,12 @@ function sortMark(direction: SortDirection): string {
 
 function createId(): string {
   return `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+}
+
+function getEntryNameFromPath(fullPath: string): string {
+  const normalized = fullPath.replace(/\/+$/, "");
+  const parts = normalized.split("/").filter(Boolean);
+  return parts[parts.length - 1] ?? fullPath;
 }
 
 function createLocalPaneState(): LocalPaneState {

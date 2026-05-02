@@ -14,8 +14,12 @@ files:
   - '!.git/**'
   - '!release/**'
   - '!**/*.log'
+extraResources:
+  - from: assets/icon/icon.png
+    to: assets/icon/icon.png
 mac:
   category: public.app-category.productivity
+  icon: assets/icon/icon.icns
   target:
     - dmg
     - zip

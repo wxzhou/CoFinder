@@ -2,9 +2,48 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
+Current app version: `0.2.0`.
+
 ## V1 Status
 
 - **V1 is complete.** Current milestone: **M5 completed (release hardening + packaging + documentation)**
+- **V1.1 is complete.** Current milestone: **M6 completed (hardening + docs + release verification)**
+
+### Implemented in V1.1 (ongoing)
+
+- **M1 — rename (local + remote):**
+  - Context menu `Rename` for local and remote file lists
+  - In-place (inline) rename editing in the list row (no popup dialog)
+  - Enter to submit, Escape to cancel, blur to submit
+  - Finder/Explorer-style delayed second click on selected item to trigger inline rename
+  - Main-process IPC + validation for `local:rename` and `remote:rename`
+- **M2 — delete (local + remote):**
+  - Context menu `Delete` for local and remote file lists
+  - Supports single and multi-selection delete requests
+  - Explicit confirmation dialog before destructive action
+  - Main-process IPC + validation for `local:delete` and `remote:delete`
+  - Local recursive delete + remote recursive delete with stable error mapping
+- **M3 — properties / Get Info (local + remote):**
+  - Context menu `Get Info` for local and remote file lists (single selection)
+  - Read-only metadata dialog (name, full path, type, size, modified time, permissions, owner, group)
+  - Human-readable permissions format (`rwxrwxrwx`) for local and remote entries
+  - Robust remote type resolution (`file` / `directory` / `symlink`) from varied SFTP `stat` responses
+  - For directories, dialog opens immediately and size is calculated asynchronously with a loading spinner
+- **M4 — macOS-style UI polish A:**
+  - Clear active pane visual highlight for keyboard-selection context
+  - Stronger row selection contrast while preserving current selection behavior
+  - Improved transfer queue status readability with status chips
+  - Improved context menu spacing/readability (no behavior changes)
+- **M5 — Quick Look MVP:**
+  - Context menu `Quick Look` action for local and remote panes
+  - Local single-file preview via macOS Quick Look (`qlmanage -p`) through main-process IPC
+  - Optional `Space` shortcut to trigger Quick Look for current local single selection
+  - Explicit fallback message for remote Quick Look (not supported in M5)
+- **M6 — hardening + docs + release verification:**
+  - Regression hardening for selection behavior (blank-area clear selection + stable Shift range semantics)
+  - Added focused regression tests for selection and quick look guardrails
+  - Updated smoke and release checklists to match shipped V1.1 behavior
+  - Completed full verification flow (`npm test`, `npm run build`, packaging checks)
 
 ### Implemented in V1
 
@@ -24,7 +63,6 @@ CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on 
 
 - Remote edit auto-sync workflow
 - Quick Look for remote files
-- Delete/rename operations
 - Drag selection
 - Drag-and-drop upload/download
 - Full Preferences UI

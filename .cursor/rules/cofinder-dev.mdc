@@ -1,0 +1,77 @@
+---
+description: CoFinder V1.1 development guardrails
+globs:
+  - "src/**/*"
+  - "tests/**/*"
+  - "docs/**/*"
+alwaysApply: true
+---
+
+# CoFinder Development Rules
+
+CoFinder is a macOS-only Electron + React + Vite + TypeScript desktop app for dual-pane local/SFTP file management.
+
+Before implementing any feature, read:
+
+- docs/dev/PROJECT_CONTEXT.md
+- docs/dev/ARCHITECTURE.md
+- docs/dev/DEVELOPMENT_RULES.md
+- docs/dev/V1.1_PLAN.md
+
+General rules:
+
+1. Do not rewrite unrelated architecture.
+2. Do not break existing V1 features:
+   - local browsing
+   - remote SFTP browsing
+   - multi-tab isolated state
+   - Site Manager / profiles / safeStorage credentials
+   - rsync upload/download queue
+   - multi-selection and context menu
+   - packaging to macOS dmg/zip
+3. Keep Electron boundaries clean:
+   - main process handles Node/Electron privileged work
+   - preload exposes typed IPC APIs
+   - renderer does not access Node APIs directly
+4. Keep local and remote operations semantically separate.
+5. Destructive actions require explicit confirmation and robust error handling.
+6. Prefer small, reviewable changes.
+7. For each V1.1 milestone, implement only the scope described in docs/dev/V1.1_PLAN.md.
+8. After changes, run available checks:
+   - typecheck
+   - tests
+   - build
+   - smoke test / packaging check when relevant
+9. If a requested change conflicts with the current architecture, stop and explain the conflict before rewriting large parts of the codebase.
+
+# CoFinder V1.1 Rule
+
+Follow these rules for every CoFinder V1.1 task:
+
+1. Scope control:
+   - Implement only the requested milestone scope.
+   - No unrelated refactor or opportunistic feature work.
+
+2. Preserve V1 behavior:
+   - Do not break existing local/remote browsing, tabs, Site Manager, transfer queue, selection, or packaging flows.
+   - Keep IPC response shape `{ ok, data }` / `{ ok, error }`.
+
+3. Architecture:
+   - Keep `renderer -> preload -> ipc -> service` boundary.
+   - Validate user input in main process.
+   - Reuse existing validation/error utilities when possible.
+
+4. Security:
+   - Never persist plaintext passwords in profiles/tasks/logs.
+   - Never expose sensitive detail in renderer errors.
+
+5. Destructive operations:
+   - Require explicit action and confirmation path.
+   - Return stable error code/message/detail without leaking secrets.
+
+6. Verification:
+   - Run `npm test` and `npm run build` after substantive edits.
+   - Run `npm run dev` and verify dev startup before claiming a feature is complete.
+   - Add/update tests for newly added logic.
+   - Update smoke checklist/doc notes when behavior changes.
+

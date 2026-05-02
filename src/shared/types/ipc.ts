@@ -1,7 +1,26 @@
 import type { ConnectionConfig, RemoteFileEntry, ServerProfile, TransferTask } from "./models";
 import type { LocalFileEntry } from "./models";
 
-export type LocalErrorCode = "NOT_FOUND" | "PERMISSION_DENIED" | "NOT_DIRECTORY" | "OPEN_FAILED" | "UNKNOWN";
+export type LocalErrorCode =
+  | "NOT_FOUND"
+  | "PERMISSION_DENIED"
+  | "NOT_DIRECTORY"
+  | "OPEN_FAILED"
+  | "RENAME_FAILED"
+  | "DELETE_FAILED"
+  | "INFO_FAILED"
+  | "UNKNOWN";
+
+export type PathInfo = {
+  name: string;
+  fullPath: string;
+  type: "file" | "directory" | "symlink" | "unknown";
+  size: number;
+  mtime: string;
+  permissions?: string;
+  owner?: string;
+  group?: string;
+};
 
 export interface LocalErrorPayload {
   code: LocalErrorCode;
@@ -19,14 +38,22 @@ export type RemoteErrorCode =
   | "LOCAL_PERMISSION_DENIED"
   | "LOCAL_NOT_DIRECTORY"
   | "LOCAL_OPEN_FAILED"
+  | "LOCAL_RENAME_FAILED"
+  | "LOCAL_DELETE_FAILED"
+  | "LOCAL_INFO_FAILED"
   | "LOCAL_UNKNOWN_ERROR"
   | "SYSTEM_INVALID_INPUT"
+  | "SYSTEM_PREVIEW_FAILED"
+  | "SYSTEM_VERSION_FAILED"
   | "REMOTE_AUTH_FAILED"
   | "REMOTE_CONNECTION_FAILED"
   | "REMOTE_PERMISSION_DENIED"
   | "REMOTE_NOT_FOUND"
   | "REMOTE_NOT_DIRECTORY"
   | "REMOTE_LIST_FAILED"
+  | "REMOTE_RENAME_FAILED"
+  | "REMOTE_DELETE_FAILED"
+  | "REMOTE_INFO_FAILED"
   | "REMOTE_DISCONNECTED"
   | "REMOTE_UNKNOWN_ERROR"
   | "REMOTE_INVALID_INPUT"
@@ -130,12 +157,26 @@ export interface IpcApi {
     openPath: (request: { path: string }) => Promise<IpcResponse<{ opened: true }>>;
     revealPath: (request: { path: string }) => Promise<IpcResponse<{ revealed: true }>>;
     getHomePath: () => Promise<IpcResponse<{ homePath: string }>>;
+    rename: (request: { path: string; newName: string }) => Promise<IpcResponse<{ renamed: true; newPath: string }>>;
+    delete: (request: { paths: string[] }) => Promise<IpcResponse<{ deleted: number }>>;
+    getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
   };
   remote: {
     connect: (request: RemoteConnectRequest) => Promise<IpcResponse<RemoteConnectResponse>>;
     listDirectory: (request: RemoteListDirectoryRequest) => Promise<IpcResponse<RemoteListDirectoryResponse>>;
     disconnect: (request: { connectionId: string }) => Promise<IpcResponse<{ disconnected: true }>>;
     getHomeDirectory: (request: { connectionId: string }) => Promise<IpcResponse<{ homePath: string }>>;
+    rename: (request: {
+      connectionId: string;
+      path: string;
+      newName: string;
+    }) => Promise<IpcResponse<{ renamed: true; newPath: string }>>;
+    delete: (request: { connectionId: string; paths: string[] }) => Promise<IpcResponse<{ deleted: number }>>;
+    getInfo: (request: {
+      connectionId: string;
+      path: string;
+      includeDirectorySize?: boolean;
+    }) => Promise<IpcResponse<{ info: PathInfo }>>;
   };
   transfer: {
     enqueueUpload: (request: EnqueueUploadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
@@ -161,5 +202,7 @@ export interface IpcApi {
   };
   system: {
     copyText: (request: { text: string }) => Promise<IpcResponse<{ copied: true }>>;
+    quickLook: (request: { path: string }) => Promise<IpcResponse<{ opened: true }>>;
+    getAppVersion: () => Promise<IpcResponse<{ version: string }>>;
   };
 }

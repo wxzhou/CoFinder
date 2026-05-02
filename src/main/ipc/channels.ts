@@ -3,13 +3,19 @@ export const IPC_CHANNELS = {
     listDirectory: "local:listDirectory",
     openPath: "local:openPath",
     revealPath: "local:revealPath",
-    getHomePath: "local:getHomePath"
+    getHomePath: "local:getHomePath",
+    rename: "local:rename",
+    delete: "local:delete",
+    getInfo: "local:getInfo"
   },
   remote: {
     connect: "remote:connect",
     listDirectory: "remote:listDirectory",
     disconnect: "remote:disconnect",
-    getHomeDirectory: "remote:getHomeDirectory"
+    getHomeDirectory: "remote:getHomeDirectory",
+    rename: "remote:rename",
+    delete: "remote:delete",
+    getInfo: "remote:getInfo"
   },
   transfer: {
     enqueueUpload: "transfer:enqueueUpload",
@@ -34,6 +40,8 @@ export const IPC_CHANNELS = {
     isAvailable: "credentials:isAvailable"
   },
   system: {
-    copyText: "system:copyText"
+    copyText: "system:copyText",
+    quickLook: "system:quickLook",
+    getAppVersion: "system:getAppVersion"
   }
 } as const;
