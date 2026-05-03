@@ -32,29 +32,6 @@
   border-left: none;
 }
 
-/* Typed path: same typography as path segments, no “web form” chrome */
-.cfv12-root .v12m-pathfinder-go {
-  display: block;
-  width: 100%;
-  margin-top: 4px;
-}
-
-.cfv12-root .v12m-pathfinder-go input {
-  width: 100%;
-  border: none;
-  background: transparent;
-  padding: 3px 2px 2px;
-  font: 500 11px var(--m-font);
-  color: var(--m-fg-dim);
-  border-radius: 4px;
-}
-
-.cfv12-root .v12m-pathfinder-go input:focus {
-  outline: none;
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--m-fg);
-}
-
 /* Pane status row — mock has no footer; this matches drawer “sum” quiet tone */
 .cfv12-root .v12m-pane-foot {
   flex-shrink: 0;

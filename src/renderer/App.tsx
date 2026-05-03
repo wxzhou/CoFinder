@@ -2109,15 +2109,6 @@ export function App(props: AppProps = {}) {
               currentPath={localPane.currentPath || "/"}
               pathRootLabel="Macintosh HD"
               onNavigate={(path) => void navigateLocal(activeTab.id, path)}
-              pathInput={localPane.pathInput}
-              onPathInputChange={(value) =>
-                setTabs((prev) =>
-                  prev.map((tab) =>
-                    tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: value } } : tab
-                  )
-                )
-              }
-              onSubmitPathInput={() => void navigateLocal(activeTab.id, localPane.pathInput)}
             />
           </div>
           <div className="v12m-pane-body">
@@ -2500,17 +2491,6 @@ export function App(props: AppProps = {}) {
                 pathRootLabel="/"
                 badge={remoteBadgeV12}
                 onNavigate={(path) => void listRemotePath(remotePane.connectionId!, path, "push", activeTab.id)}
-                pathInput={remotePane.pathInput}
-                onPathInputChange={(value) =>
-                  setTabs((prev) =>
-                    prev.map((tab) =>
-                      tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: value } } : tab
-                    )
-                  )
-                }
-                onSubmitPathInput={() =>
-                  void listRemotePath(remotePane.connectionId!, remotePane.pathInput, "push", activeTab.id)
-                }
                 trailing={
                   <button type="button" className="v12m-insp-linkbtn" onClick={() => void disconnectRemote(activeTab.id)}>
                     Disconnect

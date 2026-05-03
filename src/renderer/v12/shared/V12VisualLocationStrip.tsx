@@ -1,4 +1,4 @@
-import type { FormEvent, ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 function normPath(p: string): string {
   const x = (p || "").replace(/\/+/g, "/").trim() || "/";
@@ -17,10 +17,6 @@ export type V12VisualLocationStripProps = {
   pathRootLabel?: string;
   onNavigate: (path: string) => void;
   badge?: ReactNode;
-  /** Optional “go to folder” field — styled like mock typography, not a heavy input. */
-  pathInput?: string;
-  onPathInputChange?: (value: string) => void;
-  onSubmitPathInput?: () => void;
   /** Right side of header row (e.g. Disconnect). */
   trailing?: ReactNode;
 };
@@ -40,46 +36,29 @@ export function V12VisualLocationStrip(props: V12VisualLocationStripProps): Reac
         </div>
       </div>
       <div className="v12m-pathfinder" role="navigation" aria-label="Path">
-        <form
-          onSubmit={(e: FormEvent) => {
-            e.preventDefault();
-            props.onSubmitPathInput?.();
-          }}
-        >
-          <div className="v12m-pathfinder-track">
-            {props.segments.map((seg, i) => {
-              const label = i === 0 && props.pathRootLabel ? props.pathRootLabel : seg.label;
-              const isCurrent = normPath(seg.path) === normPath(props.currentPath);
-              return (
-                <span key={`${seg.path}-${i}`} className="v12m-pathfinder-cell">
-                  {i > 0 ? (
-                    <span className="v12m-pathfinder-chev" aria-hidden>
-                      ›
-                    </span>
-                  ) : null}
-                  <button
-                    type="button"
-                    className={`v12m-pathfinder-seg ${isCurrent ? "is-current" : ""}`}
-                    title={seg.path}
-                    onClick={() => props.onNavigate(seg.path)}
-                  >
-                    {label}
-                  </button>
-                </span>
-              );
-            })}
-          </div>
-          {props.pathInput !== undefined && props.onPathInputChange ? (
-            <div className="v12m-pathfinder-go">
-              <input
-                value={props.pathInput}
-                onChange={(e) => props.onPathInputChange?.(e.target.value)}
-                aria-label="Go to folder"
-                placeholder="Go to folder…"
-              />
-            </div>
-          ) : null}
-        </form>
+        <div className="v12m-pathfinder-track">
+          {props.segments.map((seg, i) => {
+            const label = i === 0 && props.pathRootLabel ? props.pathRootLabel : seg.label;
+            const isCurrent = normPath(seg.path) === normPath(props.currentPath);
+            return (
+              <span key={`${seg.path}-${i}`} className="v12m-pathfinder-cell">
+                {i > 0 ? (
+                  <span className="v12m-pathfinder-chev" aria-hidden>
+                    ›
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  className={`v12m-pathfinder-seg ${isCurrent ? "is-current" : ""}`}
+                  title={seg.path}
+                  onClick={() => props.onNavigate(seg.path)}
+                >
+                  {label}
+                </button>
+              </span>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
