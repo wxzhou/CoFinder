@@ -495,3 +495,22 @@
   color: var(--m-fg-faint, rgba(60, 60, 67, 0.5));
   border-top: 1px solid var(--m-sep-hair, rgba(0, 0, 0, 0.05));
 }
+
+/* M6: v12-only polish — scoped under .cfv12-root so classic `styles.css` is untouched */
+.cfv12-root .v12m-pane.is-focus {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--m-accent, #0a5fff) 22%, transparent);
+}
+
+.cfv12-root .v12m-lrow.sel-inactive {
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--m-accent, #0a5fff) 45%, transparent);
+}
+
+.cfv12-root .v12m-tb:focus-visible:not(:disabled) {
+  outline: 2px solid color-mix(in srgb, var(--m-accent, #0a5fff) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.cfv12-root .v12m-drawer-bar:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--m-accent, #0a5fff) 45%, transparent);
+  outline-offset: 1px;
+}
