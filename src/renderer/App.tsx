@@ -1,17 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
 import { V12PaneInspector } from "./v12/V12PaneInspector";
 import { pathToSegments } from "./v12/pane/pathSegments";
 import { inspectorColumnVisible } from "./v12/v12InspectorVisibility";
-import {
-  V12PaneFootStatus,
-  V12ProdDevHint,
-  V12RemoteDisconnectedBody,
-  V12VisualFileList,
-  V12VisualLocationStrip
-} from "./v12/shared";
+import { V12PaneFootStatus, V12ProdDevHint, V12VisualFileList, V12VisualLocationStrip } from "./v12/shared";
+import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
+import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
 import { applyRowSelection, clearSelectionState, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
 import type {
   EnqueueDownloadRequest,
@@ -146,6 +142,12 @@ export function App(props: AppProps = {}) {
   const [tabs, setTabs] = useState<UiTabState[]>(tabState.tabs);
   const [activeTabId, setActiveTabId] = useState<string>(tabState.activeTabId);
   const [siteManagerByTab, setSiteManagerByTab] = useState<Record<string, SiteManagerTabState>>({});
+  const [v12EmbeddedRemoteCatalog, setV12EmbeddedRemoteCatalog] = useState<{
+    profiles: ServerProfile[];
+    listError: string;
+    credentialAvailable: boolean;
+  }>({ profiles: [], listError: "", credentialAvailable: false });
+  const [v12RemoteEmbeddedInitialProfileByTab, setV12RemoteEmbeddedInitialProfileByTab] = useState<Record<string, string>>({});
   const siteManagerRef = useRef(siteManagerByTab);
   useEffect(() => {
     siteManagerRef.current = siteManagerByTab;
@@ -210,6 +212,10 @@ export function App(props: AppProps = {}) {
   const localPane = activeTab.localPane;
   const remotePane = activeTab.remotePane;
   const remoteConnected = remotePane.connectionStatus === "connected" && !!remotePane.connectionId;
+  const activeTabRemoteDisconnected = useMemo(
+    () => !(remotePane.connectionStatus === "connected" && remotePane.connectionId),
+    [remotePane.connectionStatus, remotePane.connectionId]
+  );
 
   useEffect(() => {
     void initializeLocalHome(tabState.firstTabId);
@@ -658,13 +664,32 @@ export function App(props: AppProps = {}) {
     };
   }
 
+  const refreshV12EmbeddedRemoteCatalog = useCallback(async (): Promise<void> => {
+    const [listRes, credRes] = await Promise.all([
+      window.cofinder.profiles.list(),
+      window.cofinder.credentials.isAvailable()
+    ]);
+    const credentialAvailable = credRes.ok ? credRes.data.available : false;
+    if (!listRes.ok) {
+      setV12EmbeddedRemoteCatalog({ profiles: [], listError: listRes.error.message, credentialAvailable });
+      return;
+    }
+    setV12EmbeddedRemoteCatalog({ profiles: listRes.data, listError: "", credentialAvailable });
+  }, []);
+
   function closeSiteManagerForTab(tabId: string): void {
     setSiteManagerByTab((prev) => {
       const next = { ...prev };
       delete next[tabId];
       return next;
     });
+    void refreshV12EmbeddedRemoteCatalog();
   }
+
+  useEffect(() => {
+    if (uiShell !== "v12" || !activeTabRemoteDisconnected) return;
+    void refreshV12EmbeddedRemoteCatalog();
+  }, [uiShell, activeTab.id, activeTabRemoteDisconnected, refreshV12EmbeddedRemoteCatalog]);
 
   async function refreshSiteManagerForTab(tabId: string): Promise<void> {
     const [listRes, credRes] = await Promise.all([
@@ -768,93 +793,47 @@ export function App(props: AppProps = {}) {
     }
   }
 
-  async function handleSiteManagerLogin(tabId: string): Promise<void> {
-    const sm = siteManagerRef.current[tabId];
-    if (!sm?.open) return;
-    const { draft, profiles } = sm;
-    const host = draft.host.trim();
-    const username = draft.username.trim();
-    const port = draft.port;
-    const pwd = (draft.password ?? "").trim();
-    const hasStored = draft.id ? profiles.some((p) => p.id === draft.id && p.hasSavedPassword) : false;
+  async function connectRemoteTabFromFields(
+    tabId: string,
+    attempt: V12EmbeddedRemoteConnectSubmit
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    const v = validateEmbeddedRemoteConnectInput({
+      authType: attempt.authType,
+      host: attempt.host,
+      username: attempt.username,
+      port: attempt.port,
+      passwordTyped: attempt.passwordTyped,
+      hasStoredPassword: attempt.hasStoredPassword
+    });
+    if (!v.ok) return { ok: false, message: v.message };
 
-    if (draft.authType === "privateKey") {
-      setSiteManagerByTab((prev) => ({
-        ...prev,
-        [tabId]: { ...sm, modalError: "Private key authentication is not supported yet." }
-      }));
-      return;
-    }
-    if (!host) {
-      setSiteManagerByTab((prev) => ({ ...prev, [tabId]: { ...sm, modalError: "Host is required." } }));
-      return;
-    }
-    if (!username) {
-      setSiteManagerByTab((prev) => ({ ...prev, [tabId]: { ...sm, modalError: "Username is required." } }));
-      return;
-    }
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-      setSiteManagerByTab((prev) => ({
-        ...prev,
-        [tabId]: { ...sm, modalError: "Port must be between 1 and 65535." }
-      }));
-      return;
-    }
-    if (!pwd && !hasStored) {
-      setSiteManagerByTab((prev) => ({
-        ...prev,
-        [tabId]: { ...sm, modalError: "Password is required, or choose a site with a saved password." }
-      }));
-      return;
-    }
+    let profileId = attempt.profileId;
+    let connectPassword: string | undefined = attempt.passwordTyped.trim() || undefined;
 
-    setSiteManagerByTab((prev) => ({
-      ...prev,
-      [tabId]: { ...sm, busy: "login", modalError: "" }
-    }));
-
-    let profileId = draft.id;
-    let connectPassword: string | undefined = pwd || undefined;
-
-    if (draft.savePassword && pwd) {
-      const saveRes = await window.cofinder.profiles.save({
-        ...draft,
-        host,
-        username,
-        port,
-        password: pwd,
-        savePassword: true,
-        defaultRemotePath: draft.defaultRemotePath?.trim() || undefined
-      });
+    if (attempt.savePasswordWithTyped && attempt.profileSavePayload) {
+      const saveRes = await window.cofinder.profiles.save(attempt.profileSavePayload);
       if (!saveRes.ok) {
-        setSiteManagerByTab((prev) => ({
-          ...prev,
-          [tabId]: { ...(prev[tabId] ?? sm), busy: "idle", modalError: saveRes.error.message }
-        }));
-        return;
+        return { ok: false, message: saveRes.error.message };
       }
       profileId = saveRes.data.id;
       connectPassword = undefined;
-      void refreshSiteManagerForTab(tabId);
+      await refreshSiteManagerForTab(tabId);
+      await refreshV12EmbeddedRemoteCatalog();
     }
-
-    const defaultPath = draft.defaultRemotePath?.trim() || undefined;
 
     setTabs((prev) =>
       prev.map((item) =>
-        item.id === tabId
-          ? { ...item, remotePane: { ...item.remotePane, connectionStatus: "connecting", error: "" } }
-          : item
+        item.id === tabId ? { ...item, remotePane: { ...item.remotePane, connectionStatus: "connecting", error: "" } } : item
       )
     );
 
     const connectPayload: RemoteConnectRequest = {
       profileId: profileId || undefined,
-      host,
-      port,
-      username,
+      host: attempt.host.trim(),
+      port: attempt.port,
+      username: attempt.username.trim(),
       password: connectPassword,
-      defaultRemotePath: defaultPath,
+      defaultRemotePath: attempt.defaultRemotePathTrimmed,
       authType: "password"
     };
 
@@ -874,29 +853,94 @@ export function App(props: AppProps = {}) {
             : item
         )
       );
+      return { ok: false, message: connectResult.error.message };
+    }
+
+    const { connectionId, homePath } = connectResult.data;
+    const initialPath = attempt.defaultRemotePathTrimmed || homePath || "/";
+
+    await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, attempt.aliasForTitle, profileId ?? null, {
+      host: attempt.host.trim(),
+      port: attempt.port,
+      username: attempt.username.trim(),
+      authType: "password"
+    });
+    await refreshV12EmbeddedRemoteCatalog();
+    return { ok: true };
+  }
+
+  async function handleSiteManagerLogin(tabId: string): Promise<void> {
+    const sm = siteManagerRef.current[tabId];
+    if (!sm?.open) return;
+    const { draft, profiles } = sm;
+    const host = draft.host.trim();
+    const username = draft.username.trim();
+    const port = draft.port;
+    const pwd = (draft.password ?? "").trim();
+    const hasStored = draft.id ? profiles.some((p) => p.id === draft.id && p.hasSavedPassword) : false;
+
+    const pre = validateEmbeddedRemoteConnectInput({
+      authType: draft.authType,
+      host,
+      username,
+      port,
+      passwordTyped: pwd,
+      hasStoredPassword: hasStored
+    });
+    if (!pre.ok) {
       setSiteManagerByTab((prev) => ({
         ...prev,
-        [tabId]: {
-          ...(prev[tabId] ?? sm),
-          busy: "idle",
-          modalError: connectResult.error.message
-        }
+        [tabId]: { ...(prev[tabId] ?? sm), modalError: pre.message }
       }));
       return;
     }
 
-    const { connectionId, homePath } = connectResult.data;
-    const titleLabel = draft.alias.trim() || `${username}@${host}:${port}`;
-    const initialPath = defaultPath || homePath || "/";
+    setSiteManagerByTab((prev) => ({
+      ...prev,
+      [tabId]: { ...(prev[tabId] ?? sm), busy: "login", modalError: "" }
+    }));
 
-    closeSiteManagerForTab(tabId);
+    const savePasswordWithTyped = !!(draft.savePassword && pwd);
+    const profileSavePayload = savePasswordWithTyped
+      ? {
+          ...draft,
+          host,
+          username,
+          port,
+          password: pwd,
+          savePassword: true,
+          defaultRemotePath: draft.defaultRemotePath?.trim() || undefined
+        }
+      : null;
+    const aliasForTitle = draft.alias.trim() || `${username}@${host}:${port}`;
 
-    await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, titleLabel, profileId ?? null, {
+    const result = await connectRemoteTabFromFields(tabId, {
+      profileId: draft.id ?? null,
+      profileSavePayload,
+      savePasswordWithTyped,
       host,
       port,
       username,
-      authType: "password"
+      authType: draft.authType,
+      passwordTyped: pwd,
+      hasStoredPassword: hasStored,
+      defaultRemotePathTrimmed: draft.defaultRemotePath?.trim() || undefined,
+      aliasForTitle
     });
+
+    if (!result.ok) {
+      setSiteManagerByTab((prev) => ({
+        ...prev,
+        [tabId]: { ...(prev[tabId] ?? sm), busy: "idle", modalError: result.message }
+      }));
+      return;
+    }
+
+    closeSiteManagerForTab(tabId);
+  }
+
+  async function handleV12EmbeddedRemoteSubmit(tabId: string, payload: V12EmbeddedRemoteConnectSubmit): Promise<void> {
+    void (await connectRemoteTabFromFields(tabId, payload));
   }
 
   async function handleSiteManagerSave(tabId: string): Promise<void> {
@@ -937,6 +981,7 @@ export function App(props: AppProps = {}) {
         }
       };
     });
+    void refreshV12EmbeddedRemoteCatalog();
   }
 
   function handleSiteManagerNew(tabId: string): void {
@@ -1050,6 +1095,7 @@ export function App(props: AppProps = {}) {
         }
       };
     });
+    void refreshV12EmbeddedRemoteCatalog();
   }
 
   async function listRemotePath(
@@ -2339,11 +2385,24 @@ export function App(props: AppProps = {}) {
             <div className="v12m-pane-body">
               <div className="v12m-pane-split">
                 <div className="v12m-pane-main v12m-pane-main--stack">
-                  <V12RemoteDisconnectedBody
-                    connecting={remotePane.connectionStatus === "connecting"}
-                    errorMessage={remotePane.connectionStatus === "failed" ? remotePane.error : ""}
-                    onConnect={() => openSiteManagerForTab(activeTab.id)}
-                    connectDisabled={remotePane.connectionStatus === "connecting"}
+                  <V12RemoteEmbeddedConnect
+                    key={activeTab.id}
+                    profiles={v12EmbeddedRemoteCatalog.profiles}
+                    listError={v12EmbeddedRemoteCatalog.listError}
+                    credentialAvailable={v12EmbeddedRemoteCatalog.credentialAvailable}
+                    connectionStatus={remotePane.connectionStatus}
+                    paneError={remotePane.error}
+                    initialProfileId={v12RemoteEmbeddedInitialProfileByTab[activeTab.id] ?? null}
+                    onInitialProfileConsumed={() =>
+                      setV12RemoteEmbeddedInitialProfileByTab((prev) => {
+                        const next = { ...prev };
+                        delete next[activeTab.id];
+                        return next;
+                      })
+                    }
+                    onOpenSiteManager={() => openSiteManagerForTab(activeTab.id)}
+                    onReloadProfiles={() => void refreshV12EmbeddedRemoteCatalog()}
+                    onConnect={(payload) => void handleV12EmbeddedRemoteSubmit(activeTab.id, payload)}
                   />
                 </div>
               </div>
