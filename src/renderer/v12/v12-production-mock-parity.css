@@ -491,3 +491,49 @@
   outline: 2px solid color-mix(in srgb, var(--m-accent, #0a5fff) 45%, transparent);
   outline-offset: 1px;
 }
+
+/* Sidebar / workspace: explicit no-drag so title-strip drag never captures clicks below the header */
+.cfv12-root .v12m-core,
+.cfv12-root .v12m-sidebar,
+.cfv12-root .v12m-mainstack {
+  -webkit-app-region: no-drag;
+}
+
+.cfv12-root .v12m-sidebar .v12m-ssec-head {
+  position: relative;
+  z-index: 0;
+}
+
+.cfv12-root .v12m-sidebar .v12m-ssec-add {
+  position: relative;
+  z-index: 1;
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+}
+
+.cfv12-root .v12m-sidebar .v12m-srow-main {
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+}
+
+.cfv12-root .v12m-sidebar .v12m-srow-del {
+  -webkit-app-region: no-drag;
+  cursor: pointer;
+  opacity: 0.5 !important;
+  flex-shrink: 0 !important;
+  min-width: 22px !important;
+  position: relative;
+  z-index: 2;
+}
+
+.cfv12-root .v12m-sidebar .v12m-srow:hover .v12m-srow-del {
+  opacity: 1 !important;
+}
+
+.cfv12-root .v12m-sidebar .v12m-ssec-hint--err {
+  margin: 2px 14px 6px;
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: #9a2318;
+}

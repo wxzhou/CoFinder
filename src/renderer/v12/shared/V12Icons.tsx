@@ -171,7 +171,7 @@ export function V12TbIcon(props: { name: string }): ReactElement {
 
 export type V12SidebarIcon = "disk" | "folder" | "server" | "clock";
 
-/** Visual scaffold for M2. Real navigation: M2.7 / M4 — see `docs/dev/V1.2_PLAN.md` (Favorites → local paths; Connections → profiles + connect). */
+/** Fallback scaffold when `AppShellV12` gets no `sidebar` prop. Production v12 passes `V12LocalFavoritesSidebar` from `App.tsx`. */
 export function V12DefaultSidebar(): ReactElement {
   const style = (indent: number): CSSProperties => ({ "--si": `${indent * 10}px` } as CSSProperties);
   return (

@@ -469,3 +469,147 @@
   box-shadow: none;
   max-height: none;
 }
+
+/* V1.2 sidebar — local favorites + remote placeholder */
+.cfv12-root .v12m-ssec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 14px 6px;
+  padding: 0 2px;
+}
+
+.cfv12-root .v12m-ssec-head h3 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cfv12-fg-faint);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.cfv12-root .v12m-ssec-add {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--cfv12-fg-dim);
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.cfv12-root .v12m-ssec-add:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: var(--cfv12-fg);
+}
+
+.cfv12-root .v12m-srow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 0;
+  margin: 0 8px;
+}
+
+.cfv12-root .v12m-srow-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 12px;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  color: var(--cfv12-fg);
+  text-align: left;
+  cursor: default;
+}
+
+.cfv12-root .v12m-srow:hover .v12m-srow-main {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.cfv12-root .v12m-srow.on .v12m-srow-main {
+  background: rgba(10, 132, 255, 0.1);
+  font-weight: 500;
+}
+
+.cfv12-root .v12m-srow.is-missing .v12m-srow-label {
+  opacity: 0.55;
+}
+
+.cfv12-root .v12m-srow-del {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-right: 6px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cfv12-fg-faint);
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.5;
+  cursor: pointer;
+}
+
+.cfv12-root .v12m-srow:hover .v12m-srow-del {
+  opacity: 1;
+}
+
+.cfv12-root .v12m-srow-del:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--cfv12-fg);
+}
+
+.cfv12-root .v12m-srow--disabled {
+  padding: 6px 14px;
+  margin: 0 8px;
+  pointer-events: none;
+  opacity: 0.5;
+  cursor: default;
+  font-size: 12px;
+  color: var(--cfv12-fg-dim);
+}
+
+.cfv12-root .v12m-ssec--remote-placeholder .v12m-ssec-hint {
+  margin: 4px 14px 0;
+  padding: 0 2px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: var(--cfv12-fg-faint);
+}
+
+.cfv12-root .v12m-ssec-reset {
+  display: block;
+  margin: 8px 14px 0;
+  padding: 4px 2px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--cfv12-accent);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.cfv12-root .v12m-ssec-reset:hover {
+  color: var(--cfv12-fg);
+}

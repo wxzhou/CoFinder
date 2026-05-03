@@ -22,6 +22,10 @@ import { TransferQueueService } from "../services/TransferQueueService";
 import { SettingsService } from "../services/SettingsService";
 import { ConnectionManager } from "../services/ConnectionManager";
 import { CredentialService } from "../services/CredentialService";
+import {
+  LocalSidebarFavoritesRepository,
+  defaultLocalSidebarFavoritesPath
+} from "../services/LocalSidebarFavoritesRepository";
 import { ProfileRepository, defaultCredentialsPath, defaultProfilesPath } from "../services/ProfileRepository";
 import { SafeStorageCredentialProvider } from "../services/SafeStorageCredentialProvider";
 import { QuickLookService } from "../services/QuickLookService";
@@ -36,6 +40,7 @@ import type {
   RemoteListDirectoryRequest,
   RemoteListDirectoryResponse
 } from "../../shared/types/ipc";
+import type { LocalFavoriteListItem } from "../../shared/localFavorites";
 import type { ServerProfile } from "../../shared/types/models";
 
 const localFileService = new LocalFileService();
@@ -46,6 +51,12 @@ const settingsService = new SettingsService();
 const quickLookService = new QuickLookService();
 
 const userData = app.getPath("userData");
+const localSidebarFavoritesRepository = new LocalSidebarFavoritesRepository(defaultLocalSidebarFavoritesPath(userData), () => ({
+  home: app.getPath("home"),
+  desktop: app.getPath("desktop"),
+  downloads: app.getPath("downloads"),
+  documents: app.getPath("documents")
+}));
 const profileRepository = new ProfileRepository(defaultProfilesPath(userData));
 const credentialProvider = new SafeStorageCredentialProvider(defaultCredentialsPath(userData));
 const credentialService = new CredentialService(credentialProvider);
@@ -342,6 +353,62 @@ export function registerIpcHandlers(): void {
 
   registerChannel(IPC_CHANNELS.settings.get, () => settingsService.get());
   registerChannel(IPC_CHANNELS.settings.set, (_event, request: Record<string, unknown>) => settingsService.set(request));
+
+  registerChannel(IPC_CHANNELS.localFavorites.list, async (): Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>> => {
+    try {
+      const favorites = await localSidebarFavoritesRepository.listRows();
+      return ok({ favorites });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_FAVORITES_PERSIST_FAILED", "Failed to load local favorites.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.localFavorites.add, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid localFavorites:add request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const favorites = await localSidebarFavoritesRepository.addPath(targetPath);
+      return ok({ favorites });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code: unknown }).code === "LOCAL_FAVORITES_DUPLICATE"
+      ) {
+        return fail("LOCAL_FAVORITES_DUPLICATE", "This folder is already in favorites.");
+      }
+      return toIpcError(error, "LOCAL_FAVORITES_PERSIST_FAILED", "Failed to save favorite.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.localFavorites.remove, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid localFavorites:remove request.");
+      const id = requiredString(body.id, "id", "LOCAL_INVALID_INPUT");
+      const favorites = await localSidebarFavoritesRepository.removeById(id);
+      return ok({ favorites });
+    } catch (error) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code: unknown }).code === "LOCAL_FAVORITES_NOT_FOUND"
+      ) {
+        return fail("LOCAL_FAVORITES_NOT_FOUND", "Favorite not found.");
+      }
+      return toIpcError(error, "LOCAL_FAVORITES_PERSIST_FAILED", "Failed to remove favorite.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.localFavorites.resetDefaults, async (): Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>> => {
+    try {
+      const favorites = await localSidebarFavoritesRepository.resetDefaultLocations();
+      return ok({ favorites });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_FAVORITES_PERSIST_FAILED", "Failed to reset default favorites.");
+    }
+  });
 
   registerChannel(IPC_CHANNELS.profiles.list, async (): Promise<IpcResponse<ServerProfile[]>> => {
     try {

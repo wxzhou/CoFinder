@@ -8,9 +8,11 @@ import { V12PaneInspector } from "./v12/V12PaneInspector";
 import { pathToSegments } from "./v12/pane/pathSegments";
 import { inspectorColumnVisible } from "./v12/v12InspectorVisibility";
 import { V12PaneFootStatus, V12ProdDevHint, V12VisualFileList, V12VisualLocationStrip } from "./v12/shared";
+import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
 import { applyRowSelection, clearSelectionState, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
+import type { LocalFavoriteListItem } from "../shared/localFavorites";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -176,6 +178,9 @@ export function App(props: AppProps = {}) {
   type V12InspPaneState = { status: "idle" | "loading" | "ready" | "error"; info: PathInfo | null; error: string };
   const [v12LocalInsp, setV12LocalInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
   const [v12RemoteInsp, setV12RemoteInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
+  const [v12LocalFavorites, setV12LocalFavorites] = useState<LocalFavoriteListItem[]>([]);
+  const [v12FavoriteHint, setV12FavoriteHint] = useState("");
+  const v12FavoriteHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const cancelV12LocalInspRevealTimer = (): void => {
     if (v12LocalInspRevealTimerRef.current != null) {
@@ -390,6 +395,104 @@ export function App(props: AppProps = {}) {
         };
       })
     );
+  }
+
+  const showV12FavoriteHint = useCallback((message: string) => {
+    if (v12FavoriteHintTimerRef.current != null) clearTimeout(v12FavoriteHintTimerRef.current);
+    setV12FavoriteHint(message);
+    v12FavoriteHintTimerRef.current = setTimeout(() => {
+      v12FavoriteHintTimerRef.current = null;
+      setV12FavoriteHint("");
+    }, 2800);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (v12FavoriteHintTimerRef.current != null) clearTimeout(v12FavoriteHintTimerRef.current);
+    },
+    []
+  );
+
+  const refreshV12LocalFavorites = useCallback(async () => {
+    try {
+      const api = window.cofinder?.localFavorites;
+      if (!api?.list) {
+        showV12FavoriteHint("Local favorites are unavailable. Quit and reopen the app.");
+        return;
+      }
+      const r = await api.list();
+      if (r.ok) setV12LocalFavorites(r.data.favorites);
+      else showV12FavoriteHint(r.error.message);
+    } catch (err) {
+      showV12FavoriteHint(err instanceof Error ? err.message : "Failed to load favorites.");
+    }
+  }, [showV12FavoriteHint]);
+
+  useEffect(() => {
+    if (uiShell !== "v12") return;
+    void refreshV12LocalFavorites();
+  }, [uiShell, refreshV12LocalFavorites]);
+
+  async function handleV12AddLocalFavorite(): Promise<void> {
+    try {
+      const api = window.cofinder?.localFavorites;
+      if (!api?.add) {
+        showV12FavoriteHint("Local favorites are unavailable. Quit and reopen the app.");
+        return;
+      }
+      const p = localPane.currentPath || "/";
+      const res = await api.add({ path: p });
+      if (!res.ok) {
+        if (res.error.code === "LOCAL_FAVORITES_DUPLICATE") {
+          showV12FavoriteHint("That folder is already in favorites.");
+          return;
+        }
+        showV12FavoriteHint(res.error.message);
+        setQueueError(res.error.message);
+        return;
+      }
+      setV12LocalFavorites(res.data.favorites);
+    } catch (err) {
+      showV12FavoriteHint(err instanceof Error ? err.message : "Failed to add favorite.");
+    }
+  }
+
+  async function handleV12RemoveLocalFavorite(id: string): Promise<void> {
+    try {
+      const api = window.cofinder?.localFavorites;
+      if (!api?.remove) {
+        showV12FavoriteHint("Local favorites are unavailable. Quit and reopen the app.");
+        return;
+      }
+      const res = await api.remove({ id });
+      if (!res.ok) {
+        showV12FavoriteHint(res.error.message);
+        setQueueError(res.error.message);
+        return;
+      }
+      setV12LocalFavorites(res.data.favorites);
+    } catch (err) {
+      showV12FavoriteHint(err instanceof Error ? err.message : "Failed to remove favorite.");
+    }
+  }
+
+  async function handleV12RestoreDefaultFavorites(): Promise<void> {
+    try {
+      const api = window.cofinder?.localFavorites;
+      if (!api?.resetDefaults) {
+        showV12FavoriteHint("Local favorites are unavailable. Quit and reopen the app.");
+        return;
+      }
+      const res = await api.resetDefaults();
+      if (!res.ok) {
+        showV12FavoriteHint(res.error.message);
+        setQueueError(res.error.message);
+        return;
+      }
+      setV12LocalFavorites(res.data.favorites);
+    } catch (err) {
+      showV12FavoriteHint(err instanceof Error ? err.message : "Failed to restore defaults.");
+    }
   }
 
   const queueStats = useMemo(() => {
@@ -2865,6 +2968,23 @@ export function App(props: AppProps = {}) {
           drawer={queueV12Drawer}
           localPane={localPaneEl}
           remotePane={remotePaneEl}
+          sidebar={
+            <V12LocalFavoritesSidebar
+              favorites={v12LocalFavorites}
+              currentLocalPath={localPane.currentPath || "/"}
+              hint={v12FavoriteHint}
+              onSelectFavorite={(path) => {
+                setActivePane("local");
+                clearLocalSelection(activeTab.id);
+                cancelV12LocalInspRevealTimer();
+                setV12LocalInspectorReveal(false);
+                void navigateLocal(activeTab.id, path, "push");
+              }}
+              onAddCurrentPath={() => void handleV12AddLocalFavorite()}
+              onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
+              onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
+            />
+          }
         />
       )}
       {uiShell === "v11" ? queueV11Section : null}

@@ -38,6 +38,12 @@ const api: IpcApi = {
     get: () => ipcRenderer.invoke("settings:get"),
     set: (request) => ipcRenderer.invoke("settings:set", request)
   },
+  localFavorites: {
+    list: () => ipcRenderer.invoke("localFavorites:list"),
+    add: (request) => ipcRenderer.invoke("localFavorites:add", request),
+    remove: (request) => ipcRenderer.invoke("localFavorites:remove", request),
+    resetDefaults: () => ipcRenderer.invoke("localFavorites:resetDefaults")
+  },
   profiles: {
     list: () => ipcRenderer.invoke("profiles:list"),
     save: (request) => ipcRenderer.invoke("profiles:save", request),
