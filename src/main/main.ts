@@ -45,7 +45,12 @@ function createMainWindow(): BrowserWindow {
 
   if (isDev) {
     const devBase = "http://localhost:5173";
-    const devUrl = process.env.COFINDER_V12_MOCKUP === "1" ? `${devBase}/?mockup=v12` : devBase;
+    let devUrl = devBase;
+    if (process.env.COFINDER_V12_MOCKUP === "1") {
+      devUrl = `${devBase}/?mockup=v12`;
+    } else if (process.env.COFINDER_UI_V12 === "1") {
+      devUrl = `${devBase}/?ui=v12`;
+    }
     void mainWindow.loadURL(devUrl);
   } else {
     void mainWindow.loadFile(indexPath);

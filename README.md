@@ -59,6 +59,15 @@ Current app version: `0.2.0`.
 - **M5 — packaging:** `electron-builder` (macOS dmg + zip), `npm run package` / `npm run dist`, artifacts under `release/`
 - **M5 — documentation:** `docs/smoke-test.md`, `docs/release-checklist.md`, `docs/security.md`, `docs/roadmap.md`; `npm run check:secrets`
 
+## V1.2 shell (development)
+
+The Finder-first V1.2 **production shell** (Milestone 1+) is behind a flag so V1.1 remains the default:
+
+- **Query:** append `?ui=v12` to the renderer URL (e.g. `http://localhost:5173/?ui=v12` in dev).
+- **Electron dev:** set `COFINDER_UI_V12=1` so the dev window opens with `?ui=v12`. This is separate from `COFINDER_V12_MOCKUP=1`, which still loads the static `?mockup=v12` mockup only.
+
+Remove the flag to return to the classic UI.
+
 ### Not Supported in V1
 
 - Remote edit auto-sync workflow
