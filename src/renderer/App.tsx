@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
+import { V12PaneInspector } from "./v12/V12PaneInspector";
 import { pathToSegments } from "./v12/pane/pathSegments";
+import { inspectorColumnVisible } from "./v12/v12InspectorVisibility";
 import {
   V12PaneFootStatus,
   V12ProdDevHint,
@@ -113,6 +115,8 @@ type UiTabState = {
 const AUTO_HIDE_DELAY_MS = 10_000;
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
+/** After a row `click` with `detail === 1`, wait this long before showing inspector so a double-click rarely mounts the column. Cmd+A bypasses. If already revealed, no delay and no hide. */
+const V12_INSPECTOR_CLICK_GAP_MS = 350;
 
 type QueuePanelState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
 type PlainClickRecord = {
@@ -158,10 +162,54 @@ export function App(props: AppProps = {}) {
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [localHomePath, setLocalHomePath] = useState<string>("");
+  const v12LocalInspTokenRef = useRef(0);
+  const v12RemoteInspTokenRef = useRef(0);
+  const v12LocalInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const v12RemoteInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevActiveTabIdForV12InspRef = useRef(activeTabId);
+  const [v12LocalInspectorReveal, setV12LocalInspectorReveal] = useState(false);
+  const [v12RemoteInspectorReveal, setV12RemoteInspectorReveal] = useState(false);
+  type V12InspPaneState = { status: "idle" | "loading" | "ready" | "error"; info: PathInfo | null; error: string };
+  const [v12LocalInsp, setV12LocalInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
+  const [v12RemoteInsp, setV12RemoteInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
+
+  const cancelV12LocalInspRevealTimer = (): void => {
+    if (v12LocalInspRevealTimerRef.current != null) {
+      clearTimeout(v12LocalInspRevealTimerRef.current);
+      v12LocalInspRevealTimerRef.current = null;
+    }
+  };
+  const cancelV12RemoteInspRevealTimer = (): void => {
+    if (v12RemoteInspRevealTimerRef.current != null) {
+      clearTimeout(v12RemoteInspRevealTimerRef.current);
+      v12RemoteInspRevealTimerRef.current = null;
+    }
+  };
+  const scheduleV12LocalInspRevealFromRowClick = (): void => {
+    cancelV12LocalInspRevealTimer();
+    if (v12LocalInspectorReveal) {
+      return;
+    }
+    v12LocalInspRevealTimerRef.current = setTimeout(() => {
+      v12LocalInspRevealTimerRef.current = null;
+      setV12LocalInspectorReveal(true);
+    }, V12_INSPECTOR_CLICK_GAP_MS);
+  };
+  const scheduleV12RemoteInspRevealFromRowClick = (): void => {
+    cancelV12RemoteInspRevealTimer();
+    if (v12RemoteInspectorReveal) {
+      return;
+    }
+    v12RemoteInspRevealTimerRef.current = setTimeout(() => {
+      v12RemoteInspRevealTimerRef.current = null;
+      setV12RemoteInspectorReveal(true);
+    }, V12_INSPECTOR_CLICK_GAP_MS);
+  };
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const localPane = activeTab.localPane;
   const remotePane = activeTab.remotePane;
+  const remoteConnected = remotePane.connectionStatus === "connected" && !!remotePane.connectionId;
 
   useEffect(() => {
     void initializeLocalHome(tabState.firstTabId);
@@ -246,6 +294,10 @@ export function App(props: AppProps = {}) {
             tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, ...selectedState } } : tab
           )
         );
+        if (uiShell === "v12") {
+          cancelV12LocalInspRevealTimer();
+          setV12LocalInspectorReveal(true);
+        }
         event.preventDefault();
         event.stopPropagation();
       }
@@ -256,6 +308,10 @@ export function App(props: AppProps = {}) {
             tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, ...selectedState } } : tab
           )
         );
+        if (uiShell === "v12") {
+          cancelV12RemoteInspRevealTimer();
+          setV12RemoteInspectorReveal(true);
+        }
         event.preventDefault();
         event.stopPropagation();
       }
@@ -263,7 +319,7 @@ export function App(props: AppProps = {}) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs, tabs]);
+  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs, tabs, uiShell]);
 
   async function loadTransferTasks(): Promise<void> {
     const res = await window.cofinder.transfer.list();
@@ -404,7 +460,111 @@ export function App(props: AppProps = {}) {
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
   const remoteTotalSize = remotePane.entries.reduce((acc, item) => acc + item.size, 0);
 
+  useEffect(() => {
+    if (uiShell !== "v12") {
+      cancelV12LocalInspRevealTimer();
+      cancelV12RemoteInspRevealTimer();
+      setV12LocalInspectorReveal(false);
+      setV12RemoteInspectorReveal(false);
+      return;
+    }
+    if (localPane.selectedFullPaths.length === 0) {
+      cancelV12LocalInspRevealTimer();
+      setV12LocalInspectorReveal(false);
+    }
+    if (!remoteConnected || remotePane.selectedFullPaths.length === 0) {
+      cancelV12RemoteInspRevealTimer();
+      setV12RemoteInspectorReveal(false);
+    }
+  }, [uiShell, activeTab.id, localPane.selectedFullPaths, remotePane.selectedFullPaths, remoteConnected]);
+
+  useEffect(() => {
+    if (uiShell !== "v12") return;
+    if (prevActiveTabIdForV12InspRef.current === activeTabId) return;
+    prevActiveTabIdForV12InspRef.current = activeTabId;
+    cancelV12LocalInspRevealTimer();
+    cancelV12RemoteInspRevealTimer();
+    const tab = tabs.find((t) => t.id === activeTabId) ?? activeTab;
+    const rc = tab.remotePane.connectionStatus === "connected" && !!tab.remotePane.connectionId;
+    setV12LocalInspectorReveal(tab.localPane.selectedFullPaths.length > 0);
+    setV12RemoteInspectorReveal(rc && tab.remotePane.selectedFullPaths.length > 0);
+  }, [activeTabId, uiShell, tabs, activeTab]);
+
+  useEffect(() => {
+    if (uiShell !== "v12") return;
+    const paths = localPane.selectedFullPaths;
+    const visible =
+      inspectorColumnVisible("local", paths.length, remoteConnected) && v12LocalInspectorReveal;
+    if (!visible || paths.length === 0) {
+      setV12LocalInsp({ status: "idle", info: null, error: "" });
+      return;
+    }
+    if (paths.length > 1) {
+      setV12LocalInsp({ status: "ready", info: null, error: "" });
+      return;
+    }
+    const path = paths[0]!;
+    const token = ++v12LocalInspTokenRef.current;
+    setV12LocalInsp({ status: "loading", info: null, error: "" });
+    void (async () => {
+      const r = await window.cofinder.local.getInfo({ path, includeDirectorySize: false });
+      if (token !== v12LocalInspTokenRef.current) return;
+      if (!r.ok) {
+        setV12LocalInsp({ status: "error", info: null, error: r.error.message });
+        return;
+      }
+      const base = r.data.info;
+      setV12LocalInsp({ status: "ready", info: base, error: "" });
+      if (base.type === "directory") {
+        const r2 = await window.cofinder.local.getInfo({ path, includeDirectorySize: true });
+        if (token !== v12LocalInspTokenRef.current) return;
+        if (r2.ok) {
+          setV12LocalInsp({ status: "ready", info: { ...base, size: r2.data.info.size }, error: "" });
+        }
+      }
+    })();
+  }, [uiShell, remoteConnected, activeTab.id, localPane.selectedFullPaths, v12LocalInspectorReveal]);
+
+  useEffect(() => {
+    if (uiShell !== "v12") return;
+    const conn = remotePane.connectionId;
+    const paths = remotePane.selectedFullPaths;
+    const visible = inspectorColumnVisible("remote", paths.length, !!conn) && v12RemoteInspectorReveal;
+    if (!visible || !conn || paths.length === 0) {
+      setV12RemoteInsp({ status: "idle", info: null, error: "" });
+      return;
+    }
+    if (paths.length > 1) {
+      setV12RemoteInsp({ status: "ready", info: null, error: "" });
+      return;
+    }
+    const path = paths[0]!;
+    const token = ++v12RemoteInspTokenRef.current;
+    setV12RemoteInsp({ status: "loading", info: null, error: "" });
+    void (async () => {
+      const r = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: false });
+      if (token !== v12RemoteInspTokenRef.current) return;
+      if (!r.ok) {
+        setV12RemoteInsp({ status: "error", info: null, error: r.error.message });
+        return;
+      }
+      const base = r.data.info;
+      setV12RemoteInsp({ status: "ready", info: base, error: "" });
+      if (base.type === "directory") {
+        const r2 = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: true });
+        if (token !== v12RemoteInspTokenRef.current) return;
+        if (r2.ok) {
+          setV12RemoteInsp({ status: "ready", info: { ...base, size: r2.data.info.size }, error: "" });
+        }
+      }
+    })();
+  }, [uiShell, remotePane.connectionId, remotePane.selectedFullPaths, activeTab.id, v12RemoteInspectorReveal]);
+
   async function handleRowDoubleClick(tabId: string, entry: LocalFileEntry): Promise<void> {
+    if (uiShell === "v12") {
+      cancelV12LocalInspRevealTimer();
+      setV12LocalInspectorReveal(false);
+    }
     if (entry.type === "directory") {
       await navigateLocal(tabId, entry.fullPath);
       return;
@@ -950,6 +1110,10 @@ export function App(props: AppProps = {}) {
   }
 
   async function handleRemoteDoubleClick(tabId: string, entry: RemoteFileEntry): Promise<void> {
+    if (uiShell === "v12") {
+      cancelV12RemoteInspRevealTimer();
+      setV12RemoteInspectorReveal(false);
+    }
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (entry.type === "directory") {
@@ -1081,7 +1245,11 @@ export function App(props: AppProps = {}) {
     setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
   }
 
-  function handleLocalRowClick(tabId: string, entry: LocalFileEntry, event: { metaKey: boolean; shiftKey: boolean }): void {
+  function handleLocalRowClick(
+    tabId: string,
+    entry: LocalFileEntry,
+    event: { metaKey: boolean; shiftKey: boolean; clickDetail?: number }
+  ): void {
     setActivePane("local");
     setTabs((prev) =>
       prev.map((tab) => {
@@ -1103,9 +1271,22 @@ export function App(props: AppProps = {}) {
         };
       })
     );
+    if (uiShell === "v12") {
+      const d = event.clickDetail ?? 1;
+      if (d >= 2) {
+        cancelV12LocalInspRevealTimer();
+        setV12LocalInspectorReveal(false);
+      } else {
+        scheduleV12LocalInspRevealFromRowClick();
+      }
+    }
   }
 
-  function handleRemoteRowClick(tabId: string, entry: RemoteFileEntry, event: { metaKey: boolean; shiftKey: boolean }): void {
+  function handleRemoteRowClick(
+    tabId: string,
+    entry: RemoteFileEntry,
+    event: { metaKey: boolean; shiftKey: boolean; clickDetail?: number }
+  ): void {
     setActivePane("remote");
     setTabs((prev) =>
       prev.map((tab) => {
@@ -1127,6 +1308,15 @@ export function App(props: AppProps = {}) {
         };
       })
     );
+    if (uiShell === "v12") {
+      const d = event.clickDetail ?? 1;
+      if (d >= 2) {
+        cancelV12RemoteInspRevealTimer();
+        setV12RemoteInspectorReveal(false);
+      } else {
+        scheduleV12RemoteInspRevealFromRowClick();
+      }
+    }
   }
 
   function clearLocalSelection(tabId: string): void {
@@ -1607,7 +1797,6 @@ export function App(props: AppProps = {}) {
     remotePane.activeProfileId && sm?.profiles
       ? (sm.profiles.find((p) => p.id === remotePane.activeProfileId)?.alias?.trim() ?? null)
       : null;
-  const remoteConnected = remotePane.connectionStatus === "connected" && !!remotePane.connectionId;
   const localPaneTitleV12 = localPaneTitleFromPath(localPane.currentPath);
   const remotePaneTitleV12 = activeProfileAlias
     ? activeProfileAlias
@@ -1827,7 +2016,11 @@ export function App(props: AppProps = {}) {
                       lastPlainClickRef.current = null;
                       return;
                     }
-                    handleLocalRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                    handleLocalRowClick(activeTab.id, entry, {
+                      metaKey: event.metaKey,
+                      shiftKey: event.shiftKey,
+                      clickDetail: event.detail
+                    });
                     if (!event.metaKey && !event.shiftKey) {
                       lastPlainClickRef.current = { pane: "local", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
                     } else {
@@ -1880,6 +2073,28 @@ export function App(props: AppProps = {}) {
                   totalSizeLabel={formatSize(totalSize)}
                 />
               </div>
+              {inspectorColumnVisible("local", localPane.selectedFullPaths.length, remoteConnected) && v12LocalInspectorReveal ? (
+                <V12PaneInspector
+                  scope="local"
+                  selectionCount={localPane.selectedFullPaths.length}
+                  selectedPaths={localPane.selectedFullPaths}
+                  entries={sortedEntries}
+                  info={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.info : null}
+                  infoLoading={localPane.selectedFullPaths.length === 1 && v12LocalInsp.status === "loading"}
+                  infoError={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.error : ""}
+                  formatSize={formatSize}
+                  formatTime={formatTime}
+                  onQuickLook={() => void quickLookSelection(activeTab.id, "local")}
+                  onRevealInFinder={async () => {
+                    const target = localPane.selectedFullPaths[0];
+                    if (!target) return;
+                    const result = await window.cofinder.local.revealPath({ path: target });
+                    if (!result.ok) setQueueError(result.error.message);
+                  }}
+                  onCopyPaths={() => void copySelection(activeTab.id, "local", "path")}
+                  onGetInfo={() => void openInfoDialog(activeTab.id, "local")}
+                />
+              ) : null}
             </div>
           </div>
         </>
@@ -2028,7 +2243,11 @@ export function App(props: AppProps = {}) {
                         lastPlainClickRef.current = null;
                         return;
                       }
-                      handleLocalRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                      handleLocalRowClick(activeTab.id, entry, {
+                        metaKey: event.metaKey,
+                        shiftKey: event.shiftKey,
+                        clickDetail: event.detail
+                      });
                       if (!event.metaKey && !event.shiftKey) {
                         lastPlainClickRef.current = { pane: "local", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
                       } else {
@@ -2182,7 +2401,11 @@ export function App(props: AppProps = {}) {
                         lastPlainClickRef.current = null;
                         return;
                       }
-                      handleRemoteRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                      handleRemoteRowClick(activeTab.id, entry, {
+                        metaKey: event.metaKey,
+                        shiftKey: event.shiftKey,
+                        clickDetail: event.detail
+                      });
                       if (!event.metaKey && !event.shiftKey) {
                         lastPlainClickRef.current = { pane: "remote", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
                       } else {
@@ -2235,6 +2458,22 @@ export function App(props: AppProps = {}) {
                     totalSizeLabel={formatSize(remoteTotalSize)}
                   />
                 </div>
+                {inspectorColumnVisible("remote", remotePane.selectedFullPaths.length, remoteConnected) && v12RemoteInspectorReveal ? (
+                  <V12PaneInspector
+                    scope="remote"
+                    selectionCount={remotePane.selectedFullPaths.length}
+                    selectedPaths={remotePane.selectedFullPaths}
+                    entries={sortedRemoteEntries}
+                    info={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.info : null}
+                    infoLoading={remotePane.selectedFullPaths.length === 1 && v12RemoteInsp.status === "loading"}
+                    infoError={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.error : ""}
+                    formatSize={formatSize}
+                    formatTime={formatTime}
+                    hostLabel={`${remotePane.username}@${remotePane.host}:${remotePane.port}`}
+                    onCopyPaths={() => void copySelection(activeTab.id, "remote", "path")}
+                    onGetInfo={() => void openInfoDialog(activeTab.id, "remote")}
+                  />
+                ) : null}
               </div>
             </div>
           </>
@@ -2400,7 +2639,11 @@ export function App(props: AppProps = {}) {
                             lastPlainClickRef.current = null;
                             return;
                           }
-                          handleRemoteRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                          handleRemoteRowClick(activeTab.id, entry, {
+                            metaKey: event.metaKey,
+                            shiftKey: event.shiftKey,
+                            clickDetail: event.detail
+                          });
                           if (!event.metaKey && !event.shiftKey) {
                             lastPlainClickRef.current = { pane: "remote", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
                           } else {

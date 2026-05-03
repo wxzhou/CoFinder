@@ -122,3 +122,29 @@
   flex-shrink: 0;
   margin-left: auto;
 }
+
+.cfv12-root .v12m-insp-empty {
+  margin: 0;
+  padding: 14px 12px;
+  font-size: 11px;
+  color: var(--m-fg-dim, rgba(60, 60, 67, 0.72));
+}
+
+.cfv12-root .v12m-insp-empty--err {
+  color: #9a2318;
+}
+
+.cfv12-root .v12m-insp-line--sub {
+  font-size: 10px;
+  color: var(--m-fg-faint, rgba(60, 60, 67, 0.48));
+}
+
+.cfv12-root .v12m-insp-linkbtn:disabled {
+  opacity: 0.42;
+  cursor: default;
+}
+
+.cfv12-root .v12m-insp-linkbtn:disabled:hover {
+  color: var(--m-fg-dim, rgba(60, 60, 67, 0.72));
+  background: transparent;
+}
