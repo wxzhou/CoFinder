@@ -44,7 +44,9 @@ function createMainWindow(): BrowserWindow {
   wireWebContentsDiagnostics(mainWindow);
 
   if (isDev) {
-    void mainWindow.loadURL("http://localhost:5173");
+    const devBase = "http://localhost:5173";
+    const devUrl = process.env.COFINDER_V12_MOCKUP === "1" ? `${devBase}/?mockup=v12` : devBase;
+    void mainWindow.loadURL(devUrl);
   } else {
     void mainWindow.loadFile(indexPath);
     if (debugPackaged) {
