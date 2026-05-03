@@ -1,0 +1,124 @@
+/**
+ * M2.6: Pull approved mockup visuals into production `?ui=v12` without mounting mock dev rail.
+ * Imports mock stylesheet, then constrains / overrides for `AppShellV12` embedding.
+ */
+@import "../mockups/v12-mockup.css";
+
+.cfv12-root.v12m-root {
+  min-height: 0 !important;
+  height: 100%;
+}
+
+/* Production shell never shows mock dev rail (not in DOM; guard if CSS reused). */
+.cfv12-root .v12m-devrail {
+  display: none !important;
+}
+
+/* Toolbar: disabled glyphs stay legible (M5 wires actions). */
+.cfv12-root .v12m-tb:disabled {
+  opacity: 0.72;
+}
+
+/* Split column hairlines — match mock split; drop legacy pane focus box. */
+.cfv12-split.v12m-split {
+  background: var(--m-bg-pane-idle, #fafafa);
+}
+
+.cfv12-split > .v12m-pane {
+  border-left: 1px solid var(--m-sep-hair, rgba(0, 0, 0, 0.045));
+}
+
+.cfv12-split > .v12m-pane:first-child {
+  border-left: none;
+}
+
+/* Typed path: same typography as path segments, no “web form” chrome */
+.cfv12-root .v12m-pathfinder-go {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.cfv12-root .v12m-pathfinder-go input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  padding: 3px 2px 2px;
+  font: 500 11px var(--m-font);
+  color: var(--m-fg-dim);
+  border-radius: 4px;
+}
+
+.cfv12-root .v12m-pathfinder-go input:focus {
+  outline: none;
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--m-fg);
+}
+
+/* Pane status row — mock has no footer; this matches drawer “sum” quiet tone */
+.cfv12-root .v12m-pane-foot {
+  flex-shrink: 0;
+  padding: 4px 10px 6px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--m-fg-faint);
+  border-top: 1px solid var(--m-sep-hair);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+
+/* Real queue rows inside mock drawer panel — keep readable */
+.cfv12-root .v12m-drawer-panel .queue-panel {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.cfv12-root .v12m-drawer-panel .queue-list {
+  max-height: 96px;
+}
+
+/* Stack list + optional foot inside mock `v12m-pane-main` column */
+.cfv12-root .v12m-pane-main.v12m-pane-main--stack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cfv12-root .v12m-pane-main.v12m-pane-main--stack .v12m-list {
+  flex: 1;
+  min-height: 0;
+}
+
+/* Dev-only hint: out of hero layout */
+.cfv12-prod-devhint {
+  position: fixed;
+  right: 10px;
+  bottom: 8px;
+  z-index: 50;
+  max-width: 220px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 1.35;
+  color: rgba(60, 60, 67, 0.55);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  pointer-events: none;
+  user-select: none;
+}
+
+.cfv12-prod-devhint code {
+  font-size: 9px;
+}
+
+.cfv12-root .v12m-loc-tail {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
+}

@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
+import { AppShellV12 } from "./v12/AppShellV12";
+import { pathToSegments } from "./v12/pane/pathSegments";
+import {
+  V12PaneFootStatus,
+  V12ProdDevHint,
+  V12RemoteDisconnectedBody,
+  V12VisualFileList,
+  V12VisualLocationStrip
+} from "./v12/shared";
 import { applyRowSelection, clearSelectionState, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
 import type {
   EnqueueDownloadRequest,
@@ -113,7 +122,14 @@ type PlainClickRecord = {
   at: number;
 };
 
-export function App() {
+export type AppUiShell = "v11" | "v12";
+
+export type AppProps = {
+  uiShell?: AppUiShell;
+};
+
+export function App(props: AppProps = {}) {
+  const { uiShell = "v11" } = props;
   const [appVersion, setAppVersion] = useState("unknown");
   const [tabState] = useState(() => {
     const firstTabId = createId();
@@ -1571,25 +1587,304 @@ export function App() {
 
   const activeSiteManager = siteManagerByTab[activeTab.id];
 
-  return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div className="title-group">
-          <strong>CoFinder</strong>
+  const tabBar = (
+    <TabBar
+      tabs={tabs}
+      activeTabId={activeTabId}
+      onSelect={setActiveTabId}
+      onAdd={createTab}
+      onClose={(tabId) => void closeTab(tabId)}
+    />
+  );
+
+  const localPaneSectionClass =
+    uiShell === "v12" ? `v12m-pane ${activePane === "local" ? "is-focus" : "is-blur"}` : `pane local-pane ${activePane === "local" ? "pane-active" : ""}`;
+  const remotePaneSectionClass =
+    uiShell === "v12" ? `v12m-pane ${activePane === "remote" ? "is-focus" : "is-blur"}` : `pane remote-pane ${activePane === "remote" ? "pane-active" : ""}`;
+
+  const sm = siteManagerByTab[activeTab.id];
+  const activeProfileAlias =
+    remotePane.activeProfileId && sm?.profiles
+      ? (sm.profiles.find((p) => p.id === remotePane.activeProfileId)?.alias?.trim() ?? null)
+      : null;
+  const remoteConnected = remotePane.connectionStatus === "connected" && !!remotePane.connectionId;
+  const localPaneTitleV12 = localPaneTitleFromPath(localPane.currentPath);
+  const remotePaneTitleV12 = activeProfileAlias
+    ? activeProfileAlias
+    : remoteConnected
+      ? `${remotePane.username}@${remotePane.host}`
+      : "Remote";
+  const remotePaneMetaV12 = remoteConnected
+    ? `${remotePane.username}@${remotePane.host}:${remotePane.port}`
+    : remotePane.connectionStatus === "connecting"
+      ? "Connecting…"
+      : remotePane.connectionStatus === "failed" && remotePane.error
+        ? remotePane.error
+        : "Offline";
+
+  const remoteBadgeV12 =
+    !remoteConnected && remotePane.connectionStatus !== "connecting" ? (
+      <span className="v12m-badge v12m-badge-off">Offline</span>
+    ) : remotePane.connectionStatus === "connecting" ? (
+      <span className="v12m-badge v12m-badge-wait">Connecting…</span>
+    ) : remotePane.connectionStatus === "failed" ? (
+      <span className="v12m-badge v12m-badge-err">Error</span>
+    ) : (
+      <span className="v12m-badge v12m-badge-ok">
+        <span className="v12m-badge-dot" aria-hidden />
+        Connected
+      </span>
+    );
+
+  function expandOrCollapseQueueFromV12Drawer(): void {
+    if (queuePanelState === "hidden" || queuePanelState === "collapsed") setQueuePanelState("expanded");
+    else if (queuePanelState === "expanded" || queuePanelState === "autoHidePending") setQueuePanelState("collapsed");
+  }
+
+  const queueExpandedBody = (
+    <>
+      <div className="queue-header">
+        <div>
+          <strong>Transfer Queue</strong>
+          <span className="queue-summary">{summarizeQueue()}</span>
         </div>
-        <div className="top-version" aria-label="App version">
-          Version {appVersion}
+        <div className="queue-controls">
+          <button type="button" className="toolbar-button" onClick={() => setQueuePanelState("collapsed")}>
+            Minimize
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${queuePinned ? "is-active" : ""}`}
+            onClick={() => setQueuePinned((prev) => !prev)}
+          >
+            {queuePinned ? "Pinned" : "Pin"}
+          </button>
+          <button
+            type="button"
+            className="toolbar-button"
+            onClick={() => {
+              void clearCompletedTransfers();
+            }}
+          >
+            Clear
+          </button>
         </div>
-      </header>
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onSelect={setActiveTabId}
-        onAdd={createTab}
-        onClose={(tabId) => void closeTab(tabId)}
-      />
-      <main className="pane-layout">
-        <section className={`pane local-pane ${activePane === "local" ? "pane-active" : ""}`}>
+      </div>
+      {queueError ? <div className="error-banner">{queueError}</div> : null}
+      <div className="queue-list">
+        {transferTasks.length === 0 ? (
+          <div className="queue-empty">No transfer tasks.</div>
+        ) : (
+          transferTasks.map((task) => (
+            <div key={task.id} className="queue-item">
+              <span>{task.direction}</span>
+              <span className={`queue-status status-${task.status}`}>{task.status}</span>
+              <span className="queue-path" title={`${task.sourceDisplay} -> ${task.destinationDisplay}`}>
+                {task.sourceDisplay} {"->"} {task.destinationDisplay}
+              </span>
+              <span className="queue-path" title={task.progressText ?? task.currentFile ?? "-"}>
+                {task.progressText ?? task.currentFile ?? "-"}
+                {task.speed ? ` | ${task.speed}` : ""}
+                {task.eta ? ` | ETA ${task.eta}` : ""}
+              </span>
+              <span>
+                {task.status === "pending" ? (
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    onClick={async () => {
+                      const res = await window.cofinder.transfer.cancel({ taskId: task.id });
+                      if (!res.ok) setQueueError(res.error.message);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                ) : null}
+                {task.status === "running" ? (
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    onClick={async () => {
+                      const res = await window.cofinder.transfer.stop({ taskId: task.id });
+                      if (!res.ok) setQueueError(res.error.message);
+                    }}
+                  >
+                    Stop
+                  </button>
+                ) : null}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+      {queuePanelState === "autoHidePending" ? (
+        <div className="queue-footnote">All tasks completed. Auto-hiding in 10 seconds.</div>
+      ) : null}
+    </>
+  );
+
+  const queueV11Section =
+    queuePanelState !== "hidden" ? (
+      <section className="queue-area">
+        {queuePanelState === "collapsed" ? (
+          <button
+            type="button"
+            className="queue-collapsed-bar"
+            onClick={() => setQueuePanelState("expanded")}
+            title="Expand transfer queue"
+          >
+            <span>Transfer Queue</span>
+            <span>{summarizeQueue()}</span>
+          </button>
+        ) : (
+          <div className="queue-panel">{queueExpandedBody}</div>
+        )}
+      </section>
+    ) : null;
+
+  const queueV12Drawer = (
+    <div className={`v12m-drawer ${queuePanelState === "expanded" || queuePanelState === "autoHidePending" ? "is-open" : "is-collapsed"}`}>
+      <div
+        className="v12m-drawer-bar"
+        role="button"
+        tabIndex={0}
+        aria-expanded={queuePanelState === "expanded" || queuePanelState === "autoHidePending"}
+        onClick={() => expandOrCollapseQueueFromV12Drawer()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            expandOrCollapseQueueFromV12Drawer();
+          }
+        }}
+      >
+        <span className="v12m-drawer-title">Transfers</span>
+        <span className="v12m-drawer-sum">{summarizeQueue()}</span>
+        <button
+          type="button"
+          className="v12m-drawer-chev"
+          onClick={(event) => {
+            event.stopPropagation();
+            expandOrCollapseQueueFromV12Drawer();
+          }}
+        >
+          {queuePanelState === "expanded" || queuePanelState === "autoHidePending" ? "Hide" : "Show"}
+        </button>
+      </div>
+      {queuePanelState === "expanded" || queuePanelState === "autoHidePending" ? (
+        <div className="v12m-drawer-panel">
+          <div className="queue-panel">{queueExpandedBody}</div>
+        </div>
+      ) : null}
+    </div>
+  );
+
+  const localPaneEl = (
+    <section
+      className={localPaneSectionClass}
+      onMouseDown={uiShell === "v12" ? () => setActivePane("local") : undefined}
+    >
+      {uiShell === "v12" ? (
+        <>
+          <div className="v12m-pane-chrome">
+            <V12VisualLocationStrip
+              title={localPaneTitleV12}
+              meta="Local"
+              segments={pathToSegments(localPane.currentPath || "/")}
+              currentPath={localPane.currentPath || "/"}
+              pathRootLabel="Macintosh HD"
+              onNavigate={(path) => void navigateLocal(activeTab.id, path)}
+              pathInput={localPane.pathInput}
+              onPathInputChange={(value) =>
+                setTabs((prev) =>
+                  prev.map((tab) =>
+                    tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: value } } : tab
+                  )
+                )
+              }
+              onSubmitPathInput={() => void navigateLocal(activeTab.id, localPane.pathInput)}
+            />
+          </div>
+          <div className="v12m-pane-body">
+            <div className="v12m-pane-split">
+              <div className="v12m-pane-main v12m-pane-main--stack">
+                {localPane.error ? <div className="cfv12p-error">{localPane.error}</div> : null}
+                <V12VisualFileList
+                  isPaneActive={activePane === "local"}
+                  entries={sortedEntries}
+                  sortKey={localPane.sortKey}
+                  sortDirection={localPane.sortDirection}
+                  selectedFullPaths={localPane.selectedFullPaths}
+                  onSort={(key) => handleSort(activeTab.id, key)}
+                  onRowClick={(entry, event) => {
+                    if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                    if (
+                      shouldStartInlineRenameFromClick("local", activeTab.id, entry.fullPath, localPane.selectedFullPaths, {
+                        metaKey: event.metaKey,
+                        shiftKey: event.shiftKey
+                      })
+                    ) {
+                      openInlineRename(activeTab.id, "local");
+                      lastPlainClickRef.current = null;
+                      return;
+                    }
+                    handleLocalRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                    if (!event.metaKey && !event.shiftKey) {
+                      lastPlainClickRef.current = { pane: "local", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+                    } else {
+                      lastPlainClickRef.current = null;
+                    }
+                  }}
+                  onRowContextMenu={(entry, event) => {
+                    event.preventDefault();
+                    openContextMenu(activeTab.id, "local", entry.fullPath, event);
+                  }}
+                  onRowDoubleClick={(entry) => {
+                    if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                    void handleRowDoubleClick(activeTab.id, entry);
+                  }}
+                  onBackgroundMouseDown={(event) => {
+                    setActivePane("local");
+                    const target = event.target as HTMLElement | null;
+                    if (!target?.closest(".v12m-lrow")) {
+                      clearLocalSelection(activeTab.id);
+                    }
+                  }}
+                  inlineRename={
+                    inlineRename && inlineRename.pane === "local" && inlineRename.tabId === activeTab.id
+                      ? {
+                          sourcePath: inlineRename.sourcePath,
+                          draftName: inlineRename.draftName,
+                          onChange: (value) => setInlineRename((prev) => (prev ? { ...prev, draftName: value } : prev)),
+                          onBlur: () => void submitInlineRename(),
+                          onKeyDown: (event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void submitInlineRename();
+                            } else if (event.key === "Escape") {
+                              event.preventDefault();
+                              setInlineRename(null);
+                            }
+                          }
+                        }
+                      : null
+                  }
+                  formatSize={formatSize}
+                  formatTime={formatTime}
+                  sortMark={sortMark}
+                  formatKind={formatKindV12}
+                />
+                <V12PaneFootStatus
+                  selectedCount={selectedEntries.length}
+                  totalCount={localPane.entries.length}
+                  selectedSizeLabel={formatSize(selectedSize)}
+                  totalSizeLabel={formatSize(totalSize)}
+                />
+              </div>
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
           <div className="pane-toolbar">
             <button
               type="button"
@@ -1798,9 +2093,154 @@ export function App() {
             <span>Selected Size: {formatSize(selectedSize)}</span>
             <span>Total Size: {formatSize(totalSize)}</span>
           </div>
-        </section>
-        <section className="splitter" />
-        <section className={`pane remote-pane ${activePane === "remote" ? "pane-active" : ""}`}>
+        </>
+      )}
+    </section>
+  );
+
+  const remotePaneEl = (
+    <section
+      className={remotePaneSectionClass}
+      onMouseDown={uiShell === "v12" ? () => setActivePane("remote") : undefined}
+    >
+      {uiShell === "v12" ? (
+        !(remotePane.connectionStatus === "connected" && remotePane.connectionId) ? (
+          <>
+            <div className="v12m-pane-chrome is-muted">
+              <V12VisualLocationStrip
+                title={remotePaneTitleV12}
+                meta={remotePaneMetaV12}
+                segments={pathToSegments(remotePane.currentPath || "/")}
+                currentPath={remotePane.currentPath || "/"}
+                pathRootLabel="/"
+                badge={remoteBadgeV12}
+                onNavigate={() => {}}
+              />
+            </div>
+            <div className="v12m-pane-body">
+              <div className="v12m-pane-split">
+                <div className="v12m-pane-main v12m-pane-main--stack">
+                  <V12RemoteDisconnectedBody
+                    connecting={remotePane.connectionStatus === "connecting"}
+                    errorMessage={remotePane.connectionStatus === "failed" ? remotePane.error : ""}
+                    onConnect={() => openSiteManagerForTab(activeTab.id)}
+                    connectDisabled={remotePane.connectionStatus === "connecting"}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="v12m-pane-chrome">
+              <V12VisualLocationStrip
+                title={remotePaneTitleV12}
+                meta={remotePaneMetaV12}
+                segments={pathToSegments(remotePane.currentPath || "/")}
+                currentPath={remotePane.currentPath || "/"}
+                pathRootLabel="/"
+                badge={remoteBadgeV12}
+                onNavigate={(path) => void listRemotePath(remotePane.connectionId!, path, "push", activeTab.id)}
+                pathInput={remotePane.pathInput}
+                onPathInputChange={(value) =>
+                  setTabs((prev) =>
+                    prev.map((tab) =>
+                      tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: value } } : tab
+                    )
+                  )
+                }
+                onSubmitPathInput={() =>
+                  void listRemotePath(remotePane.connectionId!, remotePane.pathInput, "push", activeTab.id)
+                }
+                trailing={
+                  <button type="button" className="v12m-insp-linkbtn" onClick={() => void disconnectRemote(activeTab.id)}>
+                    Disconnect
+                  </button>
+                }
+              />
+            </div>
+            <div className="v12m-pane-body">
+              <div className="v12m-pane-split">
+                <div className="v12m-pane-main v12m-pane-main--stack">
+                  {remotePane.error ? <div className="cfv12p-error">{remotePane.error}</div> : null}
+                  <V12VisualFileList
+                    isPaneActive={activePane === "remote"}
+                    entries={sortedRemoteEntries}
+                    sortKey={remotePane.sortKey}
+                    sortDirection={remotePane.sortDirection}
+                    selectedFullPaths={remotePane.selectedFullPaths}
+                    onSort={(key) => handleRemoteSort(activeTab.id, key)}
+                    onRowClick={(entry, event) => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      if (
+                        shouldStartInlineRenameFromClick("remote", activeTab.id, entry.fullPath, remotePane.selectedFullPaths, {
+                          metaKey: event.metaKey,
+                          shiftKey: event.shiftKey
+                        })
+                      ) {
+                        openInlineRename(activeTab.id, "remote");
+                        lastPlainClickRef.current = null;
+                        return;
+                      }
+                      handleRemoteRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                      if (!event.metaKey && !event.shiftKey) {
+                        lastPlainClickRef.current = { pane: "remote", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+                      } else {
+                        lastPlainClickRef.current = null;
+                      }
+                    }}
+                    onRowContextMenu={(entry, event) => {
+                      event.preventDefault();
+                      openContextMenu(activeTab.id, "remote", entry.fullPath, event);
+                    }}
+                    onRowDoubleClick={(entry) => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      void handleRemoteDoubleClick(activeTab.id, entry);
+                    }}
+                    onBackgroundMouseDown={(event) => {
+                      setActivePane("remote");
+                      const target = event.target as HTMLElement | null;
+                      if (!target?.closest(".v12m-lrow")) {
+                        clearRemoteSelection(activeTab.id);
+                      }
+                    }}
+                    inlineRename={
+                      inlineRename && inlineRename.pane === "remote" && inlineRename.tabId === activeTab.id
+                        ? {
+                            sourcePath: inlineRename.sourcePath,
+                            draftName: inlineRename.draftName,
+                            onChange: (value) => setInlineRename((prev) => (prev ? { ...prev, draftName: value } : prev)),
+                            onBlur: () => void submitInlineRename(),
+                            onKeyDown: (event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void submitInlineRename();
+                              } else if (event.key === "Escape") {
+                                event.preventDefault();
+                                setInlineRename(null);
+                              }
+                            }
+                          }
+                        : null
+                    }
+                    formatSize={formatSize}
+                    formatTime={formatTime}
+                    sortMark={sortMark}
+                    formatKind={formatKindV12}
+                  />
+                  <V12PaneFootStatus
+                    selectedCount={remoteSelectedEntries.length}
+                    totalCount={remotePane.entries.length}
+                    selectedSizeLabel={formatSize(remoteSelectedSize)}
+                    totalSizeLabel={formatSize(remoteTotalSize)}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        )
+      ) : (
+        <>
           {!(remotePane.connectionStatus === "connected" && remotePane.connectionId) ? (
             <div className="remote-disconnected-wrap">
               <div className="placeholder-pane">
@@ -2027,104 +2467,43 @@ export function App() {
               </div>
             </>
           ) : null}
-        </section>
-      </main>
+        </>
+      )}
+    </section>
+  );
 
-      {queuePanelState !== "hidden" ? (
-        <section className="queue-area">
-          {queuePanelState === "collapsed" ? (
-            <button
-              type="button"
-              className="queue-collapsed-bar"
-              onClick={() => setQueuePanelState("expanded")}
-              title="Expand transfer queue"
-            >
-              <span>Transfer Queue</span>
-              <span>{summarizeQueue()}</span>
-            </button>
-          ) : (
-            <div className="queue-panel">
-              <div className="queue-header">
-                <div>
-                  <strong>Transfer Queue</strong>
-                  <span className="queue-summary">{summarizeQueue()}</span>
-                </div>
-                <div className="queue-controls">
-                  <button type="button" className="toolbar-button" onClick={() => setQueuePanelState("collapsed")}>
-                    Minimize
-                  </button>
-                  <button
-                    type="button"
-                    className={`toolbar-button ${queuePinned ? "is-active" : ""}`}
-                    onClick={() => setQueuePinned((prev) => !prev)}
-                  >
-                    {queuePinned ? "Pinned" : "Pin"}
-                  </button>
-                  <button
-                    type="button"
-                    className="toolbar-button"
-                    onClick={() => {
-                      void clearCompletedTransfers();
-                    }}
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-              {queueError ? <div className="error-banner">{queueError}</div> : null}
-              <div className="queue-list">
-                {transferTasks.length === 0 ? (
-                  <div className="queue-empty">No transfer tasks.</div>
-                ) : (
-                  transferTasks.map((task) => (
-                    <div key={task.id} className="queue-item">
-                      <span>{task.direction}</span>
-                      <span className={`queue-status status-${task.status}`}>{task.status}</span>
-                      <span className="queue-path" title={`${task.sourceDisplay} -> ${task.destinationDisplay}`}>
-                        {task.sourceDisplay} {"->"} {task.destinationDisplay}
-                      </span>
-                      <span className="queue-path" title={task.progressText ?? task.currentFile ?? "-"}>
-                        {task.progressText ?? task.currentFile ?? "-"}
-                        {task.speed ? ` | ${task.speed}` : ""}
-                        {task.eta ? ` | ETA ${task.eta}` : ""}
-                      </span>
-                      <span>
-                        {task.status === "pending" ? (
-                          <button
-                            type="button"
-                            className="toolbar-button"
-                            onClick={async () => {
-                              const res = await window.cofinder.transfer.cancel({ taskId: task.id });
-                              if (!res.ok) setQueueError(res.error.message);
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        ) : null}
-                        {task.status === "running" ? (
-                          <button
-                            type="button"
-                            className="toolbar-button"
-                            onClick={async () => {
-                              const res = await window.cofinder.transfer.stop({ taskId: task.id });
-                              if (!res.ok) setQueueError(res.error.message);
-                            }}
-                          >
-                            Stop
-                          </button>
-                        ) : null}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-              {queuePanelState === "autoHidePending" ? (
-                <div className="queue-footnote">All tasks completed. Auto-hiding in 10 seconds.</div>
-              ) : null}
+  return (
+    <div className={uiShell === "v12" ? "app-shell app-shell--v12" : "app-shell"}>
+      {uiShell === "v11" ? (
+        <>
+          <header className="top-bar">
+            <div className="title-group">
+              <strong>CoFinder</strong>
             </div>
-          )}
-        </section>
+            <div className="top-version" aria-label="App version">
+              Version {appVersion}
+            </div>
+          </header>
+          {tabBar}
+        </>
       ) : null}
+      {uiShell === "v11" ? (
+        <main className="pane-layout">
+          {localPaneEl}
+          <section className="splitter" />
+          {remotePaneEl}
+        </main>
+      ) : (
+        <AppShellV12
+          titleTabs={tabBar}
+          banner={null}
+          devHint={import.meta.env.DEV ? <V12ProdDevHint /> : null}
+          drawer={queueV12Drawer}
+          localPane={localPaneEl}
+          remotePane={remotePaneEl}
+        />
+      )}
+      {uiShell === "v11" ? queueV11Section : null}
       {contextMenu ? (
         <div
           className="context-menu"
@@ -2472,6 +2851,17 @@ function getEntryNameFromPath(fullPath: string): string {
   const normalized = fullPath.replace(/\/+$/, "");
   const parts = normalized.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? fullPath;
+}
+
+function localPaneTitleFromPath(absolutePath: string): string {
+  const n = (absolutePath || "").replace(/\/+/g, "/").trim() || "/";
+  if (n === "/") return "Macintosh HD";
+  const base = getEntryNameFromPath(n);
+  return base && base !== "/" ? base : "Macintosh HD";
+}
+
+function formatKindV12(entry: { type: string }): string {
+  return entry.type === "directory" ? "Folder" : "Document";
 }
 
 function createLocalPaneState(): LocalPaneState {

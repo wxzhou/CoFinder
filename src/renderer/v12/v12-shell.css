@@ -30,6 +30,11 @@
   flex-direction: column;
 }
 
+.app-shell--v12 .cfv12-root {
+  min-height: 0;
+  height: 100%;
+}
+
 .cfv12-root *,
 .cfv12-root *::before,
 .cfv12-root *::after {
@@ -345,4 +350,122 @@
   padding: 1px 5px;
   border-radius: 4px;
   background: rgba(0, 0, 0, 0.05);
+}
+
+/* Real `TabBar` hosted in title strip (M2+) */
+.cfv12-tabsHost {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.cfv12-tabsHost .tab-bar {
+  flex: 1;
+  min-width: 0;
+  height: calc(100% - 5px);
+  margin-top: 5px;
+  border-bottom: none;
+  background: transparent;
+  padding: 0 10px 0 0;
+  gap: 2px;
+}
+
+.cfv12-tabsHost .tab-item {
+  height: calc(100% - 1px);
+  margin-top: 0;
+  border-radius: 7px 7px 0 0;
+  font-size: 11px;
+  font-weight: 500;
+  max-width: 200px;
+}
+
+.cfv12-tabsHost .tab-item.is-active {
+  font-weight: 600;
+  margin-bottom: -1px;
+}
+
+.cfv12-tabsHost .tab-add {
+  height: 26px;
+  align-self: center;
+  margin-bottom: 5px;
+}
+
+/* File panes: real lists from App (M2) */
+.cfv12-pane.cfv12-file-pane {
+  padding: 8px 10px 10px;
+  gap: 0;
+  border: 1px solid var(--cfv12-sep-hair);
+  border-radius: 0;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.cfv12-pane.cfv12-file-pane.is-active {
+  border-color: rgba(10, 132, 255, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(10, 132, 255, 0.12);
+}
+
+.cfv12-pane.cfv12-file-pane > .cfv12p-pane {
+  flex: 1;
+  min-height: 0;
+}
+
+.cfv12-pane-stack {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.cfv12-pane-intro {
+  flex-shrink: 0;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--cfv12-sep-hair);
+}
+
+.cfv12-pane-intro-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cfv12-pane-intro-eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--cfv12-fg-faint);
+}
+
+.cfv12-pane-intro-tab {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cfv12-fg-dim);
+}
+
+.cfv12-pane-intro-path {
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--cfv12-fg-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cfv12-drawer-panel--queue {
+  max-height: min(42vh, 320px);
+  overflow: auto;
+  padding: 0;
+}
+
+.cfv12-drawer-panel--queue .queue-panel {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  max-height: none;
 }
