@@ -157,6 +157,13 @@ export function V12TbIcon(props: { name: string }): ReactElement {
           <path d="M6 8h8M7 5v3M13 5v3M8 11v4M12 11v4" />
         </svg>
       );
+    case "sidebar-right":
+      return (
+        <svg {...s}>
+          <rect x="4" y="4" width="7" height="12" rx="1" />
+          <path d="M13 4.5v11" />
+        </svg>
+      );
     default:
       return <svg {...s} />;
   }

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
+import { V12Toolbar } from "./v12/V12Toolbar";
+import { V12TransferDrawer } from "./v12/V12TransferDrawer";
 import { V12PaneInspector } from "./v12/V12PaneInspector";
 import { pathToSegments } from "./v12/pane/pathSegments";
 import { inspectorColumnVisible } from "./v12/v12InspectorVisibility";
@@ -1876,6 +1878,100 @@ export function App(props: AppProps = {}) {
     else if (queuePanelState === "expanded" || queuePanelState === "autoHidePending") setQueuePanelState("collapsed");
   }
 
+  const localInspectorCanShow = inspectorColumnVisible("local", localPane.selectedFullPaths.length, remoteConnected);
+  const remoteInspectorCanShow = inspectorColumnVisible("remote", remotePane.selectedFullPaths.length, remoteConnected);
+  const v12InspectorToggleDisabled =
+    activePane === "local"
+      ? !localInspectorCanShow || localPane.selectedFullPaths.length === 0
+      : !remoteInspectorCanShow || remotePane.selectedFullPaths.length === 0;
+  const v12InspectorTogglePressed = activePane === "local" ? v12LocalInspectorReveal : v12RemoteInspectorReveal;
+
+  const v12Toolbar =
+    uiShell === "v12" ? (
+      <V12Toolbar
+        onBack={() => {
+          if (activePane === "local") {
+            const target = localPane.history.backStack[localPane.history.backStack.length - 1];
+            if (target) void navigateLocal(activeTab.id, target, "back");
+          } else {
+            const target = remotePane.history.backStack[remotePane.history.backStack.length - 1];
+            if (target && remotePane.connectionId) void listRemotePath(remotePane.connectionId, target, "back", activeTab.id);
+          }
+        }}
+        onForward={() => {
+          if (activePane === "local") {
+            const target = localPane.history.forwardStack[0];
+            if (target) void navigateLocal(activeTab.id, target, "forward");
+          } else {
+            const target = remotePane.history.forwardStack[0];
+            if (target && remotePane.connectionId) void listRemotePath(remotePane.connectionId, target, "forward", activeTab.id);
+          }
+        }}
+        onUp={() => {
+          if (activePane === "local") {
+            void navigateLocal(activeTab.id, getParentPath(localPane.currentPath));
+          } else if (remotePane.connectionId) {
+            void listRemotePath(remotePane.connectionId, getParentPath(remotePane.currentPath), "push", activeTab.id);
+          }
+        }}
+        onRefresh={() => {
+          if (activePane === "local") {
+            if (localPane.currentPath) void navigateLocal(activeTab.id, localPane.currentPath, "replace");
+          } else if (remotePane.connectionId) {
+            void listRemotePath(remotePane.connectionId, remotePane.currentPath, "replace", activeTab.id);
+          }
+        }}
+        backDisabled={
+          activePane === "local"
+            ? localPane.history.backStack.length === 0
+            : remotePane.history.backStack.length === 0 || !remotePane.connectionId
+        }
+        forwardDisabled={
+          activePane === "local"
+            ? localPane.history.forwardStack.length === 0
+            : remotePane.history.forwardStack.length === 0 || !remotePane.connectionId
+        }
+        upDisabled={activePane === "local" ? false : !remotePane.connectionId}
+        refreshDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
+        onConnectAction={() => {
+          if (remoteConnected) void disconnectRemote(activeTab.id);
+          else openSiteManagerForTab(activeTab.id);
+        }}
+        connectActionDisabled={remotePane.connectionStatus === "connecting"}
+        connectActionTitle={remoteConnected ? "Disconnect from server" : "Connect to server…"}
+        connectActionAriaLabel={remoteConnected ? "Disconnect" : "Connect"}
+        onUpload={() => void enqueueUpload(activeTab.id)}
+        onDownload={() => void enqueueDownload(activeTab.id)}
+        uploadDisabled={localPane.selectedFullPaths.length === 0 || !remotePane.connectionId}
+        downloadDisabled={
+          remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId
+        }
+        onDelete={() => openDeleteConfirm(activeTab.id, activePane)}
+        deleteDisabled={
+          activePane === "local"
+            ? localPane.selectedFullPaths.length === 0
+            : remotePane.selectedFullPaths.length === 0
+        }
+        onGetInfo={() => void openInfoDialog(activeTab.id, activePane)}
+        getInfoDisabled={
+          activePane === "local"
+            ? localPane.selectedFullPaths.length !== 1
+            : remotePane.selectedFullPaths.length !== 1
+        }
+        onInspectorToggle={() => {
+          if (activePane === "local") {
+            cancelV12LocalInspRevealTimer();
+            setV12LocalInspectorReveal((v) => !v);
+          } else {
+            cancelV12RemoteInspRevealTimer();
+            setV12RemoteInspectorReveal((v) => !v);
+          }
+        }}
+        inspectorToggleDisabled={v12InspectorToggleDisabled}
+        inspectorTogglePressed={v12InspectorTogglePressed}
+      />
+    ) : null;
+
   const queueExpandedBody = (
     <>
       <div className="queue-header">
@@ -1978,39 +2074,24 @@ export function App(props: AppProps = {}) {
     ) : null;
 
   const queueV12Drawer = (
-    <div className={`v12m-drawer ${queuePanelState === "expanded" || queuePanelState === "autoHidePending" ? "is-open" : "is-collapsed"}`}>
-      <div
-        className="v12m-drawer-bar"
-        role="button"
-        tabIndex={0}
-        aria-expanded={queuePanelState === "expanded" || queuePanelState === "autoHidePending"}
-        onClick={() => expandOrCollapseQueueFromV12Drawer()}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            expandOrCollapseQueueFromV12Drawer();
-          }
-        }}
-      >
-        <span className="v12m-drawer-title">Transfers</span>
-        <span className="v12m-drawer-sum">{summarizeQueue()}</span>
-        <button
-          type="button"
-          className="v12m-drawer-chev"
-          onClick={(event) => {
-            event.stopPropagation();
-            expandOrCollapseQueueFromV12Drawer();
-          }}
-        >
-          {queuePanelState === "expanded" || queuePanelState === "autoHidePending" ? "Hide" : "Show"}
-        </button>
-      </div>
-      {queuePanelState === "expanded" || queuePanelState === "autoHidePending" ? (
-        <div className="v12m-drawer-panel">
-          <div className="queue-panel">{queueExpandedBody}</div>
-        </div>
-      ) : null}
-    </div>
+    <V12TransferDrawer
+      state={queuePanelState}
+      pinned={queuePinned}
+      error={queueError}
+      tasks={transferTasks}
+      summary={summarizeQueue()}
+      onToggleExpand={() => expandOrCollapseQueueFromV12Drawer()}
+      onTogglePin={() => setQueuePinned((prev) => !prev)}
+      onClearCompleted={() => void clearCompletedTransfers()}
+      onCancelTask={async (taskId) => {
+        const res = await window.cofinder.transfer.cancel({ taskId });
+        if (!res.ok) setQueueError(res.error.message);
+      }}
+      onStopTask={async (taskId) => {
+        const res = await window.cofinder.transfer.stop({ taskId });
+        if (!res.ok) setQueueError(res.error.message);
+      }}
+    />
   );
 
   const localPaneEl = (
@@ -2799,6 +2880,7 @@ export function App(props: AppProps = {}) {
         <AppShellV12
           titleTabs={tabBar}
           banner={null}
+          toolbar={v12Toolbar!}
           devHint={import.meta.env.DEV ? <V12ProdDevHint /> : null}
           drawer={queueV12Drawer}
           localPane={localPaneEl}
