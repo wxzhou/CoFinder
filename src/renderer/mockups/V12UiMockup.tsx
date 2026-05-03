@@ -16,9 +16,9 @@ type PaneScenario = "browse" | "empty" | "loading" | "error";
 type RemoteScenario = "normal" | "disconnected" | "loading" | "error";
 type InspectorMode = "off" | "local" | "remote" | "active";
 
-function Icon(props: { name: "disk" | "folder" | "server" | "clock" | "doc"; size?: "sm" | "md" }): ReactElement {
+function Icon(props: { name: "disk" | "folder" | "server" | "clock" | "doc"; size?: "sm" | "md" | "lg" }): ReactElement {
   const { name, size = "md" } = props;
-  const px = size === "sm" ? 14 : 18;
+  const px = size === "sm" ? 16 : size === "lg" ? 22 : 20;
   const vb = 20;
   const c = {
     width: px,
@@ -29,151 +29,153 @@ function Icon(props: { name: "disk" | "folder" | "server" | "clock" | "doc"; siz
   };
   if (name === "doc") {
     return (
-      <svg {...c}>
-        <path d="M5 3.5h6.5L14 6v10.5H5V3.5z" fill="none" stroke="currentColor" strokeWidth="1.15" opacity="0.92" />
-        <path d="M11.5 3.5V7H14" fill="none" stroke="currentColor" strokeWidth="1.15" opacity="0.55" />
+      <svg {...c} className="v12m-svg-doc">
+        <path d="M5 3.5h6.5L14 6v10.5H5V3.5z" fill="#fafafa" stroke="rgba(60,60,67,0.42)" strokeWidth="1.1" />
+        <path d="M11.5 3.5V7H14" fill="none" stroke="rgba(60,60,67,0.32)" strokeWidth="1.05" />
       </svg>
     );
   }
   if (name === "folder") {
     return (
-      <svg {...c}>
+      <svg {...c} className="v12m-svg-folder">
         <path
           d="M3.25 5.25c0-.55.45-1 1-1h2.2l.85.85h6.45c.55 0 1 .45 1 1v8.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1v-8.35z"
-          opacity="0.88"
+          fill="#7eb6ec"
         />
-        <path d="M3.25 6.5h13.5v7.1c0 .55-.45 1-1 1h-11.5c-.55 0-1-.45-1-1V6.5z" opacity="0.35" />
+        <path d="M3.25 6.5h13.5v7.1c0 .55-.45 1-1 1h-11.5c-.55 0-1-.45-1-1V6.5z" fill="#4d92d9" />
       </svg>
     );
   }
   if (name === "server") {
     return (
-      <svg {...c}>
-        <rect x="3" y="4" width="14" height="3.2" rx="0.75" opacity="0.9" />
-        <rect x="3" y="8.4" width="14" height="3.2" rx="0.75" opacity="0.55" />
-        <rect x="3" y="12.8" width="14" height="3.2" rx="0.75" opacity="0.32" />
-        <circle cx="4.8" cy="5.6" r="0.55" fill="#fff" opacity="0.45" />
-        <circle cx="4.8" cy="10" r="0.55" fill="#fff" opacity="0.45" />
-        <circle cx="4.8" cy="14.4" r="0.55" fill="#fff" opacity="0.45" />
+      <svg {...c} className="v12m-svg-server">
+        <rect x="3" y="4" width="14" height="3.2" rx="0.75" fill="rgba(60,60,67,0.35)" />
+        <rect x="3" y="8.4" width="14" height="3.2" rx="0.75" fill="rgba(60,60,67,0.22)" />
+        <rect x="3" y="12.8" width="14" height="3.2" rx="0.75" fill="rgba(60,60,67,0.14)" />
+        <circle cx="4.8" cy="5.6" r="0.55" fill="rgba(255,255,255,0.65)" />
+        <circle cx="4.8" cy="10" r="0.55" fill="rgba(255,255,255,0.5)" />
+        <circle cx="4.8" cy="14.4" r="0.55" fill="rgba(255,255,255,0.4)" />
       </svg>
     );
   }
   if (name === "disk") {
     return (
-      <svg {...c}>
-        <ellipse cx="10" cy="10" rx="7.2" ry="7.5" opacity="0.22" />
-        <path d="M10 3.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm0 11.75a5.25 5.25 0 110-10.5 5.25 5.25 0 010 10.5z" opacity="0.88" />
-        <circle cx="10" cy="10" r="2.2" opacity="0.4" />
+      <svg {...c} className="v12m-svg-disk">
+        <ellipse cx="10" cy="10" rx="7.2" ry="7.5" fill="rgba(60,60,67,0.08)" />
+        <path
+          d="M10 3.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zm0 11.75a5.25 5.25 0 110-10.5 5.25 5.25 0 010 10.5z"
+          fill="none"
+          stroke="rgba(60,60,67,0.5)"
+          strokeWidth="1.05"
+        />
+        <circle cx="10" cy="10" r="2.2" fill="rgba(60,60,67,0.18)" />
       </svg>
     );
   }
   return (
-    <svg {...c}>
-      <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.1" opacity="0.35" />
-      <path d="M10 6.5v4l2.8 1.6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" opacity="0.85" />
+    <svg {...c} className="v12m-svg-clock">
+      <circle cx="10" cy="10" r="6.5" fill="none" stroke="rgba(60,60,67,0.38)" strokeWidth="1.05" />
+      <path d="M10 6.5v4l2.8 1.6" fill="none" stroke="rgba(60,60,67,0.55)" strokeWidth="1.15" strokeLinecap="round" />
     </svg>
   );
 }
 
 function TbIcon(props: { name: string }): ReactElement {
   const { name } = props;
-  const s = { width: 16, height: 16, viewBox: "0 0 20 20", fill: "currentColor", "aria-hidden": true as const };
+  const s = {
+    width: 18,
+    height: 18,
+    viewBox: "0 0 20 20",
+    fill: "none",
+    stroke: "rgba(55, 55, 60, 0.72)",
+    strokeWidth: 1.25,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true as const
+  };
   switch (name) {
     case "chevron-back":
       return (
         <svg {...s}>
-          <path d="M12 5l-5 5 5 5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M12 5l-5 5 5 5" />
         </svg>
       );
     case "chevron-forward":
       return (
         <svg {...s}>
-          <path d="M8 5l5 5-5 5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M8 5l5 5-5 5" />
         </svg>
       );
     case "chevron-up":
       return (
         <svg {...s}>
-          <path d="M5 12l5-5 5 5" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M5 12l5-5 5 5" />
         </svg>
       );
     case "arrow-clockwise":
       return (
         <svg {...s}>
-          <path
-            d="M10 4.5a5.5 5.5 0 014.9 3M15 4v3.5h-3.5M10 15.5a5.5 5.5 0 01-4.9-3M5 16v-3.5h3.5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.35"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+          <path d="M10 4.5a5.5 5.5 0 014.9 3M15 4v3.5h-3.5M10 15.5a5.5 5.5 0 01-4.9-3M5 16v-3.5h3.5" />
         </svg>
       );
     case "arrow-up-tray":
       return (
         <svg {...s}>
-          <path d="M4 14h12M6 10l4-4 4 4M10 6v8" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4 14h12M6 10l4-4 4 4M10 6v8" />
         </svg>
       );
     case "arrow-down-tray":
       return (
         <svg {...s}>
-          <path d="M4 14h12M6 10l4 4 4-4M10 6v8" fill="none" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M4 14h12M6 10l4 4 4-4M10 6v8" />
         </svg>
       );
     case "folder-badge-plus":
       return (
         <svg {...s}>
-          <path d="M3.5 6.5h4l1 1h8v9h-13v-10z" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-          <path d="M10 11v4M8 13h4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+          <path d="M3.5 6.5h4l1 1h8v9h-13v-10z" />
+          <path d="M10 11v4M8 13h4" />
         </svg>
       );
     case "trash":
       return (
         <svg {...s}>
-          <path d="M6.5 7.5v9h7v-9M4 7.5h12M8 4.5h4l1 1h3v2h-12v-2h3l1-1z" fill="none" stroke="currentColor" strokeWidth="1.15" strokeLinejoin="round" />
+          <path d="M6.5 7.5v9h7v-9M4 7.5h12M8 4.5h4l1 1h3v2h-12v-2h3l1-1z" />
         </svg>
       );
     case "info-circle":
       return (
         <svg {...s}>
-          <circle cx="10" cy="10" r="6.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M10 9v5M10 6.8v.1" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+          <circle cx="10" cy="10" r="6.5" fill="none" />
+          <path d="M10 9v5M10 6.8v.1" />
         </svg>
       );
     case "list-bullet":
       return (
-        <svg {...s}>
-          <path d="M6 6h9M6 10h9M6 14h9" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
-          <circle cx="4" cy="6" r="0.9" />
-          <circle cx="4" cy="10" r="0.9" />
-          <circle cx="4" cy="14" r="0.9" />
+        <svg width={18} height={18} viewBox="0 0 20 20" aria-hidden>
+          <path d="M6 6h9M6 10h9M6 14h9" fill="none" stroke="rgba(55,55,60,0.72)" strokeWidth="1.25" strokeLinecap="round" />
+          <circle cx="4" cy="6" r="0.85" fill="rgba(55,55,60,0.72)" />
+          <circle cx="4" cy="10" r="0.85" fill="rgba(55,55,60,0.72)" />
+          <circle cx="4" cy="14" r="0.85" fill="rgba(55,55,60,0.72)" />
         </svg>
       );
     case "rectangle-split":
       return (
         <svg {...s}>
-          <rect x="4" y="4" width="12" height="12" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.15" />
-          <path d="M10 4.5v11" stroke="currentColor" strokeWidth="1" />
+          <rect x="4" y="4" width="12" height="12" rx="1.5" />
+          <path d="M10 4.5v11" />
         </svg>
       );
     case "link":
       return (
         <svg {...s}>
-          <path
-            d="M8.5 11.5a3 3 0 010-4.2l1-1a3 3 0 114.2 4.2l-1 1M11.5 8.5a3 3 0 010 4.2l-1 1a3 3 0 11-4.2-4.2l1-1"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.25"
-            strokeLinecap="round"
-          />
+          <path d="M8.5 11.5a3 3 0 010-4.2l1-1a3 3 0 114.2 4.2l-1 1M11.5 8.5a3 3 0 010 4.2l-1 1a3 3 0 11-4.2-4.2l1-1" />
         </svg>
       );
     case "plug":
       return (
         <svg {...s}>
-          <path d="M6 8h8M7 5v3M13 5v3M8 11v4M12 11v4" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+          <path d="M6 8h8M7 5v3M13 5v3M8 11v4M12 11v4" />
         </svg>
       );
     default:
@@ -251,8 +253,8 @@ function FileListBlock(props: {
           return (
             <div key={row.id} className={`v12m-lrow ${row.hidden ? "is-hidden" : ""} ${selClass}`} role="listitem">
               <div className="v12m-lname">
-                <span className="v12m-file-ico">
-                  <Icon name={row.kind === "dir" ? "folder" : "doc"} size="sm" />
+                <span className={`v12m-file-ico ${row.kind === "dir" ? "v12m-file-ico--dir" : "v12m-file-ico--file"}`}>
+                  <Icon name={row.kind === "dir" ? "folder" : "doc"} size="md" />
                 </span>
                 <span className="v12m-lname-txt">{row.name}</span>
               </div>
@@ -274,7 +276,7 @@ function PaneInspector(props: { scope: "local" | "remote" }): ReactElement {
         <div className="v12m-insp-hdr">Info</div>
         <div className="v12m-insp-prev">
           <div className="v12m-insp-iconwrap">
-            <Icon name="doc" />
+            <Icon name="doc" size="lg" />
           </div>
           <div className="v12m-insp-prev-cap">Markdown</div>
         </div>
@@ -304,9 +306,15 @@ function PaneInspector(props: { scope: "local" | "remote" }): ReactElement {
           </ul>
         </div>
         <div className="v12m-insp-actions">
-          <button type="button">Quick Look</button>
-          <button type="button">Reveal in Finder</button>
-          <button type="button">Copy Path</button>
+          <button type="button" className="v12m-insp-linkbtn">
+            Quick Look
+          </button>
+          <button type="button" className="v12m-insp-linkbtn">
+            Reveal in Finder
+          </button>
+          <button type="button" className="v12m-insp-linkbtn">
+            Copy Path
+          </button>
         </div>
       </aside>
     );
@@ -316,7 +324,7 @@ function PaneInspector(props: { scope: "local" | "remote" }): ReactElement {
       <div className="v12m-insp-hdr">Info</div>
       <div className="v12m-insp-prev">
         <div className="v12m-insp-iconwrap">
-          <Icon name="doc" />
+          <Icon name="doc" size="lg" />
         </div>
         <div className="v12m-insp-prev-cap">ZIP archive</div>
       </div>
@@ -342,8 +350,12 @@ function PaneInspector(props: { scope: "local" | "remote" }): ReactElement {
         </ul>
       </div>
       <div className="v12m-insp-actions">
-        <button type="button">Quick Look</button>
-        <button type="button">Copy remote path</button>
+        <button type="button" className="v12m-insp-linkbtn">
+          Quick Look
+        </button>
+        <button type="button" className="v12m-insp-linkbtn">
+          Copy remote path
+        </button>
       </div>
     </aside>
   );
@@ -431,7 +443,10 @@ export function V12UiMockup(): ReactElement {
 
   const remoteBadge =
     remoteScenario === "normal" ? (
-      <span className="v12m-badge v12m-badge-ok">Connected</span>
+      <span className="v12m-badge v12m-badge-ok">
+        <span className="v12m-badge-dot" aria-hidden />
+        Connected
+      </span>
     ) : remoteScenario === "loading" ? (
       <span className="v12m-badge v12m-badge-wait">Connecting…</span>
     ) : remoteScenario === "error" ? (
@@ -449,7 +464,7 @@ export function V12UiMockup(): ReactElement {
       <div className="v12m-devrail">
         <div className="v12m-devrail-top">
           <span>
-            <strong>Mockup</strong> — Finder-first V1.2 hero · dev only · <code>?mockup=v12</code>
+            <strong>Mockup</strong> — V1.2 warm Finder-first (static) · dev only · <code>?mockup=v12</code>
           </span>
         </div>
         <div className="v12m-devrail-grid" role="group" aria-label="Mockup state">
