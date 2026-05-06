@@ -93,6 +93,8 @@ npm run dist      # dmg + zip
 
 Build artifacts are generated under `release/`.
 
+**App icons:** `assets/icon/icon.icns` is used for the packaged `.app` / `.dmg` / `.zip` (see `electron-builder.yml`). `assets/icon/icon.png` is copied into `Resources` for `BrowserWindow` (`src/main/main.ts`). To regenerate both from the archived source PNG on macOS: `./scripts/gen-mac-app-icons.sh` (uses `sips` + `iconutil`, no extra npm deps).
+
 Production renderer uses **relative asset URLs** (`vite` `base: './'`) so `loadFile()` from inside `app.asar` resolves JS/CSS correctly (avoids packaged white screen from `/assets/...` on `file://`).
 
 ## Troubleshooting
