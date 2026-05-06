@@ -133,7 +133,7 @@ export type AppProps = {
 };
 
 export function App(props: AppProps = {}) {
-  const { uiShell = "v11" } = props;
+  const { uiShell = "v12" } = props;
   const [appVersion, setAppVersion] = useState("unknown");
   const [tabState] = useState(() => {
     const firstTabId = createId();
@@ -3344,7 +3344,7 @@ function localPaneTitleFromPath(absolutePath: string): string {
   return base && base !== "/" ? base : "Macintosh HD";
 }
 
-function formatKindV12(entry: { type: string }): string {
+function formatKindV12(entry: LocalFileEntry | RemoteFileEntry): string {
   return entry.type === "directory" ? "Folder" : "Document";
 }
 

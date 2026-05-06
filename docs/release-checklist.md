@@ -7,11 +7,12 @@
 - `npm run package`
 - `npm run dist`
 
-## V1.2 v12 shell (optional but recommended before advertising v12)
+## V1.2 v12 shell (required)
 
-- Confirm **default UI remains classic** (open packaged app with no `ui=v12` query → v11 layout).
-- With **`?ui=v12`** (or a packaged launch URL that includes it), run the **V1.2** subsection of `docs/smoke-test.md`.
-- Confirm no v12-only CSS leaks globally: quick scan of classic UI (toolbar/queue) unchanged.
+- Confirm **default UI is V1.2** (open packaged app with no env/query overrides → Finder shell / `AppShellV12`).
+- Run the **V1.2** subsection of `docs/smoke-test.md` on that default build.
+- With **legacy** (`COFINDER_LEGACY_UI=1` or `?ui=v11`), confirm classic layout still works and **V1.1 baseline** smoke sections pass.
+- Confirm v12-scoped styles stay under `.cfv12-root` / v12 class prefixes where intended.
 
 ## Packaged App Smoke
 

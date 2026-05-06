@@ -8,15 +8,15 @@ Current app version: `0.3.0`.
 
 - **V1 is complete.**
 - **V1.1 is complete** (shipped in the 0.2.x line).
-- **V1.2 shell (M1–M6) is complete** behind a flag — see **Implemented in V1.2** below. App release line for that work: **0.3.0** (see CHANGELOG).
+- **V1.2 shell (M1–M6) is complete** as the **default** UI — see **Implemented in V1.2** below. App release line for that work: **0.3.0** (see CHANGELOG).
 
 ### Implemented in V1.2
 
-- Finder-first production shell (`AppShellV12`) for real local/remote browsing, path chrome, and tab strip — opt-in via **`?ui=v12`** or dev **`COFINDER_UI_V12=1`** (see `src/renderer/main.ts` / `src/main/main.ts`). **`COFINDER_V12_MOCKUP=1`** is still the static `?mockup=v12` mockup only.
-- **M6 default (Option B):** classic UI stays the default in dev and packaged builds unless the renderer URL includes `ui=v12`.
+- Finder-first production shell (`AppShellV12`) for real local/remote browsing, path chrome, and tab strip — **default** in dev and packaged builds (`src/renderer/uiMode.ts`, `src/renderer/main.tsx`, `src/main/main.ts`). **Legacy classic UI:** renderer URL **`?ui=v11`** or **`?legacy=1`**, or **`COFINDER_LEGACY_UI=1`** (Electron main, runtime), or **`VITE_COFINDER_LEGACY_UI=1`** at build time. **`COFINDER_V12_MOCKUP=1`** is still the static `?mockup=v12` mockup only (dev).
+- **M6 default:** V1.2 shell is the default; classic UI is opt-in legacy only.
 - Per-pane inspector, embedded remote connect (shared connect path with Site Manager), toolbar and compact transfer drawer wired to existing V1.1 handlers; v12-scoped CSS polish and docs (`docs/dev/V1.2_PLAN.md`, `docs/smoke-test.md`, `docs/release-checklist.md`).
 
-Regression for v12: run the **V1.2** subsection in `docs/smoke-test.md`, then the overlapping **V1.1** sections (transfers, selection, Site Manager, Quick Look) while on `?ui=v12`.
+Regression for the default shell: run the **V1.2** subsection in `docs/smoke-test.md`, then the overlapping **V1.1** sections (transfers, selection, Site Manager, Quick Look). For classic UI parity, repeat with **`?ui=v11`** or **`COFINDER_LEGACY_UI=1`**.
 
 ### Implemented in V1.1
 

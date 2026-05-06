@@ -2,8 +2,8 @@
 
 ## 0.3.0
 
-- V1.2 Finder shell (M1–M6) behind `?ui=v12` / `COFINDER_UI_V12=1`: dual-pane browsing, per-pane inspector, embedded remote connect, wired toolbar and transfer drawer.
-- M6: v12-only UI polish under `.cfv12-root`; **default UI Option B** (classic remains default); docs and smoke/release checklists updated; `npm run package` verified.
+- V1.2 Finder shell (M1–M6): dual-pane browsing, per-pane inspector, embedded remote connect, wired toolbar and transfer drawer — **default UI** in dev and packaged builds; legacy classic via `?ui=v11` / `COFINDER_LEGACY_UI=1` / `VITE_COFINDER_LEGACY_UI=1`.
+- M6: v12-only UI polish under `.cfv12-root`; docs and smoke/release checklists updated; `npm run package` verified.
 
 ## 0.2.0
 

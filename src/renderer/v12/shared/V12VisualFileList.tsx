@@ -1,25 +1,20 @@
 import type { KeyboardEvent, MouseEvent, ReactElement } from "react";
-import type { SortDirection, SortKey } from "../../../shared/types/models";
+import type { FileEntry, SortDirection, SortKey } from "../../../shared/types/models";
 import { V12Icon } from "./V12Icons";
 
-export type V12VisualFileRow = {
-  fullPath: string;
-  name: string;
-  type: string;
-  size: number;
-  mtime: string;
-};
+/** Alias for callers that only need the shared list shape (extends IPC file entries). */
+export type V12VisualFileRow = FileEntry;
 
-export type V12VisualFileListProps = {
+export type V12VisualFileListProps<T extends FileEntry> = {
   isPaneActive: boolean;
-  entries: V12VisualFileRow[];
+  entries: T[];
   sortKey: SortKey;
   sortDirection: SortDirection;
   selectedFullPaths: string[];
   onSort: (key: SortKey) => void;
-  onRowClick: (entry: V12VisualFileRow, event: MouseEvent<HTMLDivElement>) => void;
-  onRowContextMenu: (entry: V12VisualFileRow, event: MouseEvent<HTMLDivElement>) => void;
-  onRowDoubleClick: (entry: V12VisualFileRow) => void;
+  onRowClick: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
+  onRowContextMenu: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
+  onRowDoubleClick: (entry: T) => void;
   onBackgroundMouseDown: (event: MouseEvent<HTMLDivElement>) => void;
   inlineRename:
     | {
@@ -34,7 +29,7 @@ export type V12VisualFileListProps = {
   formatTime: (iso: string) => string;
   sortMark: (direction: SortDirection) => string;
   /** Human-readable kind column (mock uses “Folder” / “Document”). */
-  formatKind: (entry: V12VisualFileRow) => string;
+  formatKind: (entry: T) => string;
 };
 
 function rowSelClass(selected: boolean, paneActive: boolean): string {
@@ -42,7 +37,7 @@ function rowSelClass(selected: boolean, paneActive: boolean): string {
   return paneActive ? "sel-active" : "sel-inactive";
 }
 
-export function V12VisualFileList(props: V12VisualFileListProps): ReactElement {
+export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListProps<T>): ReactElement {
   return (
     <>
       <div className="v12m-list-head">

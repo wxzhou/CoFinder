@@ -1,5 +1,5 @@
 /**
- * M2.6: Pull approved mockup visuals into production `?ui=v12` without mounting mock dev rail.
+ * M2.6: Pull approved mockup visuals into production V1.2 shell without mounting mock dev rail.
  * Imports mock stylesheet, then constrains / overrides for `AppShellV12` embedding.
  */
 @import "../mockups/v12-mockup.css";

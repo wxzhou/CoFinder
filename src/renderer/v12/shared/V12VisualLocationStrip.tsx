@@ -22,7 +22,6 @@ export type V12VisualLocationStripProps = {
 };
 
 export function V12VisualLocationStrip(props: V12VisualLocationStripProps): ReactElement {
-  const n = props.segments.length;
   return (
     <div className="v12m-loc">
       <div className="v12m-loc-head">

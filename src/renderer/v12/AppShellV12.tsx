@@ -68,7 +68,7 @@ export type AppShellV12Props = {
   localPane: ReactNode;
   remotePane: ReactNode;
   drawer: ReactNode;
-  /** Fixed corner dev hint (e.g. `?ui=v12`); keep out of hero chrome. */
+  /** Fixed corner dev hint; keep out of hero chrome. */
   devHint?: ReactNode | null;
 };
 

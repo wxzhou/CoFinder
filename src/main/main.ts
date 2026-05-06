@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import path from "node:path";
 import fs from "node:fs";
+import { pathToFileURL } from "node:url";
 import { registerIpcHandlers, shutdownMainProcessResources } from "./ipc/registerIpcHandlers";
 
 const isDev = !app.isPackaged;
@@ -48,12 +49,16 @@ function createMainWindow(): BrowserWindow {
     let devUrl = devBase;
     if (process.env.COFINDER_V12_MOCKUP === "1") {
       devUrl = `${devBase}/?mockup=v12`;
-    } else if (process.env.COFINDER_UI_V12 === "1") {
-      devUrl = `${devBase}/?ui=v12`;
+    } else if (process.env.COFINDER_LEGACY_UI === "1") {
+      devUrl = `${devBase}/?ui=v11`;
     }
     void mainWindow.loadURL(devUrl);
   } else {
-    void mainWindow.loadFile(indexPath);
+    let url = pathToFileURL(indexPath).href;
+    if (process.env.COFINDER_LEGACY_UI === "1") {
+      url += url.includes("?") ? "&ui=v11" : "?ui=v11";
+    }
+    void mainWindow.loadURL(url);
     if (debugPackaged) {
       mainWindow.webContents.openDevTools({ mode: "detach" });
     }

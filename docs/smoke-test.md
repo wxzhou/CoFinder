@@ -2,9 +2,11 @@
 
 Use this checklist before a release candidate. Prefer an isolated test workspace.
 
-## V1.2 Finder shell (`?ui=v12`) — M6
+## V1.2 Finder shell (default) — M6
 
-Run with **`?ui=v12`** in the renderer URL (or `COFINDER_UI_V12=1` in dev). Core file operations should match V1.1; this section only highlights shell-specific checks.
+**Acceptance:** plain `npm run dev` and packaged app with **no** env vars load this shell (`getRendererUiMode` → `shell-v12`). Core file operations should match V1.1; this section only highlights shell-specific checks.
+
+**Legacy classic UI:** use **`?ui=v11`**, **`?legacy=1`**, **`COFINDER_LEGACY_UI=1`**, or a build with **`VITE_COFINDER_LEGACY_UI=1`** — then run overlapping **V1.1 baseline** checks below for parity.
 
 - **Layout:** sidebar, toolbar, tab strip, dual panes, bottom transfer drawer render without overlap; inactive pane reads visually cooler than the focused pane.
 - **Toolbar:** back / forward / up / refresh follow the **focused** pane; plug opens Site Manager when disconnected and **disconnects** when connected; upload/download/delete/Get Info / inspector toggle match enabled states of the classic panes.
