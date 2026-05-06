@@ -1,11 +1,8 @@
 import type { ProfileUpsertPayload } from "../../shared/types/ipc";
 import type { ServerProfile } from "../../shared/types/models";
+import { profilePrimaryLabel } from "../profilePrimaryLabel";
 
-
-export function profilePrimaryLabel(profile: ServerProfile): string {
-  if (profile.alias.trim()) return profile.alias.trim();
-  return `${profile.username}@${profile.host}:${profile.port}`;
-}
+export { profilePrimaryLabel } from "../profilePrimaryLabel";
 
 type Props = {
   open: boolean;

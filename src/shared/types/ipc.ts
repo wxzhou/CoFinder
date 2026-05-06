@@ -1,3 +1,4 @@
+import type { LocalFavoriteListItem } from "../localFavorites";
 import type { ConnectionConfig, RemoteFileEntry, ServerProfile, TransferTask } from "./models";
 import type { LocalFileEntry } from "./models";
 
@@ -69,7 +70,10 @@ export type RemoteErrorCode =
   | "TRANSFER_PRECHECK_FAILED"
   | "TRANSFER_NOT_FOUND"
   | "TRANSFER_NOT_RUNNING"
-  | "TRANSFER_QUEUE_ERROR";
+  | "TRANSFER_QUEUE_ERROR"
+  | "LOCAL_FAVORITES_DUPLICATE"
+  | "LOCAL_FAVORITES_NOT_FOUND"
+  | "LOCAL_FAVORITES_PERSIST_FAILED";
 
 export interface RemoteErrorPayload {
   code: RemoteErrorCode;
@@ -190,6 +194,12 @@ export interface IpcApi {
   settings: {
     get: () => Promise<unknown>;
     set: (request: unknown) => Promise<void>;
+  };
+  localFavorites: {
+    list: () => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
+    add: (request: { path: string }) => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
+    remove: (request: { id: string }) => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
+    resetDefaults: () => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
   };
   profiles: {
     list: () => Promise<IpcResponse<ServerProfile[]>>;

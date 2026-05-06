@@ -1,7 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
+import { AppShellV12 } from "./v12/AppShellV12";
+import { V12Toolbar } from "./v12/V12Toolbar";
+import { V12TransferDrawer } from "./v12/V12TransferDrawer";
+import { V12PaneInspector } from "./v12/V12PaneInspector";
+import { pathToSegments } from "./v12/pane/pathSegments";
+import { inspectorColumnVisible } from "./v12/v12InspectorVisibility";
+import { V12PaneFootStatus, V12ProdDevHint, V12VisualFileList, V12VisualLocationStrip } from "./v12/shared";
+import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
+import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
+import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
 import { applyRowSelection, clearSelectionState, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
+import type { LocalFavoriteListItem } from "../shared/localFavorites";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -104,6 +115,8 @@ type UiTabState = {
 const AUTO_HIDE_DELAY_MS = 10_000;
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
+/** After a row `click` with `detail === 1`, wait this long before showing inspector so a double-click rarely mounts the column. Cmd+A bypasses. If already revealed, no delay and no hide. */
+const V12_INSPECTOR_CLICK_GAP_MS = 350;
 
 type QueuePanelState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
 type PlainClickRecord = {
@@ -113,7 +126,14 @@ type PlainClickRecord = {
   at: number;
 };
 
-export function App() {
+export type AppUiShell = "v11" | "v12";
+
+export type AppProps = {
+  uiShell?: AppUiShell;
+};
+
+export function App(props: AppProps = {}) {
+  const { uiShell = "v12" } = props;
   const [appVersion, setAppVersion] = useState("unknown");
   const [tabState] = useState(() => {
     const firstTabId = createId();
@@ -126,6 +146,12 @@ export function App() {
   const [tabs, setTabs] = useState<UiTabState[]>(tabState.tabs);
   const [activeTabId, setActiveTabId] = useState<string>(tabState.activeTabId);
   const [siteManagerByTab, setSiteManagerByTab] = useState<Record<string, SiteManagerTabState>>({});
+  const [v12EmbeddedRemoteCatalog, setV12EmbeddedRemoteCatalog] = useState<{
+    profiles: ServerProfile[];
+    listError: string;
+    credentialAvailable: boolean;
+  }>({ profiles: [], listError: "", credentialAvailable: false });
+  const [v12RemoteEmbeddedInitialProfileByTab, setV12RemoteEmbeddedInitialProfileByTab] = useState<Record<string, string>>({});
   const siteManagerRef = useRef(siteManagerByTab);
   useEffect(() => {
     siteManagerRef.current = siteManagerByTab;
@@ -142,10 +168,61 @@ export function App() {
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [localHomePath, setLocalHomePath] = useState<string>("");
+  const v12LocalInspTokenRef = useRef(0);
+  const v12RemoteInspTokenRef = useRef(0);
+  const v12LocalInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const v12RemoteInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevActiveTabIdForV12InspRef = useRef(activeTabId);
+  const [v12LocalInspectorReveal, setV12LocalInspectorReveal] = useState(false);
+  const [v12RemoteInspectorReveal, setV12RemoteInspectorReveal] = useState(false);
+  type V12InspPaneState = { status: "idle" | "loading" | "ready" | "error"; info: PathInfo | null; error: string };
+  const [v12LocalInsp, setV12LocalInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
+  const [v12RemoteInsp, setV12RemoteInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
+  const [v12LocalFavorites, setV12LocalFavorites] = useState<LocalFavoriteListItem[]>([]);
+  const [v12FavoriteHint, setV12FavoriteHint] = useState("");
+  const v12FavoriteHintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelV12LocalInspRevealTimer = (): void => {
+    if (v12LocalInspRevealTimerRef.current != null) {
+      clearTimeout(v12LocalInspRevealTimerRef.current);
+      v12LocalInspRevealTimerRef.current = null;
+    }
+  };
+  const cancelV12RemoteInspRevealTimer = (): void => {
+    if (v12RemoteInspRevealTimerRef.current != null) {
+      clearTimeout(v12RemoteInspRevealTimerRef.current);
+      v12RemoteInspRevealTimerRef.current = null;
+    }
+  };
+  const scheduleV12LocalInspRevealFromRowClick = (): void => {
+    cancelV12LocalInspRevealTimer();
+    if (v12LocalInspectorReveal) {
+      return;
+    }
+    v12LocalInspRevealTimerRef.current = setTimeout(() => {
+      v12LocalInspRevealTimerRef.current = null;
+      setV12LocalInspectorReveal(true);
+    }, V12_INSPECTOR_CLICK_GAP_MS);
+  };
+  const scheduleV12RemoteInspRevealFromRowClick = (): void => {
+    cancelV12RemoteInspRevealTimer();
+    if (v12RemoteInspectorReveal) {
+      return;
+    }
+    v12RemoteInspRevealTimerRef.current = setTimeout(() => {
+      v12RemoteInspRevealTimerRef.current = null;
+      setV12RemoteInspectorReveal(true);
+    }, V12_INSPECTOR_CLICK_GAP_MS);
+  };
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const localPane = activeTab.localPane;
   const remotePane = activeTab.remotePane;
+  const remoteConnected = remotePane.connectionStatus === "connected" && !!remotePane.connectionId;
+  const activeTabRemoteDisconnected = useMemo(
+    () => !(remotePane.connectionStatus === "connected" && remotePane.connectionId),
+    [remotePane.connectionStatus, remotePane.connectionId]
+  );
 
   useEffect(() => {
     void initializeLocalHome(tabState.firstTabId);
@@ -230,6 +307,10 @@ export function App() {
             tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, ...selectedState } } : tab
           )
         );
+        if (uiShell === "v12") {
+          cancelV12LocalInspRevealTimer();
+          setV12LocalInspectorReveal(true);
+        }
         event.preventDefault();
         event.stopPropagation();
       }
@@ -240,6 +321,10 @@ export function App() {
             tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, ...selectedState } } : tab
           )
         );
+        if (uiShell === "v12") {
+          cancelV12RemoteInspRevealTimer();
+          setV12RemoteInspectorReveal(true);
+        }
         event.preventDefault();
         event.stopPropagation();
       }
@@ -247,7 +332,7 @@ export function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs, tabs]);
+  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs, tabs, uiShell]);
 
   async function loadTransferTasks(): Promise<void> {
     const res = await window.cofinder.transfer.list();
@@ -310,6 +395,104 @@ export function App() {
         };
       })
     );
+  }
+
+  const showV12FavoriteHint = useCallback((message: string) => {
+    if (v12FavoriteHintTimerRef.current != null) clearTimeout(v12FavoriteHintTimerRef.current);
+    setV12FavoriteHint(message);
+    v12FavoriteHintTimerRef.current = setTimeout(() => {
+      v12FavoriteHintTimerRef.current = null;
+      setV12FavoriteHint("");
+    }, 2800);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (v12FavoriteHintTimerRef.current != null) clearTimeout(v12FavoriteHintTimerRef.current);
+    },
+    []
+  );
+
+  const refreshV12LocalFavorites = useCallback(async () => {
+    try {
+      const api = window.cofinder?.localFavorites;
+      if (!api?.list) {
+        showV12FavoriteHint("Local favorites are unavailable. Quit and reopen the app.");
+        return;
+      }
+      const r = await api.list();
+      if (r.ok) setV12LocalFavorites(r.data.favorites);
+      else showV12FavoriteHint(r.error.message);
+    } catch (err) {
+      showV12FavoriteHint(err instanceof Error ? err.message : "Failed to load favorites.");
+    }
+  }, [showV12FavoriteHint]);
+
+  useEffect(() => {
+    if (uiShell !== "v12") return;
+    void refreshV12LocalFavorites();
+  }, [uiShell, refreshV12LocalFavorites]);
+
+  async function handleV12AddLocalFavorite(): Promise<void> {
+    try {
+      const api = window.cofinder?.localFavorites;
+      if (!api?.add) {
+        showV12FavoriteHint("Local favorites are unavailable. Quit and reopen the app.");
+        return;
+      }
+      const p = localPane.currentPath || "/";
+      const res = await api.add({ path: p });
+      if (!res.ok) {
+        if (res.error.code === "LOCAL_FAVORITES_DUPLICATE") {
+          showV12FavoriteHint("That folder is already in favorites.");
+          return;
+        }
+        showV12FavoriteHint(res.error.message);
+        setQueueError(res.error.message);
+        return;
+      }
+      setV12LocalFavorites(res.data.favorites);
+    } catch (err) {
+      showV12FavoriteHint(err instanceof Error ? err.message : "Failed to add favorite.");
+    }
+  }
+
+  async function handleV12RemoveLocalFavorite(id: string): Promise<void> {
+    try {
+      const api = window.cofinder?.localFavorites;
+      if (!api?.remove) {
+        showV12FavoriteHint("Local favorites are unavailable. Quit and reopen the app.");
+        return;
+      }
+      const res = await api.remove({ id });
+      if (!res.ok) {
+        showV12FavoriteHint(res.error.message);
+        setQueueError(res.error.message);
+        return;
+      }
+      setV12LocalFavorites(res.data.favorites);
+    } catch (err) {
+      showV12FavoriteHint(err instanceof Error ? err.message : "Failed to remove favorite.");
+    }
+  }
+
+  async function handleV12RestoreDefaultFavorites(): Promise<void> {
+    try {
+      const api = window.cofinder?.localFavorites;
+      if (!api?.resetDefaults) {
+        showV12FavoriteHint("Local favorites are unavailable. Quit and reopen the app.");
+        return;
+      }
+      const res = await api.resetDefaults();
+      if (!res.ok) {
+        showV12FavoriteHint(res.error.message);
+        setQueueError(res.error.message);
+        return;
+      }
+      setV12LocalFavorites(res.data.favorites);
+    } catch (err) {
+      showV12FavoriteHint(err instanceof Error ? err.message : "Failed to restore defaults.");
+    }
   }
 
   const queueStats = useMemo(() => {
@@ -388,7 +571,111 @@ export function App() {
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
   const remoteTotalSize = remotePane.entries.reduce((acc, item) => acc + item.size, 0);
 
+  useEffect(() => {
+    if (uiShell !== "v12") {
+      cancelV12LocalInspRevealTimer();
+      cancelV12RemoteInspRevealTimer();
+      setV12LocalInspectorReveal(false);
+      setV12RemoteInspectorReveal(false);
+      return;
+    }
+    if (localPane.selectedFullPaths.length === 0) {
+      cancelV12LocalInspRevealTimer();
+      setV12LocalInspectorReveal(false);
+    }
+    if (!remoteConnected || remotePane.selectedFullPaths.length === 0) {
+      cancelV12RemoteInspRevealTimer();
+      setV12RemoteInspectorReveal(false);
+    }
+  }, [uiShell, activeTab.id, localPane.selectedFullPaths, remotePane.selectedFullPaths, remoteConnected]);
+
+  useEffect(() => {
+    if (uiShell !== "v12") return;
+    if (prevActiveTabIdForV12InspRef.current === activeTabId) return;
+    prevActiveTabIdForV12InspRef.current = activeTabId;
+    cancelV12LocalInspRevealTimer();
+    cancelV12RemoteInspRevealTimer();
+    const tab = tabs.find((t) => t.id === activeTabId) ?? activeTab;
+    const rc = tab.remotePane.connectionStatus === "connected" && !!tab.remotePane.connectionId;
+    setV12LocalInspectorReveal(tab.localPane.selectedFullPaths.length > 0);
+    setV12RemoteInspectorReveal(rc && tab.remotePane.selectedFullPaths.length > 0);
+  }, [activeTabId, uiShell, tabs, activeTab]);
+
+  useEffect(() => {
+    if (uiShell !== "v12") return;
+    const paths = localPane.selectedFullPaths;
+    const visible =
+      inspectorColumnVisible("local", paths.length, remoteConnected) && v12LocalInspectorReveal;
+    if (!visible || paths.length === 0) {
+      setV12LocalInsp({ status: "idle", info: null, error: "" });
+      return;
+    }
+    if (paths.length > 1) {
+      setV12LocalInsp({ status: "ready", info: null, error: "" });
+      return;
+    }
+    const path = paths[0]!;
+    const token = ++v12LocalInspTokenRef.current;
+    setV12LocalInsp({ status: "loading", info: null, error: "" });
+    void (async () => {
+      const r = await window.cofinder.local.getInfo({ path, includeDirectorySize: false });
+      if (token !== v12LocalInspTokenRef.current) return;
+      if (!r.ok) {
+        setV12LocalInsp({ status: "error", info: null, error: r.error.message });
+        return;
+      }
+      const base = r.data.info;
+      setV12LocalInsp({ status: "ready", info: base, error: "" });
+      if (base.type === "directory") {
+        const r2 = await window.cofinder.local.getInfo({ path, includeDirectorySize: true });
+        if (token !== v12LocalInspTokenRef.current) return;
+        if (r2.ok) {
+          setV12LocalInsp({ status: "ready", info: { ...base, size: r2.data.info.size }, error: "" });
+        }
+      }
+    })();
+  }, [uiShell, remoteConnected, activeTab.id, localPane.selectedFullPaths, v12LocalInspectorReveal]);
+
+  useEffect(() => {
+    if (uiShell !== "v12") return;
+    const conn = remotePane.connectionId;
+    const paths = remotePane.selectedFullPaths;
+    const visible = inspectorColumnVisible("remote", paths.length, !!conn) && v12RemoteInspectorReveal;
+    if (!visible || !conn || paths.length === 0) {
+      setV12RemoteInsp({ status: "idle", info: null, error: "" });
+      return;
+    }
+    if (paths.length > 1) {
+      setV12RemoteInsp({ status: "ready", info: null, error: "" });
+      return;
+    }
+    const path = paths[0]!;
+    const token = ++v12RemoteInspTokenRef.current;
+    setV12RemoteInsp({ status: "loading", info: null, error: "" });
+    void (async () => {
+      const r = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: false });
+      if (token !== v12RemoteInspTokenRef.current) return;
+      if (!r.ok) {
+        setV12RemoteInsp({ status: "error", info: null, error: r.error.message });
+        return;
+      }
+      const base = r.data.info;
+      setV12RemoteInsp({ status: "ready", info: base, error: "" });
+      if (base.type === "directory") {
+        const r2 = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: true });
+        if (token !== v12RemoteInspTokenRef.current) return;
+        if (r2.ok) {
+          setV12RemoteInsp({ status: "ready", info: { ...base, size: r2.data.info.size }, error: "" });
+        }
+      }
+    })();
+  }, [uiShell, remotePane.connectionId, remotePane.selectedFullPaths, activeTab.id, v12RemoteInspectorReveal]);
+
   async function handleRowDoubleClick(tabId: string, entry: LocalFileEntry): Promise<void> {
+    if (uiShell === "v12") {
+      cancelV12LocalInspRevealTimer();
+      setV12LocalInspectorReveal(false);
+    }
     if (entry.type === "directory") {
       await navigateLocal(tabId, entry.fullPath);
       return;
@@ -482,13 +769,32 @@ export function App() {
     };
   }
 
+  const refreshV12EmbeddedRemoteCatalog = useCallback(async (): Promise<void> => {
+    const [listRes, credRes] = await Promise.all([
+      window.cofinder.profiles.list(),
+      window.cofinder.credentials.isAvailable()
+    ]);
+    const credentialAvailable = credRes.ok ? credRes.data.available : false;
+    if (!listRes.ok) {
+      setV12EmbeddedRemoteCatalog({ profiles: [], listError: listRes.error.message, credentialAvailable });
+      return;
+    }
+    setV12EmbeddedRemoteCatalog({ profiles: listRes.data, listError: "", credentialAvailable });
+  }, []);
+
   function closeSiteManagerForTab(tabId: string): void {
     setSiteManagerByTab((prev) => {
       const next = { ...prev };
       delete next[tabId];
       return next;
     });
+    void refreshV12EmbeddedRemoteCatalog();
   }
+
+  useEffect(() => {
+    if (uiShell !== "v12" || !activeTabRemoteDisconnected) return;
+    void refreshV12EmbeddedRemoteCatalog();
+  }, [uiShell, activeTab.id, activeTabRemoteDisconnected, refreshV12EmbeddedRemoteCatalog]);
 
   async function refreshSiteManagerForTab(tabId: string): Promise<void> {
     const [listRes, credRes] = await Promise.all([
@@ -592,93 +898,47 @@ export function App() {
     }
   }
 
-  async function handleSiteManagerLogin(tabId: string): Promise<void> {
-    const sm = siteManagerRef.current[tabId];
-    if (!sm?.open) return;
-    const { draft, profiles } = sm;
-    const host = draft.host.trim();
-    const username = draft.username.trim();
-    const port = draft.port;
-    const pwd = (draft.password ?? "").trim();
-    const hasStored = draft.id ? profiles.some((p) => p.id === draft.id && p.hasSavedPassword) : false;
+  async function connectRemoteTabFromFields(
+    tabId: string,
+    attempt: V12EmbeddedRemoteConnectSubmit
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    const v = validateEmbeddedRemoteConnectInput({
+      authType: attempt.authType,
+      host: attempt.host,
+      username: attempt.username,
+      port: attempt.port,
+      passwordTyped: attempt.passwordTyped,
+      hasStoredPassword: attempt.hasStoredPassword
+    });
+    if (!v.ok) return { ok: false, message: v.message };
 
-    if (draft.authType === "privateKey") {
-      setSiteManagerByTab((prev) => ({
-        ...prev,
-        [tabId]: { ...sm, modalError: "Private key authentication is not supported yet." }
-      }));
-      return;
-    }
-    if (!host) {
-      setSiteManagerByTab((prev) => ({ ...prev, [tabId]: { ...sm, modalError: "Host is required." } }));
-      return;
-    }
-    if (!username) {
-      setSiteManagerByTab((prev) => ({ ...prev, [tabId]: { ...sm, modalError: "Username is required." } }));
-      return;
-    }
-    if (!Number.isInteger(port) || port <= 0 || port > 65535) {
-      setSiteManagerByTab((prev) => ({
-        ...prev,
-        [tabId]: { ...sm, modalError: "Port must be between 1 and 65535." }
-      }));
-      return;
-    }
-    if (!pwd && !hasStored) {
-      setSiteManagerByTab((prev) => ({
-        ...prev,
-        [tabId]: { ...sm, modalError: "Password is required, or choose a site with a saved password." }
-      }));
-      return;
-    }
+    let profileId = attempt.profileId;
+    let connectPassword: string | undefined = attempt.passwordTyped.trim() || undefined;
 
-    setSiteManagerByTab((prev) => ({
-      ...prev,
-      [tabId]: { ...sm, busy: "login", modalError: "" }
-    }));
-
-    let profileId = draft.id;
-    let connectPassword: string | undefined = pwd || undefined;
-
-    if (draft.savePassword && pwd) {
-      const saveRes = await window.cofinder.profiles.save({
-        ...draft,
-        host,
-        username,
-        port,
-        password: pwd,
-        savePassword: true,
-        defaultRemotePath: draft.defaultRemotePath?.trim() || undefined
-      });
+    if (attempt.savePasswordWithTyped && attempt.profileSavePayload) {
+      const saveRes = await window.cofinder.profiles.save(attempt.profileSavePayload);
       if (!saveRes.ok) {
-        setSiteManagerByTab((prev) => ({
-          ...prev,
-          [tabId]: { ...(prev[tabId] ?? sm), busy: "idle", modalError: saveRes.error.message }
-        }));
-        return;
+        return { ok: false, message: saveRes.error.message };
       }
       profileId = saveRes.data.id;
       connectPassword = undefined;
-      void refreshSiteManagerForTab(tabId);
+      await refreshSiteManagerForTab(tabId);
+      await refreshV12EmbeddedRemoteCatalog();
     }
-
-    const defaultPath = draft.defaultRemotePath?.trim() || undefined;
 
     setTabs((prev) =>
       prev.map((item) =>
-        item.id === tabId
-          ? { ...item, remotePane: { ...item.remotePane, connectionStatus: "connecting", error: "" } }
-          : item
+        item.id === tabId ? { ...item, remotePane: { ...item.remotePane, connectionStatus: "connecting", error: "" } } : item
       )
     );
 
     const connectPayload: RemoteConnectRequest = {
       profileId: profileId || undefined,
-      host,
-      port,
-      username,
+      host: attempt.host.trim(),
+      port: attempt.port,
+      username: attempt.username.trim(),
       password: connectPassword,
-      defaultRemotePath: defaultPath,
+      defaultRemotePath: attempt.defaultRemotePathTrimmed,
       authType: "password"
     };
 
@@ -698,29 +958,94 @@ export function App() {
             : item
         )
       );
+      return { ok: false, message: connectResult.error.message };
+    }
+
+    const { connectionId, homePath } = connectResult.data;
+    const initialPath = attempt.defaultRemotePathTrimmed || homePath || "/";
+
+    await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, attempt.aliasForTitle, profileId ?? null, {
+      host: attempt.host.trim(),
+      port: attempt.port,
+      username: attempt.username.trim(),
+      authType: "password"
+    });
+    await refreshV12EmbeddedRemoteCatalog();
+    return { ok: true };
+  }
+
+  async function handleSiteManagerLogin(tabId: string): Promise<void> {
+    const sm = siteManagerRef.current[tabId];
+    if (!sm?.open) return;
+    const { draft, profiles } = sm;
+    const host = draft.host.trim();
+    const username = draft.username.trim();
+    const port = draft.port;
+    const pwd = (draft.password ?? "").trim();
+    const hasStored = draft.id ? profiles.some((p) => p.id === draft.id && p.hasSavedPassword) : false;
+
+    const pre = validateEmbeddedRemoteConnectInput({
+      authType: draft.authType,
+      host,
+      username,
+      port,
+      passwordTyped: pwd,
+      hasStoredPassword: hasStored
+    });
+    if (!pre.ok) {
       setSiteManagerByTab((prev) => ({
         ...prev,
-        [tabId]: {
-          ...(prev[tabId] ?? sm),
-          busy: "idle",
-          modalError: connectResult.error.message
-        }
+        [tabId]: { ...(prev[tabId] ?? sm), modalError: pre.message }
       }));
       return;
     }
 
-    const { connectionId, homePath } = connectResult.data;
-    const titleLabel = draft.alias.trim() || `${username}@${host}:${port}`;
-    const initialPath = defaultPath || homePath || "/";
+    setSiteManagerByTab((prev) => ({
+      ...prev,
+      [tabId]: { ...(prev[tabId] ?? sm), busy: "login", modalError: "" }
+    }));
 
-    closeSiteManagerForTab(tabId);
+    const savePasswordWithTyped = !!(draft.savePassword && pwd);
+    const profileSavePayload = savePasswordWithTyped
+      ? {
+          ...draft,
+          host,
+          username,
+          port,
+          password: pwd,
+          savePassword: true,
+          defaultRemotePath: draft.defaultRemotePath?.trim() || undefined
+        }
+      : null;
+    const aliasForTitle = draft.alias.trim() || `${username}@${host}:${port}`;
 
-    await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, titleLabel, profileId ?? null, {
+    const result = await connectRemoteTabFromFields(tabId, {
+      profileId: draft.id ?? null,
+      profileSavePayload,
+      savePasswordWithTyped,
       host,
       port,
       username,
-      authType: "password"
+      authType: draft.authType,
+      passwordTyped: pwd,
+      hasStoredPassword: hasStored,
+      defaultRemotePathTrimmed: draft.defaultRemotePath?.trim() || undefined,
+      aliasForTitle
     });
+
+    if (!result.ok) {
+      setSiteManagerByTab((prev) => ({
+        ...prev,
+        [tabId]: { ...(prev[tabId] ?? sm), busy: "idle", modalError: result.message }
+      }));
+      return;
+    }
+
+    closeSiteManagerForTab(tabId);
+  }
+
+  async function handleV12EmbeddedRemoteSubmit(tabId: string, payload: V12EmbeddedRemoteConnectSubmit): Promise<void> {
+    void (await connectRemoteTabFromFields(tabId, payload));
   }
 
   async function handleSiteManagerSave(tabId: string): Promise<void> {
@@ -761,6 +1086,7 @@ export function App() {
         }
       };
     });
+    void refreshV12EmbeddedRemoteCatalog();
   }
 
   function handleSiteManagerNew(tabId: string): void {
@@ -874,6 +1200,7 @@ export function App() {
         }
       };
     });
+    void refreshV12EmbeddedRemoteCatalog();
   }
 
   async function listRemotePath(
@@ -934,6 +1261,10 @@ export function App() {
   }
 
   async function handleRemoteDoubleClick(tabId: string, entry: RemoteFileEntry): Promise<void> {
+    if (uiShell === "v12") {
+      cancelV12RemoteInspRevealTimer();
+      setV12RemoteInspectorReveal(false);
+    }
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (entry.type === "directory") {
@@ -1065,7 +1396,11 @@ export function App() {
     setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
   }
 
-  function handleLocalRowClick(tabId: string, entry: LocalFileEntry, event: { metaKey: boolean; shiftKey: boolean }): void {
+  function handleLocalRowClick(
+    tabId: string,
+    entry: LocalFileEntry,
+    event: { metaKey: boolean; shiftKey: boolean; clickDetail?: number }
+  ): void {
     setActivePane("local");
     setTabs((prev) =>
       prev.map((tab) => {
@@ -1087,9 +1422,22 @@ export function App() {
         };
       })
     );
+    if (uiShell === "v12") {
+      const d = event.clickDetail ?? 1;
+      if (d >= 2) {
+        cancelV12LocalInspRevealTimer();
+        setV12LocalInspectorReveal(false);
+      } else {
+        scheduleV12LocalInspRevealFromRowClick();
+      }
+    }
   }
 
-  function handleRemoteRowClick(tabId: string, entry: RemoteFileEntry, event: { metaKey: boolean; shiftKey: boolean }): void {
+  function handleRemoteRowClick(
+    tabId: string,
+    entry: RemoteFileEntry,
+    event: { metaKey: boolean; shiftKey: boolean; clickDetail?: number }
+  ): void {
     setActivePane("remote");
     setTabs((prev) =>
       prev.map((tab) => {
@@ -1111,6 +1459,15 @@ export function App() {
         };
       })
     );
+    if (uiShell === "v12") {
+      const d = event.clickDetail ?? 1;
+      if (d >= 2) {
+        cancelV12RemoteInspRevealTimer();
+        setV12RemoteInspectorReveal(false);
+      } else {
+        scheduleV12RemoteInspRevealFromRowClick();
+      }
+    }
   }
 
   function clearLocalSelection(tabId: string): void {
@@ -1571,25 +1928,399 @@ export function App() {
 
   const activeSiteManager = siteManagerByTab[activeTab.id];
 
-  return (
-    <div className="app-shell">
-      <header className="top-bar">
-        <div className="title-group">
-          <strong>CoFinder</strong>
-        </div>
-        <div className="top-version" aria-label="App version">
-          Version {appVersion}
-        </div>
-      </header>
-      <TabBar
-        tabs={tabs}
-        activeTabId={activeTabId}
-        onSelect={setActiveTabId}
-        onAdd={createTab}
-        onClose={(tabId) => void closeTab(tabId)}
+  const tabBar = (
+    <TabBar
+      tabs={tabs}
+      activeTabId={activeTabId}
+      onSelect={setActiveTabId}
+      onAdd={createTab}
+      onClose={(tabId) => void closeTab(tabId)}
+    />
+  );
+
+  const localPaneSectionClass =
+    uiShell === "v12" ? `v12m-pane ${activePane === "local" ? "is-focus" : "is-blur"}` : `pane local-pane ${activePane === "local" ? "pane-active" : ""}`;
+  const remotePaneSectionClass =
+    uiShell === "v12" ? `v12m-pane ${activePane === "remote" ? "is-focus" : "is-blur"}` : `pane remote-pane ${activePane === "remote" ? "pane-active" : ""}`;
+
+  const sm = siteManagerByTab[activeTab.id];
+  const activeProfileAlias =
+    remotePane.activeProfileId && sm?.profiles
+      ? (sm.profiles.find((p) => p.id === remotePane.activeProfileId)?.alias?.trim() ?? null)
+      : null;
+  const localPaneTitleV12 = localPaneTitleFromPath(localPane.currentPath);
+  const remotePaneTitleV12 = activeProfileAlias
+    ? activeProfileAlias
+    : remoteConnected
+      ? `${remotePane.username}@${remotePane.host}`
+      : "Remote";
+  const remotePaneMetaV12 = remoteConnected
+    ? `${remotePane.username}@${remotePane.host}:${remotePane.port}`
+    : remotePane.connectionStatus === "connecting"
+      ? "Connecting…"
+      : remotePane.connectionStatus === "failed" && remotePane.error
+        ? remotePane.error
+        : "Offline";
+
+  const remoteBadgeV12 =
+    !remoteConnected && remotePane.connectionStatus !== "connecting" ? (
+      <span className="v12m-badge v12m-badge-off">Offline</span>
+    ) : remotePane.connectionStatus === "connecting" ? (
+      <span className="v12m-badge v12m-badge-wait">Connecting…</span>
+    ) : remotePane.connectionStatus === "failed" ? (
+      <span className="v12m-badge v12m-badge-err">Error</span>
+    ) : (
+      <span className="v12m-badge v12m-badge-ok">
+        <span className="v12m-badge-dot" aria-hidden />
+        Connected
+      </span>
+    );
+
+  function expandOrCollapseQueueFromV12Drawer(): void {
+    if (queuePanelState === "hidden" || queuePanelState === "collapsed") setQueuePanelState("expanded");
+    else if (queuePanelState === "expanded" || queuePanelState === "autoHidePending") setQueuePanelState("collapsed");
+  }
+
+  const localInspectorCanShow = inspectorColumnVisible("local", localPane.selectedFullPaths.length, remoteConnected);
+  const remoteInspectorCanShow = inspectorColumnVisible("remote", remotePane.selectedFullPaths.length, remoteConnected);
+  const v12InspectorToggleDisabled =
+    activePane === "local"
+      ? !localInspectorCanShow || localPane.selectedFullPaths.length === 0
+      : !remoteInspectorCanShow || remotePane.selectedFullPaths.length === 0;
+  const v12InspectorTogglePressed = activePane === "local" ? v12LocalInspectorReveal : v12RemoteInspectorReveal;
+
+  const v12Toolbar =
+    uiShell === "v12" ? (
+      <V12Toolbar
+        onBack={() => {
+          if (activePane === "local") {
+            const target = localPane.history.backStack[localPane.history.backStack.length - 1];
+            if (target) void navigateLocal(activeTab.id, target, "back");
+          } else {
+            const target = remotePane.history.backStack[remotePane.history.backStack.length - 1];
+            if (target && remotePane.connectionId) void listRemotePath(remotePane.connectionId, target, "back", activeTab.id);
+          }
+        }}
+        onForward={() => {
+          if (activePane === "local") {
+            const target = localPane.history.forwardStack[0];
+            if (target) void navigateLocal(activeTab.id, target, "forward");
+          } else {
+            const target = remotePane.history.forwardStack[0];
+            if (target && remotePane.connectionId) void listRemotePath(remotePane.connectionId, target, "forward", activeTab.id);
+          }
+        }}
+        onUp={() => {
+          if (activePane === "local") {
+            void navigateLocal(activeTab.id, getParentPath(localPane.currentPath));
+          } else if (remotePane.connectionId) {
+            void listRemotePath(remotePane.connectionId, getParentPath(remotePane.currentPath), "push", activeTab.id);
+          }
+        }}
+        onRefresh={() => {
+          if (activePane === "local") {
+            if (localPane.currentPath) void navigateLocal(activeTab.id, localPane.currentPath, "replace");
+          } else if (remotePane.connectionId) {
+            void listRemotePath(remotePane.connectionId, remotePane.currentPath, "replace", activeTab.id);
+          }
+        }}
+        backDisabled={
+          activePane === "local"
+            ? localPane.history.backStack.length === 0
+            : remotePane.history.backStack.length === 0 || !remotePane.connectionId
+        }
+        forwardDisabled={
+          activePane === "local"
+            ? localPane.history.forwardStack.length === 0
+            : remotePane.history.forwardStack.length === 0 || !remotePane.connectionId
+        }
+        upDisabled={activePane === "local" ? false : !remotePane.connectionId}
+        refreshDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
+        onConnectAction={() => {
+          if (remoteConnected) void disconnectRemote(activeTab.id);
+          else openSiteManagerForTab(activeTab.id);
+        }}
+        connectActionDisabled={remotePane.connectionStatus === "connecting"}
+        connectActionTitle={remoteConnected ? "Disconnect from server" : "Connect to server…"}
+        connectActionAriaLabel={remoteConnected ? "Disconnect" : "Connect"}
+        onUpload={() => void enqueueUpload(activeTab.id)}
+        onDownload={() => void enqueueDownload(activeTab.id)}
+        uploadDisabled={localPane.selectedFullPaths.length === 0 || !remotePane.connectionId}
+        downloadDisabled={
+          remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId
+        }
+        onDelete={() => openDeleteConfirm(activeTab.id, activePane)}
+        deleteDisabled={
+          activePane === "local"
+            ? localPane.selectedFullPaths.length === 0
+            : remotePane.selectedFullPaths.length === 0
+        }
+        onGetInfo={() => void openInfoDialog(activeTab.id, activePane)}
+        getInfoDisabled={
+          activePane === "local"
+            ? localPane.selectedFullPaths.length !== 1
+            : remotePane.selectedFullPaths.length !== 1
+        }
+        onInspectorToggle={() => {
+          if (activePane === "local") {
+            cancelV12LocalInspRevealTimer();
+            setV12LocalInspectorReveal((v) => !v);
+          } else {
+            cancelV12RemoteInspRevealTimer();
+            setV12RemoteInspectorReveal((v) => !v);
+          }
+        }}
+        inspectorToggleDisabled={v12InspectorToggleDisabled}
+        inspectorTogglePressed={v12InspectorTogglePressed}
       />
-      <main className="pane-layout">
-        <section className={`pane local-pane ${activePane === "local" ? "pane-active" : ""}`}>
+    ) : null;
+
+  const queueExpandedBody = (
+    <>
+      <div className="queue-header">
+        <div>
+          <strong>Transfer Queue</strong>
+          <span className="queue-summary">{summarizeQueue()}</span>
+        </div>
+        <div className="queue-controls">
+          <button type="button" className="toolbar-button" onClick={() => setQueuePanelState("collapsed")}>
+            Minimize
+          </button>
+          <button
+            type="button"
+            className={`toolbar-button ${queuePinned ? "is-active" : ""}`}
+            onClick={() => setQueuePinned((prev) => !prev)}
+          >
+            {queuePinned ? "Pinned" : "Pin"}
+          </button>
+          <button
+            type="button"
+            className="toolbar-button"
+            onClick={() => {
+              void clearCompletedTransfers();
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+      {queueError ? <div className="error-banner">{queueError}</div> : null}
+      <div className="queue-list">
+        {transferTasks.length === 0 ? (
+          <div className="queue-empty">No transfer tasks.</div>
+        ) : (
+          transferTasks.map((task) => (
+            <div key={task.id} className="queue-item">
+              <span>{task.direction}</span>
+              <span className={`queue-status status-${task.status}`}>{task.status}</span>
+              <span className="queue-path" title={`${task.sourceDisplay} -> ${task.destinationDisplay}`}>
+                {task.sourceDisplay} {"->"} {task.destinationDisplay}
+              </span>
+              <span className="queue-path" title={task.progressText ?? task.currentFile ?? "-"}>
+                {task.progressText ?? task.currentFile ?? "-"}
+                {task.speed ? ` | ${task.speed}` : ""}
+                {task.eta ? ` | ETA ${task.eta}` : ""}
+              </span>
+              <span>
+                {task.status === "pending" ? (
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    onClick={async () => {
+                      const res = await window.cofinder.transfer.cancel({ taskId: task.id });
+                      if (!res.ok) setQueueError(res.error.message);
+                    }}
+                  >
+                    Cancel
+                  </button>
+                ) : null}
+                {task.status === "running" ? (
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    onClick={async () => {
+                      const res = await window.cofinder.transfer.stop({ taskId: task.id });
+                      if (!res.ok) setQueueError(res.error.message);
+                    }}
+                  >
+                    Stop
+                  </button>
+                ) : null}
+              </span>
+            </div>
+          ))
+        )}
+      </div>
+      {queuePanelState === "autoHidePending" ? (
+        <div className="queue-footnote">All tasks completed. Auto-hiding in 10 seconds.</div>
+      ) : null}
+    </>
+  );
+
+  const queueV11Section =
+    queuePanelState !== "hidden" ? (
+      <section className="queue-area">
+        {queuePanelState === "collapsed" ? (
+          <button
+            type="button"
+            className="queue-collapsed-bar"
+            onClick={() => setQueuePanelState("expanded")}
+            title="Expand transfer queue"
+          >
+            <span>Transfer Queue</span>
+            <span>{summarizeQueue()}</span>
+          </button>
+        ) : (
+          <div className="queue-panel">{queueExpandedBody}</div>
+        )}
+      </section>
+    ) : null;
+
+  const queueV12Drawer = (
+    <V12TransferDrawer
+      state={queuePanelState}
+      pinned={queuePinned}
+      error={queueError}
+      tasks={transferTasks}
+      summary={summarizeQueue()}
+      onToggleExpand={() => expandOrCollapseQueueFromV12Drawer()}
+      onTogglePin={() => setQueuePinned((prev) => !prev)}
+      onClearCompleted={() => void clearCompletedTransfers()}
+      onCancelTask={async (taskId) => {
+        const res = await window.cofinder.transfer.cancel({ taskId });
+        if (!res.ok) setQueueError(res.error.message);
+      }}
+      onStopTask={async (taskId) => {
+        const res = await window.cofinder.transfer.stop({ taskId });
+        if (!res.ok) setQueueError(res.error.message);
+      }}
+    />
+  );
+
+  const localPaneEl = (
+    <section
+      className={localPaneSectionClass}
+      onMouseDown={uiShell === "v12" ? () => setActivePane("local") : undefined}
+    >
+      {uiShell === "v12" ? (
+        <>
+          <div className="v12m-pane-chrome">
+            <V12VisualLocationStrip
+              title={localPaneTitleV12}
+              meta="Local"
+              segments={pathToSegments(localPane.currentPath || "/")}
+              currentPath={localPane.currentPath || "/"}
+              pathRootLabel="Macintosh HD"
+              onNavigate={(path) => void navigateLocal(activeTab.id, path)}
+            />
+          </div>
+          <div className="v12m-pane-body">
+            <div className="v12m-pane-split">
+              <div className="v12m-pane-main v12m-pane-main--stack">
+                {localPane.error ? <div className="cfv12p-error">{localPane.error}</div> : null}
+                <V12VisualFileList
+                  isPaneActive={activePane === "local"}
+                  entries={sortedEntries}
+                  sortKey={localPane.sortKey}
+                  sortDirection={localPane.sortDirection}
+                  selectedFullPaths={localPane.selectedFullPaths}
+                  onSort={(key) => handleSort(activeTab.id, key)}
+                  onRowClick={(entry, event) => {
+                    if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                    if (
+                      shouldStartInlineRenameFromClick("local", activeTab.id, entry.fullPath, localPane.selectedFullPaths, {
+                        metaKey: event.metaKey,
+                        shiftKey: event.shiftKey
+                      })
+                    ) {
+                      openInlineRename(activeTab.id, "local");
+                      lastPlainClickRef.current = null;
+                      return;
+                    }
+                    handleLocalRowClick(activeTab.id, entry, {
+                      metaKey: event.metaKey,
+                      shiftKey: event.shiftKey,
+                      clickDetail: event.detail
+                    });
+                    if (!event.metaKey && !event.shiftKey) {
+                      lastPlainClickRef.current = { pane: "local", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+                    } else {
+                      lastPlainClickRef.current = null;
+                    }
+                  }}
+                  onRowContextMenu={(entry, event) => {
+                    event.preventDefault();
+                    openContextMenu(activeTab.id, "local", entry.fullPath, event);
+                  }}
+                  onRowDoubleClick={(entry) => {
+                    if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                    void handleRowDoubleClick(activeTab.id, entry);
+                  }}
+                  onBackgroundMouseDown={(event) => {
+                    setActivePane("local");
+                    const target = event.target as HTMLElement | null;
+                    if (!target?.closest(".v12m-lrow")) {
+                      clearLocalSelection(activeTab.id);
+                    }
+                  }}
+                  inlineRename={
+                    inlineRename && inlineRename.pane === "local" && inlineRename.tabId === activeTab.id
+                      ? {
+                          sourcePath: inlineRename.sourcePath,
+                          draftName: inlineRename.draftName,
+                          onChange: (value) => setInlineRename((prev) => (prev ? { ...prev, draftName: value } : prev)),
+                          onBlur: () => void submitInlineRename(),
+                          onKeyDown: (event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              void submitInlineRename();
+                            } else if (event.key === "Escape") {
+                              event.preventDefault();
+                              setInlineRename(null);
+                            }
+                          }
+                        }
+                      : null
+                  }
+                  formatSize={formatSize}
+                  formatTime={formatTime}
+                  sortMark={sortMark}
+                  formatKind={formatKindV12}
+                />
+                <V12PaneFootStatus
+                  selectedCount={selectedEntries.length}
+                  totalCount={localPane.entries.length}
+                  selectedSizeLabel={formatSize(selectedSize)}
+                  totalSizeLabel={formatSize(totalSize)}
+                />
+              </div>
+              {inspectorColumnVisible("local", localPane.selectedFullPaths.length, remoteConnected) && v12LocalInspectorReveal ? (
+                <V12PaneInspector
+                  scope="local"
+                  selectionCount={localPane.selectedFullPaths.length}
+                  selectedPaths={localPane.selectedFullPaths}
+                  entries={sortedEntries}
+                  info={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.info : null}
+                  infoLoading={localPane.selectedFullPaths.length === 1 && v12LocalInsp.status === "loading"}
+                  infoError={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.error : ""}
+                  formatSize={formatSize}
+                  formatTime={formatTime}
+                  onQuickLook={() => void quickLookSelection(activeTab.id, "local")}
+                  onRevealInFinder={async () => {
+                    const target = localPane.selectedFullPaths[0];
+                    if (!target) return;
+                    const result = await window.cofinder.local.revealPath({ path: target });
+                    if (!result.ok) setQueueError(result.error.message);
+                  }}
+                  onCopyPaths={() => void copySelection(activeTab.id, "local", "path")}
+                  onGetInfo={() => void openInfoDialog(activeTab.id, "local")}
+                />
+              ) : null}
+            </div>
+          </div>
+        </>
+      ) : (
+        <>
           <div className="pane-toolbar">
             <button
               type="button"
@@ -1733,7 +2464,11 @@ export function App() {
                         lastPlainClickRef.current = null;
                         return;
                       }
-                      handleLocalRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                      handleLocalRowClick(activeTab.id, entry, {
+                        metaKey: event.metaKey,
+                        shiftKey: event.shiftKey,
+                        clickDetail: event.detail
+                      });
                       if (!event.metaKey && !event.shiftKey) {
                         lastPlainClickRef.current = { pane: "local", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
                       } else {
@@ -1798,9 +2533,176 @@ export function App() {
             <span>Selected Size: {formatSize(selectedSize)}</span>
             <span>Total Size: {formatSize(totalSize)}</span>
           </div>
-        </section>
-        <section className="splitter" />
-        <section className={`pane remote-pane ${activePane === "remote" ? "pane-active" : ""}`}>
+        </>
+      )}
+    </section>
+  );
+
+  const remotePaneEl = (
+    <section
+      className={remotePaneSectionClass}
+      onMouseDown={uiShell === "v12" ? () => setActivePane("remote") : undefined}
+    >
+      {uiShell === "v12" ? (
+        !(remotePane.connectionStatus === "connected" && remotePane.connectionId) ? (
+          <>
+            <div className="v12m-pane-chrome is-muted">
+              <V12VisualLocationStrip
+                title={remotePaneTitleV12}
+                meta={remotePaneMetaV12}
+                segments={pathToSegments(remotePane.currentPath || "/")}
+                currentPath={remotePane.currentPath || "/"}
+                pathRootLabel="/"
+                badge={remoteBadgeV12}
+                onNavigate={() => {}}
+              />
+            </div>
+            <div className="v12m-pane-body">
+              <div className="v12m-pane-split">
+                <div className="v12m-pane-main v12m-pane-main--stack">
+                  <V12RemoteEmbeddedConnect
+                    key={activeTab.id}
+                    profiles={v12EmbeddedRemoteCatalog.profiles}
+                    listError={v12EmbeddedRemoteCatalog.listError}
+                    credentialAvailable={v12EmbeddedRemoteCatalog.credentialAvailable}
+                    connectionStatus={remotePane.connectionStatus}
+                    paneError={remotePane.error}
+                    initialProfileId={v12RemoteEmbeddedInitialProfileByTab[activeTab.id] ?? null}
+                    onInitialProfileConsumed={() =>
+                      setV12RemoteEmbeddedInitialProfileByTab((prev) => {
+                        const next = { ...prev };
+                        delete next[activeTab.id];
+                        return next;
+                      })
+                    }
+                    onOpenSiteManager={() => openSiteManagerForTab(activeTab.id)}
+                    onReloadProfiles={() => void refreshV12EmbeddedRemoteCatalog()}
+                    onConnect={(payload) => void handleV12EmbeddedRemoteSubmit(activeTab.id, payload)}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="v12m-pane-chrome">
+              <V12VisualLocationStrip
+                title={remotePaneTitleV12}
+                meta={remotePaneMetaV12}
+                segments={pathToSegments(remotePane.currentPath || "/")}
+                currentPath={remotePane.currentPath || "/"}
+                pathRootLabel="/"
+                badge={remoteBadgeV12}
+                onNavigate={(path) => void listRemotePath(remotePane.connectionId!, path, "push", activeTab.id)}
+                trailing={
+                  <button type="button" className="v12m-insp-linkbtn" onClick={() => void disconnectRemote(activeTab.id)}>
+                    Disconnect
+                  </button>
+                }
+              />
+            </div>
+            <div className="v12m-pane-body">
+              <div className="v12m-pane-split">
+                <div className="v12m-pane-main v12m-pane-main--stack">
+                  {remotePane.error ? <div className="cfv12p-error">{remotePane.error}</div> : null}
+                  <V12VisualFileList
+                    isPaneActive={activePane === "remote"}
+                    entries={sortedRemoteEntries}
+                    sortKey={remotePane.sortKey}
+                    sortDirection={remotePane.sortDirection}
+                    selectedFullPaths={remotePane.selectedFullPaths}
+                    onSort={(key) => handleRemoteSort(activeTab.id, key)}
+                    onRowClick={(entry, event) => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      if (
+                        shouldStartInlineRenameFromClick("remote", activeTab.id, entry.fullPath, remotePane.selectedFullPaths, {
+                          metaKey: event.metaKey,
+                          shiftKey: event.shiftKey
+                        })
+                      ) {
+                        openInlineRename(activeTab.id, "remote");
+                        lastPlainClickRef.current = null;
+                        return;
+                      }
+                      handleRemoteRowClick(activeTab.id, entry, {
+                        metaKey: event.metaKey,
+                        shiftKey: event.shiftKey,
+                        clickDetail: event.detail
+                      });
+                      if (!event.metaKey && !event.shiftKey) {
+                        lastPlainClickRef.current = { pane: "remote", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+                      } else {
+                        lastPlainClickRef.current = null;
+                      }
+                    }}
+                    onRowContextMenu={(entry, event) => {
+                      event.preventDefault();
+                      openContextMenu(activeTab.id, "remote", entry.fullPath, event);
+                    }}
+                    onRowDoubleClick={(entry) => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      void handleRemoteDoubleClick(activeTab.id, entry);
+                    }}
+                    onBackgroundMouseDown={(event) => {
+                      setActivePane("remote");
+                      const target = event.target as HTMLElement | null;
+                      if (!target?.closest(".v12m-lrow")) {
+                        clearRemoteSelection(activeTab.id);
+                      }
+                    }}
+                    inlineRename={
+                      inlineRename && inlineRename.pane === "remote" && inlineRename.tabId === activeTab.id
+                        ? {
+                            sourcePath: inlineRename.sourcePath,
+                            draftName: inlineRename.draftName,
+                            onChange: (value) => setInlineRename((prev) => (prev ? { ...prev, draftName: value } : prev)),
+                            onBlur: () => void submitInlineRename(),
+                            onKeyDown: (event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                void submitInlineRename();
+                              } else if (event.key === "Escape") {
+                                event.preventDefault();
+                                setInlineRename(null);
+                              }
+                            }
+                          }
+                        : null
+                    }
+                    formatSize={formatSize}
+                    formatTime={formatTime}
+                    sortMark={sortMark}
+                    formatKind={formatKindV12}
+                  />
+                  <V12PaneFootStatus
+                    selectedCount={remoteSelectedEntries.length}
+                    totalCount={remotePane.entries.length}
+                    selectedSizeLabel={formatSize(remoteSelectedSize)}
+                    totalSizeLabel={formatSize(remoteTotalSize)}
+                  />
+                </div>
+                {inspectorColumnVisible("remote", remotePane.selectedFullPaths.length, remoteConnected) && v12RemoteInspectorReveal ? (
+                  <V12PaneInspector
+                    scope="remote"
+                    selectionCount={remotePane.selectedFullPaths.length}
+                    selectedPaths={remotePane.selectedFullPaths}
+                    entries={sortedRemoteEntries}
+                    info={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.info : null}
+                    infoLoading={remotePane.selectedFullPaths.length === 1 && v12RemoteInsp.status === "loading"}
+                    infoError={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.error : ""}
+                    formatSize={formatSize}
+                    formatTime={formatTime}
+                    hostLabel={`${remotePane.username}@${remotePane.host}:${remotePane.port}`}
+                    onCopyPaths={() => void copySelection(activeTab.id, "remote", "path")}
+                    onGetInfo={() => void openInfoDialog(activeTab.id, "remote")}
+                  />
+                ) : null}
+              </div>
+            </div>
+          </>
+        )
+      ) : (
+        <>
           {!(remotePane.connectionStatus === "connected" && remotePane.connectionId) ? (
             <div className="remote-disconnected-wrap">
               <div className="placeholder-pane">
@@ -1960,7 +2862,11 @@ export function App() {
                             lastPlainClickRef.current = null;
                             return;
                           }
-                          handleRemoteRowClick(activeTab.id, entry, { metaKey: event.metaKey, shiftKey: event.shiftKey });
+                          handleRemoteRowClick(activeTab.id, entry, {
+                            metaKey: event.metaKey,
+                            shiftKey: event.shiftKey,
+                            clickDetail: event.detail
+                          });
                           if (!event.metaKey && !event.shiftKey) {
                             lastPlainClickRef.current = { pane: "remote", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
                           } else {
@@ -2027,104 +2933,61 @@ export function App() {
               </div>
             </>
           ) : null}
-        </section>
-      </main>
+        </>
+      )}
+    </section>
+  );
 
-      {queuePanelState !== "hidden" ? (
-        <section className="queue-area">
-          {queuePanelState === "collapsed" ? (
-            <button
-              type="button"
-              className="queue-collapsed-bar"
-              onClick={() => setQueuePanelState("expanded")}
-              title="Expand transfer queue"
-            >
-              <span>Transfer Queue</span>
-              <span>{summarizeQueue()}</span>
-            </button>
-          ) : (
-            <div className="queue-panel">
-              <div className="queue-header">
-                <div>
-                  <strong>Transfer Queue</strong>
-                  <span className="queue-summary">{summarizeQueue()}</span>
-                </div>
-                <div className="queue-controls">
-                  <button type="button" className="toolbar-button" onClick={() => setQueuePanelState("collapsed")}>
-                    Minimize
-                  </button>
-                  <button
-                    type="button"
-                    className={`toolbar-button ${queuePinned ? "is-active" : ""}`}
-                    onClick={() => setQueuePinned((prev) => !prev)}
-                  >
-                    {queuePinned ? "Pinned" : "Pin"}
-                  </button>
-                  <button
-                    type="button"
-                    className="toolbar-button"
-                    onClick={() => {
-                      void clearCompletedTransfers();
-                    }}
-                  >
-                    Clear
-                  </button>
-                </div>
-              </div>
-              {queueError ? <div className="error-banner">{queueError}</div> : null}
-              <div className="queue-list">
-                {transferTasks.length === 0 ? (
-                  <div className="queue-empty">No transfer tasks.</div>
-                ) : (
-                  transferTasks.map((task) => (
-                    <div key={task.id} className="queue-item">
-                      <span>{task.direction}</span>
-                      <span className={`queue-status status-${task.status}`}>{task.status}</span>
-                      <span className="queue-path" title={`${task.sourceDisplay} -> ${task.destinationDisplay}`}>
-                        {task.sourceDisplay} {"->"} {task.destinationDisplay}
-                      </span>
-                      <span className="queue-path" title={task.progressText ?? task.currentFile ?? "-"}>
-                        {task.progressText ?? task.currentFile ?? "-"}
-                        {task.speed ? ` | ${task.speed}` : ""}
-                        {task.eta ? ` | ETA ${task.eta}` : ""}
-                      </span>
-                      <span>
-                        {task.status === "pending" ? (
-                          <button
-                            type="button"
-                            className="toolbar-button"
-                            onClick={async () => {
-                              const res = await window.cofinder.transfer.cancel({ taskId: task.id });
-                              if (!res.ok) setQueueError(res.error.message);
-                            }}
-                          >
-                            Cancel
-                          </button>
-                        ) : null}
-                        {task.status === "running" ? (
-                          <button
-                            type="button"
-                            className="toolbar-button"
-                            onClick={async () => {
-                              const res = await window.cofinder.transfer.stop({ taskId: task.id });
-                              if (!res.ok) setQueueError(res.error.message);
-                            }}
-                          >
-                            Stop
-                          </button>
-                        ) : null}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-              {queuePanelState === "autoHidePending" ? (
-                <div className="queue-footnote">All tasks completed. Auto-hiding in 10 seconds.</div>
-              ) : null}
+  return (
+    <div className={uiShell === "v12" ? "app-shell app-shell--v12" : "app-shell"}>
+      {uiShell === "v11" ? (
+        <>
+          <header className="top-bar">
+            <div className="title-group">
+              <strong>CoFinder</strong>
             </div>
-          )}
-        </section>
+            <div className="top-version" aria-label="App version">
+              Version {appVersion}
+            </div>
+          </header>
+          {tabBar}
+        </>
       ) : null}
+      {uiShell === "v11" ? (
+        <main className="pane-layout">
+          {localPaneEl}
+          <section className="splitter" />
+          {remotePaneEl}
+        </main>
+      ) : (
+        <AppShellV12
+          titleTabs={tabBar}
+          banner={null}
+          toolbar={v12Toolbar!}
+          devHint={import.meta.env.DEV ? <V12ProdDevHint /> : null}
+          drawer={queueV12Drawer}
+          localPane={localPaneEl}
+          remotePane={remotePaneEl}
+          sidebar={
+            <V12LocalFavoritesSidebar
+              favorites={v12LocalFavorites}
+              currentLocalPath={localPane.currentPath || "/"}
+              hint={v12FavoriteHint}
+              onSelectFavorite={(path) => {
+                setActivePane("local");
+                clearLocalSelection(activeTab.id);
+                cancelV12LocalInspRevealTimer();
+                setV12LocalInspectorReveal(false);
+                void navigateLocal(activeTab.id, path, "push");
+              }}
+              onAddCurrentPath={() => void handleV12AddLocalFavorite()}
+              onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
+              onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
+            />
+          }
+        />
+      )}
+      {uiShell === "v11" ? queueV11Section : null}
       {contextMenu ? (
         <div
           className="context-menu"
@@ -2472,6 +3335,17 @@ function getEntryNameFromPath(fullPath: string): string {
   const normalized = fullPath.replace(/\/+$/, "");
   const parts = normalized.split("/").filter(Boolean);
   return parts[parts.length - 1] ?? fullPath;
+}
+
+function localPaneTitleFromPath(absolutePath: string): string {
+  const n = (absolutePath || "").replace(/\/+/g, "/").trim() || "/";
+  if (n === "/") return "Macintosh HD";
+  const base = getEntryNameFromPath(n);
+  return base && base !== "/" ? base : "Macintosh HD";
+}
+
+function formatKindV12(entry: LocalFileEntry | RemoteFileEntry): string {
+  return entry.type === "directory" ? "Folder" : "Document";
 }
 
 function createLocalPaneState(): LocalPaneState {

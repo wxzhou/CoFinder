@@ -1,4 +1,4 @@
-# CoFinder Release Checklist (V1.1 M6)
+# CoFinder Release Checklist
 
 ## Preflight
 
@@ -6,6 +6,13 @@
 - `npm run build`
 - `npm run package`
 - `npm run dist`
+
+## V1.2 v12 shell (required)
+
+- Confirm **default UI is V1.2** (open packaged app with no env/query overrides → Finder shell / `AppShellV12`).
+- Run the **V1.2** subsection of `docs/smoke-test.md` on that default build.
+- With **legacy** (`COFINDER_LEGACY_UI=1` or `?ui=v11`), confirm classic layout still works and **V1.1 baseline** smoke sections pass.
+- Confirm v12-scoped styles stay under `.cfv12-root` / v12 class prefixes where intended.
 
 ## Packaged App Smoke
 
@@ -30,8 +37,8 @@
 - Run:
   - `npm run check:secrets -- --user-data "$HOME/Library/Application Support/CoFinder"`
 
-## Regression Gates (M6)
+## Regression gates
 
-- `npm test` passes with selection and quick look regression coverage.
+- `npm test` passes (selection, Quick Look guards, v12 helpers as applicable).
 - `npm run build` passes without IPC contract regressions.
 - `npm run package` completes and packaged app launches.

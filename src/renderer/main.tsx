@@ -1,10 +1,26 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { App } from "./App";
+import { V12UiMockup } from "./mockups/V12UiMockup";
+import { getRendererUiMode } from "./uiMode";
 import "./styles.css";
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+const uiMode = getRendererUiMode({
+  search: window.location.search,
+  isDev: import.meta.env.DEV,
+  viteLegacyUi: import.meta.env.VITE_COFINDER_LEGACY_UI === "1"
+});
+
+const root = (
   <React.StrictMode>
-    <App />
+    {uiMode === "mockup-v12" ? (
+      <V12UiMockup />
+    ) : uiMode === "shell-v12" ? (
+      <App uiShell="v12" />
+    ) : (
+      <App uiShell="v11" />
+    )}
   </React.StrictMode>
 );
+
+ReactDOM.createRoot(document.getElementById("root")!).render(root);
