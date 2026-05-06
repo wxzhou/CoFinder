@@ -2,7 +2,30 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-Current app version: `0.3.0`.
+Current app version: `0.3.0` (semver **v0.3.0**).
+
+## Versioning
+
+CoFinder uses two parallel naming schemes:
+
+- **Product milestone** (V1, V1.1, V1.2, …): labels for development phases and plan documents (`docs/dev/V1.*_PLAN.md`, `docs/roadmap.md`). They do **not** equal the numeric field in `package.json`.
+- **Release version** (semver): what ships in `package.json`, git tags, GitHub Releases, and packaged macOS artifacts (e.g. **v0.3.0**, **v0.4.0**). **CHANGELOG.md** is organized by release version.
+
+Past releases are **not** retroactively re-tagged. Product milestone **V1.2** shipped as **`v0.3.0`**; the scheme below is the intended mapping forward.
+
+| Product milestone | Release version / tag | Status |
+| --- | --- | --- |
+| V1 | v0.1.0 | Shipped |
+| V1.1 | v0.2.0 | Shipped |
+| V1.2 | v0.3.0 | Shipped |
+| V1.3 | v0.4.0 | Planned |
+| V1.4 | v0.5.0 | Planned |
+| V1.5 | v0.6.0 | Planned |
+| V1.6 | v0.7.0 | Planned |
+| V1.7 | v0.8.0 | Planned |
+| V1.8 | v0.9.0 | Planned |
+| V1.9 | v0.10.0 | Planned |
+| V2.0 | v1.0.0 | Planned stable release |
 
 ## V1 Status
 
