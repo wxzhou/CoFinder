@@ -43,6 +43,9 @@ describe("ProfileRepository", () => {
     expect(saved.hasSavedPassword).toBeUndefined();
     expect(saved.passphrase).toBeUndefined();
     expect(saved.privateKeyContent).toBeUndefined();
+
+    const st = await fs.stat(filePath);
+    expect(st.mode & 0o777).toBe(0o600);
   });
 
   it("returns empty list on corrupted JSON and does not throw", async () => {

@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ServerProfile } from "../../shared/types/models";
+import { writePrivateUtf8File } from "../security/privateAtomicWrite";
 
 type ProfilesFileV1 = {
   version: 1;
@@ -94,10 +95,7 @@ export class ProfileRepository {
       version: 1,
       profiles: profiles.map(stripForDisk)
     };
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    const tmp = `${this.filePath}.tmp`;
-    await fs.writeFile(tmp, `${JSON.stringify(disk, null, 2)}\n`, "utf8");
-    await fs.rename(tmp, this.filePath);
+    await writePrivateUtf8File(this.filePath, `${JSON.stringify(disk, null, 2)}\n`);
   }
 
   async upsert(profile: ServerProfile): Promise<void> {

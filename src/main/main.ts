@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 import { registerIpcHandlers, shutdownMainProcessResources } from "./ipc/registerIpcHandlers";
+import { redactSensitiveStructured } from "./security/redactSensitive";
 
 const isDev = !app.isPackaged;
 const debugPackaged = process.env.COFINDER_DEBUG === "1";
@@ -111,10 +112,11 @@ app.on("will-quit", (event) => {
 
 function logBoot(message: string, payload?: Record<string, unknown>): void {
   const prefix = "[CoFinder:main]";
-  if (payload) console.info(prefix, message, payload);
+  const safePayload = payload ? (redactSensitiveStructured(payload) as Record<string, unknown>) : undefined;
+  if (safePayload) console.info(prefix, message, safePayload);
   else console.info(prefix, message);
   try {
-    const line = `${new Date().toISOString()} ${prefix} ${message}${payload ? ` ${JSON.stringify(payload)}` : ""}\n`;
+    const line = `${new Date().toISOString()} ${prefix} ${message}${safePayload ? ` ${JSON.stringify(safePayload)}` : ""}\n`;
     const userDataPath = safeGetUserDataPath();
     fs.mkdirSync(userDataPath, { recursive: true });
     fs.appendFileSync(path.join(userDataPath, "main.log"), line, "utf8");

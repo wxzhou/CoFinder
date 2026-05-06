@@ -1,6 +1,7 @@
 import path from "node:path";
 import { posix as posixPath } from "node:path";
 import type { IpcFailureResponse, IpcResponse, RemoteErrorCode } from "../../shared/types/ipc";
+import { redactSensitivePlaintext } from "../security/redactSensitive";
 
 export class AppError extends Error {
   constructor(
@@ -20,7 +21,9 @@ export function ok<T>(data: T): IpcResponse<T> {
 }
 
 export function fail(code: RemoteErrorCode, message: string, detail?: string): IpcFailureResponse {
-  return { ok: false, error: { code, message, detail } };
+  const safeDetail =
+    detail === undefined ? undefined : redactSensitivePlaintext(detail.length > 500 ? detail.slice(0, 500) : detail);
+  return { ok: false, error: { code, message, detail: safeDetail } };
 }
 
 export function toIpcError(error: unknown, fallbackCode: RemoteErrorCode, fallbackMessage: string): IpcFailureResponse {
@@ -102,8 +105,8 @@ export function normalizeRemotePathInput(value: unknown, code: RemoteErrorCode, 
 
 function safeDetail(detail: unknown): string | undefined {
   if (detail === undefined || detail === null) return undefined;
-  const text = String(detail);
-  return text.slice(0, 500);
+  const text = String(detail).slice(0, 500);
+  return redactSensitivePlaintext(text);
 }
 
 function mapErrorCode(rawCode: string, fallbackCode: RemoteErrorCode): RemoteErrorCode {

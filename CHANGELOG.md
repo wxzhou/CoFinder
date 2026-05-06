@@ -2,9 +2,15 @@
 
 ## Versioning note
 
-- This file is organized by **semver release version** (e.g. **v0.3.0**).
-- **Product milestone** names (V1, V1.1, V1.2, …) appear in section titles only as phase context; see **README.md** for the full milestone ↔ release mapping.
-- Shipped today: **V1.2** ↔ **v0.3.0**. Next planned phase: **V1.3** targeting **v0.4.0**.
+- This file is organized by **semver release version** once a version is **tagged/shipped**.
+- **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
+- **Latest shipped release: v0.3.0.** The repo may temporarily use **`package.json` 0.4.0** during development so local **`npm run build` / `npm run dist`** does not overwrite the **v0.3.0** release identity—do **not** treat that as shipped until **v0.4.0** is tagged and this file gains a **`## v0.4.0`** section.
+
+## Unreleased
+
+**Target:** v0.4.0 / product milestone **V1.3** (draft notes—not shipped).
+
+- Security/runtime hardening (on branch): Electron **37.x**, **0o600** writes for **`profiles.json`** / **`credentials.enc.json`**, IPC **`error.detail`** + **`logBoot`** redaction (`password`, `passphrase`, `privateKey`, `token`), transfer failure detail scrubbing (`docs/security.md`).
 
 ## v0.3.0 — Product milestone V1.2
 

@@ -13,7 +13,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1 | v0.1.0 | Shipped |
 | V1.1 | v0.2.0 | Shipped |
 | V1.2 | v0.3.0 | Shipped |
-| V1.3 | v0.4.0 | Planned |
+| V1.3 | v0.4.0 | Planned (dev tree may already bump `package.json`; not shipped until tagged) |
 | V1.4 | v0.5.0 | Planned |
 | V1.5 | v0.6.0 | Planned |
 | V1.6 | v0.7.0 | Planned |
@@ -42,7 +42,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 
 | Phase | Release | Theme |
 | --- | --- | --- |
-| V1.3 | v0.4.0 | Interaction Efficiency & Layout Control |
+| V1.3 | v0.4.0 | Interaction Efficiency & Layout Control (+ security hardening on branch; see CHANGELOG **Unreleased**) |
 | V1.4 | v0.5.0 | Transfer Safety & Conflict Handling |
 | V1.5 | v0.6.0 | Drag-and-Drop Transfer & Selection |
 | V1.6 | v0.7.0 | Preferences MVP |

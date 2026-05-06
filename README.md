@@ -2,16 +2,16 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-Current app version: `0.3.0` (semver **v0.3.0**).
+**`package.json` version:** `0.4.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.3.0** (tags, GitHub Release, user-facing “what’s out”).
 
 ## Versioning
 
 CoFinder uses two parallel naming schemes:
 
 - **Product milestone** (V1, V1.1, V1.2, …): labels for development phases and plan documents (`docs/dev/V1.*_PLAN.md`, `docs/roadmap.md`). They do **not** equal the numeric field in `package.json`.
-- **Release version** (semver): what ships in `package.json`, git tags, GitHub Releases, and packaged macOS artifacts (e.g. **v0.3.0**, **v0.4.0**). **CHANGELOG.md** is organized by release version.
+- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.4.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
 
-Past releases are **not** retroactively re-tagged. Product milestone **V1.2** shipped as **`v0.3.0`**; the scheme below is the intended mapping forward.
+Past releases are **not** retroactively re-tagged. Product milestone **V1.2** shipped as **`v0.3.0`**; **V1.3** is planned to ship as **`v0.4.0`** when ready.
 
 | Product milestone | Release version / tag | Status |
 | --- | --- | --- |
@@ -31,7 +31,7 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.2** sh
 
 - **V1 is complete.**
 - **V1.1 is complete** (shipped in the 0.2.x line).
-- **V1.2 shell (M1–M6) is complete** as the **default** UI — see **Implemented in V1.2** below. App release line for that work: **0.3.0** (see CHANGELOG).
+- **V1.2 shell (M1–M6) is complete** as the **default** UI — see **Implemented in V1.2** below. Shipped as **v0.3.0** (see CHANGELOG).
 
 ### Implemented in V1.2
 
