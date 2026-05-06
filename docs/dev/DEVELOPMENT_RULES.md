@@ -1,13 +1,14 @@
-# CoFinder Development Rules (V1.1)
+# CoFinder Development Rules
 
 ## Primary Goal
 
-Ship V1.1 in controlled milestones without regressing V1 behavior.
+Ship CoFinder milestone-by-milestone. Each change set should implement only the current milestone scope, preserve shipped behavior, and avoid opportunistic rewrites.
 
 ## Mandatory Rules
 
 - Work milestone-by-milestone; do not mix multiple milestones in one PR.
-- Do not introduce V1.1 features outside the current milestone scope.
+- Do not introduce features outside the current milestone scope.
+- Do not pull in features from later milestones unless the current plan explicitly requires them.
 - No unrelated refactor, formatting sweep, or folder reshuffle.
 - Keep existing architecture boundaries (`renderer -> preload -> IPC -> service`).
 - Preserve IPC response contract: `{ ok, data }` / `{ ok, error }`.
@@ -23,7 +24,7 @@ Ship V1.1 in controlled milestones without regressing V1 behavior.
 
 ## Destructive Action Guardrails
 
-For delete/rename style operations (especially V1.1 M1/M2/M3):
+For delete, rename, overwrite, move, transfer conflict resolution, or any operation that may modify or replace user data:
 
 - Require explicit user intent from UI interaction.
 - Validate target path and identity in main process.
@@ -65,7 +66,9 @@ If tests fail:
 
 ## UI/UX Stability Rules
 
-- Do not redesign UI layout as part of V1.1 feature work unless milestone explicitly says so.
+- Do not redesign UI layout unless the current milestone explicitly requires it.
+- Preserve V12 default UI behavior.
+- Do not break legacy UI entry points unless the current milestone explicitly removes them.
 - Keep existing keyboard/multi-select/context menu behavior working.
 - Keep tab isolation and queue visibility rules unchanged unless milestone explicitly changes them.
 
@@ -75,5 +78,15 @@ For each completed milestone:
 
 - Update `README.md` feature/support notes if externally visible behavior changed.
 - Update `docs/smoke-test.md` checklist for new behavior.
-- Update `docs/dev/V1.1_PLAN.md` milestone status and risk notes.
+- Update the active `docs/dev/V*.md` plan when milestone status, scope, risk notes, or acceptance criteria change.
 
+## Milestone-Scoped Development Contract
+
+When asked to implement `Vx.y Mz`, the assistant or coding agent must:
+
+- Read the corresponding `docs/dev/Vx.y_PLAN.md`.
+- Implement only the requested milestone.
+- Treat later milestones as non-goals.
+- Prefer reuse over rewrites.
+- Avoid unrelated refactors, dependency additions, formatting sweeps, and architecture changes.
+- Report files changed, acceptance points implemented, acceptance points not implemented, smoke-test steps, legacy UI impact, IPC changes, dependency changes, and documentation updates.
