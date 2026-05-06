@@ -2,48 +2,29 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-Current app version: `0.2.0`.
+Current app version: `0.3.0`.
 
 ## V1 Status
 
-- **V1 is complete.** Current milestone: **M5 completed (release hardening + packaging + documentation)**
-- **V1.1 is complete.** Current milestone: **M6 completed (hardening + docs + release verification)**
+- **V1 is complete.**
+- **V1.1 is complete** (shipped in the 0.2.x line).
+- **V1.2 shell (M1–M6) is complete** as the **default** UI — see **Implemented in V1.2** below. App release line for that work: **0.3.0** (see CHANGELOG).
 
-### Implemented in V1.1 (ongoing)
+### Implemented in V1.2
 
-- **M1 — rename (local + remote):**
-  - Context menu `Rename` for local and remote file lists
-  - In-place (inline) rename editing in the list row (no popup dialog)
-  - Enter to submit, Escape to cancel, blur to submit
-  - Finder/Explorer-style delayed second click on selected item to trigger inline rename
-  - Main-process IPC + validation for `local:rename` and `remote:rename`
-- **M2 — delete (local + remote):**
-  - Context menu `Delete` for local and remote file lists
-  - Supports single and multi-selection delete requests
-  - Explicit confirmation dialog before destructive action
-  - Main-process IPC + validation for `local:delete` and `remote:delete`
-  - Local recursive delete + remote recursive delete with stable error mapping
-- **M3 — properties / Get Info (local + remote):**
-  - Context menu `Get Info` for local and remote file lists (single selection)
-  - Read-only metadata dialog (name, full path, type, size, modified time, permissions, owner, group)
-  - Human-readable permissions format (`rwxrwxrwx`) for local and remote entries
-  - Robust remote type resolution (`file` / `directory` / `symlink`) from varied SFTP `stat` responses
-  - For directories, dialog opens immediately and size is calculated asynchronously with a loading spinner
-- **M4 — macOS-style UI polish A:**
-  - Clear active pane visual highlight for keyboard-selection context
-  - Stronger row selection contrast while preserving current selection behavior
-  - Improved transfer queue status readability with status chips
-  - Improved context menu spacing/readability (no behavior changes)
-- **M5 — Quick Look MVP:**
-  - Context menu `Quick Look` action for local and remote panes
-  - Local single-file preview via macOS Quick Look (`qlmanage -p`) through main-process IPC
-  - Optional `Space` shortcut to trigger Quick Look for current local single selection
-  - Explicit fallback message for remote Quick Look (not supported in M5)
-- **M6 — hardening + docs + release verification:**
-  - Regression hardening for selection behavior (blank-area clear selection + stable Shift range semantics)
-  - Added focused regression tests for selection and quick look guardrails
-  - Updated smoke and release checklists to match shipped V1.1 behavior
-  - Completed full verification flow (`npm test`, `npm run build`, packaging checks)
+- Finder-first production shell (`AppShellV12`) for real local/remote browsing, path chrome, and tab strip — **default** in dev and packaged builds (`src/renderer/uiMode.ts`, `src/renderer/main.tsx`, `src/main/main.ts`). **Legacy classic UI:** renderer URL **`?ui=v11`** or **`?legacy=1`**, or **`COFINDER_LEGACY_UI=1`** (Electron main, runtime), or **`VITE_COFINDER_LEGACY_UI=1`** at build time. **`COFINDER_V12_MOCKUP=1`** is still the static `?mockup=v12` mockup only (dev).
+- **M6 default:** V1.2 shell is the default; classic UI is opt-in legacy only.
+- Per-pane inspector, embedded remote connect (shared connect path with Site Manager), toolbar and compact transfer drawer wired to existing V1.1 handlers; v12-scoped CSS polish and docs (`docs/dev/V1.2_PLAN.md`, `docs/smoke-test.md`, `docs/release-checklist.md`).
+
+Regression for the default shell: run the **V1.2** subsection in `docs/smoke-test.md`, then the overlapping **V1.1** sections (transfers, selection, Site Manager, Quick Look). For classic UI parity, repeat with **`?ui=v11`** or **`COFINDER_LEGACY_UI=1`**.
+
+### Implemented in V1.1
+
+- Inline rename (local + remote) and delete with confirmation
+- Get Info (local + remote) including async directory size where applicable
+- macOS-style UI polish (active pane, selection contrast, queue status chips, context menu spacing)
+- Quick Look for local files (context menu + `Space`); explicit unsupported path for remote
+- Selection hardening, regression tests, and smoke/release checklist updates
 
 ### Implemented in V1
 
@@ -59,7 +40,7 @@ Current app version: `0.2.0`.
 - **M5 — packaging:** `electron-builder` (macOS dmg + zip), `npm run package` / `npm run dist`, artifacts under `release/`
 - **M5 — documentation:** `docs/smoke-test.md`, `docs/release-checklist.md`, `docs/security.md`, `docs/roadmap.md`; `npm run check:secrets`
 
-### Not Supported in V1
+### Not Supported in V1-1.2
 
 - Remote edit auto-sync workflow
 - Quick Look for remote files
@@ -111,6 +92,8 @@ npm run dist      # dmg + zip
 ```
 
 Build artifacts are generated under `release/`.
+
+**App icons:** `assets/icon/icon.icns` is used for the packaged `.app` / `.dmg` / `.zip` (see `electron-builder.yml`). `assets/icon/icon.png` is copied into `Resources` for `BrowserWindow` (`src/main/main.ts`). To regenerate both from the archived source PNG on macOS: `./scripts/gen-mac-app-icons.sh` (uses `sips` + `iconutil`, no extra npm deps).
 
 Production renderer uses **relative asset URLs** (`vite` `base: './'`) so `loadFile()` from inside `app.asar` resolves JS/CSS correctly (avoids packaged white screen from `/assets/...` on `file://`).
 

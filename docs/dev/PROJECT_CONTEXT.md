@@ -20,6 +20,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 - Remote pane SFTP connect/list/disconnect/history.
 - Site Manager modal (profiles CRUD + login entry).
 - Profile persistence in `profiles.json`; credentials in `credentials.enc.json`.
+- v12 local sidebar favorites in `local-sidebar-favorites.json` under userData (`custom`, optional `hiddenDefaultIds`; `localFavorites:*` IPC).
 - Multi-tab isolation for local/remote pane state.
 - Global serial transfer queue (upload/download via `rsync`).
 - Multi-select (`Cmd`/`Shift` click + `Cmd/Ctrl+A`) and context menus.

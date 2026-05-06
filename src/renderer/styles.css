@@ -44,6 +44,16 @@ body,
   background: var(--bg-app);
 }
 
+.app-shell--v12 {
+  min-height: 0;
+}
+
+.app-shell--v12 > .cfv12-root {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+}
+
 .top-bar {
   display: flex;
   justify-content: space-between;

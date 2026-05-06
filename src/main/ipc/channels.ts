@@ -30,6 +30,12 @@ export const IPC_CHANNELS = {
     get: "settings:get",
     set: "settings:set"
   },
+  localFavorites: {
+    list: "localFavorites:list",
+    add: "localFavorites:add",
+    remove: "localFavorites:remove",
+    resetDefaults: "localFavorites:resetDefaults"
+  },
   profiles: {
     list: "profiles:list",
     save: "profiles:save",

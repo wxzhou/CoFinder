@@ -1,0 +1,117 @@
+import type { ReactElement } from "react";
+import type { TransferTask } from "../../shared/types/models";
+import { formatTransferTaskMetaLine } from "./v12TransferRowSummary";
+
+export type V12DrawerQueueState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
+
+export type V12TransferDrawerProps = {
+  state: V12DrawerQueueState;
+  pinned: boolean;
+  error: string;
+  tasks: TransferTask[];
+  summary: string;
+  onToggleExpand: () => void;
+  onTogglePin: () => void;
+  onClearCompleted: () => void;
+  onCancelTask: (taskId: string) => void | Promise<void>;
+  onStopTask: (taskId: string) => void | Promise<void>;
+};
+
+export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
+  const expanded = props.state === "expanded" || props.state === "autoHidePending";
+
+  return (
+    <div className={`v12m-drawer ${expanded ? "is-open" : "is-collapsed"}`}>
+      <div
+        className="v12m-drawer-bar"
+        role="button"
+        tabIndex={0}
+        aria-expanded={expanded}
+        onClick={() => props.onToggleExpand()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            props.onToggleExpand();
+          }
+        }}
+      >
+        <span className="v12m-drawer-title">Transfers</span>
+        <span className="v12m-drawer-sum">{props.summary}</span>
+        <button
+          type="button"
+          className="v12m-drawer-chev"
+          onClick={(event) => {
+            event.stopPropagation();
+            props.onToggleExpand();
+          }}
+        >
+          {expanded ? "Hide" : "Show"}
+        </button>
+      </div>
+      {expanded ? (
+        <div className="v12m-drawer-panel">
+          <div className="v12m-tq-panel">
+            <div className="v12m-tq-head">
+              <div className="v12m-tq-head-titles">
+                <strong className="v12m-tq-head-title">Transfer queue</strong>
+                <span className="v12m-tq-head-sum">{props.summary}</span>
+              </div>
+              <div className="v12m-tq-head-actions">
+                <button type="button" className="v12m-tq-btn" onClick={() => props.onToggleExpand()}>
+                  Minimize
+                </button>
+                <button
+                  type="button"
+                  className={`v12m-tq-btn${props.pinned ? " is-on" : ""}`}
+                  onClick={() => props.onTogglePin()}
+                >
+                  {props.pinned ? "Pinned" : "Pin"}
+                </button>
+                <button type="button" className="v12m-tq-btn" onClick={() => props.onClearCompleted()}>
+                  Clear
+                </button>
+              </div>
+            </div>
+            {props.error ? <div className="cfv12p-error v12m-tq-err">{props.error}</div> : null}
+            <div className="v12m-tq-list">
+              {props.tasks.length === 0 ? (
+                <div className="v12m-tq-empty">No transfer tasks.</div>
+              ) : (
+                props.tasks.map((task) => (
+                  <div
+                    key={task.id}
+                    className={`v12m-tq-row${task.status === "running" ? " v12m-tq-row--running" : ""}`}
+                  >
+                    <div className="v12m-tq-row-main">
+                      <span className={`v12m-tq-badge v12m-tq-badge--${task.status}`}>{task.status}</span>
+                      <span className="v12m-tq-dir">{task.direction}</span>
+                      <span className="v12m-tq-path" title={`${task.sourceDisplay} → ${task.destinationDisplay}`}>
+                        {task.sourceDisplay} → {task.destinationDisplay}
+                      </span>
+                    </div>
+                    <div className="v12m-tq-row-meta">{formatTransferTaskMetaLine(task)}</div>
+                    <div className="v12m-tq-row-actions">
+                      {task.status === "pending" ? (
+                        <button type="button" className="v12m-tq-act" onClick={() => void props.onCancelTask(task.id)}>
+                          Cancel
+                        </button>
+                      ) : null}
+                      {task.status === "running" ? (
+                        <button type="button" className="v12m-tq-act" onClick={() => void props.onStopTask(task.id)}>
+                          Stop
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            {props.state === "autoHidePending" ? (
+              <div className="v12m-tq-foot">All tasks completed. Auto-hiding in 10 seconds.</div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}

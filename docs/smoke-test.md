@@ -1,6 +1,23 @@
-# CoFinder Smoke Test Checklist (V1.1 M6)
+# CoFinder Smoke Test Checklist
 
 Use this checklist before a release candidate. Prefer an isolated test workspace.
+
+## V1.2 Finder shell (default) — M6
+
+**Acceptance:** plain `npm run dev` and packaged app with **no** env vars load this shell (`getRendererUiMode` → `shell-v12`). Core file operations should match V1.1; this section only highlights shell-specific checks.
+
+**Legacy classic UI:** use **`?ui=v11`**, **`?legacy=1`**, **`COFINDER_LEGACY_UI=1`**, or a build with **`VITE_COFINDER_LEGACY_UI=1`** — then run overlapping **V1.1 baseline** checks below for parity.
+
+- **Layout:** sidebar, toolbar, tab strip, dual panes, bottom transfer drawer render without overlap; inactive pane reads visually cooler than the focused pane.
+- **Toolbar:** back / forward / up / refresh follow the **focused** pane; plug opens Site Manager when disconnected and **disconnects** when connected; upload/download/delete/Get Info / inspector toggle match enabled states of the classic panes.
+- **Remote (M4):** disconnected pane shows embedded connect + profile list + **Open Site Manager**; connect and failures surface in-pane; connected list matches M2 behavior.
+- **Inspector (M3):** single-click selection timing, double-click folder navigation, Cmd/Ctrl+A immediate reveal — no inspector flash regressions.
+- **Transfers (M5):** enqueue from context menu or toolbar; drawer shows live tasks, **Pin** / **Clear** / expand; cancel pending / stop running.
+- **Then:** run **Local / Remote / Tabs / Transfer / Multi-select / Quick Look / Selection regression** sections below on the same v12 session (behavior must match V1.1).
+
+## V1.1 baseline (still required for classic UI and v12 parity)
+
+The following sections were written for **V1.1 M6**; they remain the functional baseline.
 
 ## Test Workspace
 
