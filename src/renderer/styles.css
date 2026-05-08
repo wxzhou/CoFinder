@@ -798,6 +798,16 @@ body,
   font-size: 12px;
   text-align: left;
   padding: 0 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.context-shortcut {
+  color: var(--text-tertiary);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .context-item:hover {

@@ -18,6 +18,8 @@ type CacheEntry = {
   localPath: string;
   size: number;
   modifyTime: number;
+  localSize: number;
+  localMtimeMs: number;
   kind: PreviewKind;
 };
 
@@ -62,7 +64,12 @@ export class RemotePreviewService {
 
     const key = this.cacheKey(request.tabId, request.connectionId, request.remotePath);
     const existing = this.entries.get(key);
-    if (existing && existing.size === size && existing.modifyTime === modifyTime && (await exists(existing.localPath))) {
+    if (
+      existing &&
+      existing.size === size &&
+      existing.modifyTime === modifyTime &&
+      (await cacheFileStillMatches(existing))
+    ) {
       await openLocalPreview(existing.localPath);
       return { opened: true, localPath: existing.localPath, kind: existing.kind };
     }
@@ -78,6 +85,8 @@ export class RemotePreviewService {
     if (existing?.localPath && existing.localPath !== localPath) {
       await fs.unlink(existing.localPath).catch(() => {});
     }
+    await makeCachedPreviewReadOnly(localPath);
+    const localStat = await fs.stat(localPath);
     this.entries.set(key, {
       tabId: request.tabId,
       connectionId: request.connectionId,
@@ -85,6 +94,8 @@ export class RemotePreviewService {
       localPath,
       size,
       modifyTime,
+      localSize: localStat.size,
+      localMtimeMs: localStat.mtimeMs,
       kind
     });
     await openLocalPreview(localPath);
@@ -109,6 +120,7 @@ export class RemotePreviewService {
       if (!predicate(entry)) continue;
       this.entries.delete(key);
       cleared += 1;
+      await makeCachePathWritable(entry.localPath).catch(() => {});
       await fs.unlink(entry.localPath).catch(() => {});
     }
     return cleared;
@@ -122,6 +134,7 @@ export class RemotePreviewService {
     const tabHash = safeHash(tabId).slice(0, 12);
     const dir = path.join(this.cacheRoot, "remote-preview", tabHash);
     await fs.mkdir(dir, { recursive: true });
+    await fs.chmod(dir, 0o755).catch(() => {});
     const base = sanitizeFileName(path.posix.basename(remotePath) || "remote-file");
     return path.join(dir, `${safeHash(remotePath).slice(0, 16)}-${randomUUID().slice(0, 8)}-${base}`);
   }
@@ -182,13 +195,23 @@ async function openLocalPreview(localPath: string): Promise<void> {
   if (result) throw new RemotePreviewError("REMOTE_PREVIEW_FAILED", "Failed to open local preview file.", result);
 }
 
-async function exists(localPath: string): Promise<boolean> {
+async function cacheFileStillMatches(entry: CacheEntry): Promise<boolean> {
   try {
-    await fs.access(localPath);
-    return true;
+    const stat = await fs.stat(entry.localPath);
+    return stat.size === entry.localSize && Math.abs(stat.mtimeMs - entry.localMtimeMs) < 1;
   } catch {
     return false;
   }
+}
+
+async function makeCachedPreviewReadOnly(localPath: string): Promise<void> {
+  await fs.chmod(localPath, 0o444).catch(() => {});
+  await fs.chmod(path.dirname(localPath), 0o555).catch(() => {});
+}
+
+async function makeCachePathWritable(localPath: string): Promise<void> {
+  await fs.chmod(path.dirname(localPath), 0o755).catch(() => {});
+  await fs.chmod(localPath, 0o644).catch(() => {});
 }
 
 function safeHash(input: string): string {

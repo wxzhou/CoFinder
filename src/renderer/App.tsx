@@ -296,6 +296,24 @@ export function App(props: AppProps = {}) {
       if (isQuickLook) {
         if (contextMenu) return;
         if (isEditableTarget(document.activeElement)) return;
+        if (activePane === "remote") {
+          setTabs((prev) =>
+            prev.map((item) =>
+              item.id === activeTab.id
+                ? {
+                    ...item,
+                    remotePane: {
+                      ...item.remotePane,
+                      error: "Remote Quick Look is not implemented yet. Double-click a remote file or use Open for read-only preview."
+                    }
+                  }
+                : item
+            )
+          );
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         void quickLookSelection(activeTab.id, activePane);
         event.preventDefault();
         event.stopPropagation();
@@ -1353,13 +1371,7 @@ export function App(props: AppProps = {}) {
       if (tab.remotePane.connectionId) await listRemotePath(tab.remotePane.connectionId, entry.fullPath, "push", tabId);
       return;
     }
-    setTabs((prev) =>
-      prev.map((item) =>
-        item.id === tabId
-          ? { ...item, remotePane: { ...item.remotePane, error: "Remote file open/edit will be implemented later." } }
-          : item
-      )
-    );
+    await previewRemotePath(tabId, entry.fullPath);
   }
 
   async function enqueueUpload(tabId: string): Promise<void> {
@@ -1929,7 +1941,19 @@ export function App(props: AppProps = {}) {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (pane === "remote") {
-      await previewRemoteSelection(tabId);
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId
+            ? {
+                ...item,
+                remotePane: {
+                  ...item.remotePane,
+                  error: "Remote Quick Look is not implemented yet. Double-click a remote file or use Open for read-only preview."
+                }
+              }
+            : item
+        )
+      );
       return;
     }
     const selected = tab.localPane.selectedFullPaths;
@@ -2315,10 +2339,16 @@ export function App(props: AppProps = {}) {
     const tab = tabs.find((item) => item.id === tabId);
     const target = tab?.remotePane.selectedFullPaths[0];
     if (!tab?.remotePane.connectionId || !target || tab.remotePane.selectedFullPaths.length !== 1) return;
+    await previewRemotePath(tabId, target);
+  }
+
+  async function previewRemotePath(tabId: string, remotePath: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId) return;
     const res = await window.cofinder.remote.previewOpen({
       tabId,
       connectionId: tab.remotePane.connectionId,
-      path: target
+      path: remotePath
     });
     if (!res.ok) {
       setTabs((prev) =>
@@ -3204,6 +3234,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Rename
+                <span className="context-shortcut">F2</span>
               </button>
               <button
                 type="button"
@@ -3215,6 +3246,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Delete
+                <span className="context-shortcut">Del</span>
               </button>
               <button
                 type="button"
@@ -3226,6 +3258,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Get Info
+                <span className="context-shortcut">⌘I</span>
               </button>
               <button
                 type="button"
@@ -3267,6 +3300,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Upload
+                <span className="context-shortcut">⌘U</span>
               </button>
               <button
                 type="button"
@@ -3303,6 +3337,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Copy Full Path
+                <span className="context-shortcut">⌘⇧C</span>
               </button>
               <button
                 type="button"
@@ -3314,10 +3349,23 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Refresh
+                <span className="context-shortcut">⌘R</span>
               </button>
             </>
           ) : (
             <>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await previewRemoteSelection(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Open
+                <span className="context-shortcut">double-click</span>
+              </button>
               <button
                 type="button"
                 className="context-item"
@@ -3331,6 +3379,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Download
+                <span className="context-shortcut">⌘D</span>
               </button>
               <button
                 type="button"
@@ -3342,17 +3391,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Delete
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await previewRemoteSelection(contextMenu.tabId);
-                  setContextMenu(null);
-                }}
-              >
-                Preview Remote File
+                <span className="context-shortcut">Del</span>
               </button>
               <button
                 type="button"
@@ -3364,6 +3403,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Get Info
+                <span className="context-shortcut">⌘I</span>
               </button>
               <button
                 type="button"
@@ -3375,6 +3415,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Rename
+                <span className="context-shortcut">F2</span>
               </button>
               <button
                 type="button"
@@ -3395,6 +3436,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Copy Full Path
+                <span className="context-shortcut">⌘⇧C</span>
               </button>
               <button
                 type="button"
@@ -3408,6 +3450,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Refresh
+                <span className="context-shortcut">⌘R</span>
               </button>
             </>
           )}

@@ -26,8 +26,10 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Tab reorder:** drag tabs into a new order; confirm active tab and local/remote pane state stay with the tab.
 - **Local favorites:** add current local folder; rename/reorder/remove it; restore default locations; confirm clicks affect local pane only.
 - **Remote favorites:** connect using a saved profile; add current remote path; rename/reorder/remove it; click a remote favorite and confirm only the remote pane navigates.
-- **Remote preview:** select a remote text file with no obvious text extension and choose `Preview Remote File`; repeat to confirm cached reopen; update the remote file and confirm CoFinder re-downloads before opening. Repeat with a PNG/JPEG/GIF/WebP image. Try a binary file and confirm an unsupported message.
-- **Preview cleanup:** open a remote preview, disconnect or close the tab, and confirm the cache entry is cleared by app behavior (no stale preview reuse after reconnect).
+- **Remote preview:** double-click a remote text file with no obvious text extension, or right-click it and choose `Open`; repeat to confirm cached reopen. Update the remote file and confirm CoFinder re-downloads before opening. Repeat with a PNG/JPEG/GIF/WebP image. Try a binary file and confirm an unsupported message.
+- **Remote Quick Look separation:** press Space on a remote file and confirm it does **not** open the cached preview path; Space remains reserved for future remote Quick Look behavior.
+- **Read-only cache:** after a remote preview opens, attempt to save edits in the local viewer and confirm the cached file behaves as read-only. If you force-edit the cached file outside the app, open the same remote file again and confirm CoFinder re-downloads the remote version instead of showing the local edit.
+- **Preview cleanup:** cache files live under the macOS temp directory in `remote-preview/<tab-hash>/` (for example `find "$(getconf DARWIN_USER_TEMP_DIR)remote-preview" -type f`). Open a remote preview, disconnect or close the tab, and confirm the cache entry is cleared.
 
 ## Test Workspace
 

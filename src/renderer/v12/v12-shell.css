@@ -589,13 +589,9 @@
 }
 
 .cfv12-root .v12m-srow-tools {
-  display: none;
+  display: flex;
   gap: 4px;
   padding-right: 6px;
-}
-
-.cfv12-root .v12m-srow:hover .v12m-srow-tools {
-  display: flex;
 }
 
 .cfv12-root .v12m-srow-tools button {
