@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import type { LocalFavoriteListItem } from "../../shared/localFavorites";
 import { pickActiveFavoriteId } from "../../shared/localFavorites";
+import type { RemoteFavorite } from "../../shared/types/models";
 import { V12Icon } from "./shared/V12Icons";
 
 export type V12LocalFavoritesSidebarProps = {
@@ -11,8 +12,18 @@ export type V12LocalFavoritesSidebarProps = {
   onSelectFavorite: (path: string) => void;
   onAddCurrentPath: () => void;
   onRemoveFavorite: (id: string) => void;
+  onRenameFavorite: (id: string) => void;
+  onReorderFavorite: (id: string, direction: "up" | "down") => void;
   /** Restore Home / Desktop / Downloads / Documents after any were removed. */
   onRestoreDefaults: () => void;
+  remoteFavorites: RemoteFavorite[];
+  remoteConnected: boolean;
+  currentRemotePath: string;
+  onSelectRemoteFavorite: (path: string) => void;
+  onAddCurrentRemotePath: () => void;
+  onRemoveRemoteFavorite: (id: string) => void;
+  onRenameRemoteFavorite: (favorite: RemoteFavorite) => void;
+  onReorderRemoteFavorite: (id: string, direction: "up" | "down") => void;
 };
 
 export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): ReactElement {
@@ -67,6 +78,19 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
               >
                 ×
               </button>
+              {!f.isDefault ? (
+                <span className="v12m-srow-tools">
+                  <button type="button" title="Rename" onClick={() => props.onRenameFavorite(f.id)}>
+                    Rename
+                  </button>
+                  <button type="button" title="Move up" onClick={() => props.onReorderFavorite(f.id, "up")}>
+                    Up
+                  </button>
+                  <button type="button" title="Move down" onClick={() => props.onReorderFavorite(f.id, "down")}>
+                    Down
+                  </button>
+                </span>
+              ) : null}
             </div>
           );
         })}
@@ -84,12 +108,77 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
       </div>
 
       <div className="v12m-ssec v12m-ssec--remote-placeholder">
-        <h3>Remote Favorites</h3>
-        <div className="v12m-srow v12m-srow--disabled" aria-disabled="true">
-          <span className="v12m-srow-label">Coming in V1.3</span>
+        <div className="v12m-ssec-head">
+          <h3>Remote Favorites</h3>
+          <button
+            type="button"
+            className="v12m-ssec-add"
+            title="Add current remote folder"
+            aria-label="Add current remote folder to favorites"
+            disabled={!props.remoteConnected}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              props.onAddCurrentRemotePath();
+            }}
+          >
+            +
+          </button>
         </div>
-        <p className="v12m-ssec-hint">Per-profile remote shortcuts will appear here after you connect.</p>
+        {!props.remoteConnected ? (
+          <>
+            <div className="v12m-srow v12m-srow--disabled" aria-disabled="true">
+              <span className="v12m-srow-label">Connect to a saved profile</span>
+            </div>
+            <p className="v12m-ssec-hint">Per-profile remote shortcuts appear here after you connect.</p>
+          </>
+        ) : props.remoteFavorites.length === 0 ? (
+          <p className="v12m-ssec-hint">No remote favorites for this profile.</p>
+        ) : (
+          props.remoteFavorites.map((f) => {
+            const active = normalizeRemote(props.currentRemotePath) === normalizeRemote(f.path);
+            return (
+              <div key={f.id} className={`v12m-srow ${active ? "on" : ""}`}>
+                <button type="button" className="v12m-srow-main" title={f.path} onClick={() => props.onSelectRemoteFavorite(f.path)}>
+                  <span className="v12m-srow-ic" aria-hidden>
+                    <V12Icon name="folder" />
+                  </span>
+                  <span className="v12m-srow-label">{f.label}</span>
+                </button>
+                <button
+                  type="button"
+                  className="v12m-srow-del"
+                  title="Remove remote favorite"
+                  aria-label={`Remove ${f.label} from remote favorites`}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    props.onRemoveRemoteFavorite(f.id);
+                  }}
+                >
+                  ×
+                </button>
+                <span className="v12m-srow-tools">
+                  <button type="button" title="Rename" onClick={() => props.onRenameRemoteFavorite(f)}>
+                    Rename
+                  </button>
+                  <button type="button" title="Move up" onClick={() => props.onReorderRemoteFavorite(f.id, "up")}>
+                    Up
+                  </button>
+                  <button type="button" title="Move down" onClick={() => props.onReorderRemoteFavorite(f.id, "down")}>
+                    Down
+                  </button>
+                </span>
+              </div>
+            );
+          })
+        )}
       </div>
     </aside>
   );
+}
+
+function normalizeRemote(p: string): string {
+  const out = (p || "/").replace(/\/+/g, "/").replace(/\/+$/, "");
+  return out || "/";
 }

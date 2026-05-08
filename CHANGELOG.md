@@ -11,6 +11,8 @@
 **Target:** v0.4.0 / product milestone **V1.3** (draft notes—not shipped).
 
 - Security/runtime hardening (on branch): Electron **37.x**, **0o600** writes for **`profiles.json`** / **`credentials.enc.json`**, IPC **`error.detail`** + **`logBoot`** redaction (`password`, `passphrase`, `privateKey`, `token`), transfer failure detail scrubbing (`docs/security.md`).
+- V1.3 interaction efficiency: keyboard shortcut MVP, V12 pane splitter with persisted ratio, tab drag reorder, local favorites rename/reorder, and per-profile remote favorites.
+- Limited read-only remote preview cache: sniffed text/common images download to a local cache, re-open from cache when remote `mtime` + size match, and clean up on disconnect/tab close/quit.
 
 ## v0.3.0 — Product milestone V1.2
 

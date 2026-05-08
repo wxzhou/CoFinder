@@ -42,3 +42,12 @@
 - `npm test` passes (selection, Quick Look guards, v12 helpers as applicable).
 - `npm run build` passes without IPC contract regressions.
 - `npm run package` completes and packaged app launches.
+
+## V1.3 v0.4.0 gates
+
+- `npm run typecheck`
+- Shortcut smoke subset from `docs/smoke-test.md`.
+- V12 pane splitter persistence and reset.
+- Tab drag reorder.
+- Local and remote favorites add / rename / reorder / remove.
+- Remote read-only preview cache for sniffed text and images; verify cleanup on disconnect, tab close, and quit.

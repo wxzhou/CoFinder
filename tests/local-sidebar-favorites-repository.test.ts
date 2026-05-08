@@ -80,4 +80,24 @@ describe("LocalSidebarFavoritesRepository", () => {
     const rows = await repo2.listRows();
     expect(rows.some((r) => r.path === extra)).toBe(true);
   });
+
+  it("renames and reorders custom favorites", async () => {
+    const { repo, home } = await makeRepo();
+    const firstPath = path.join(home, "first");
+    const secondPath = path.join(home, "second");
+    await fs.mkdir(firstPath, { recursive: true });
+    await fs.mkdir(secondPath, { recursive: true });
+    await repo.addPath(firstPath);
+    await repo.addPath(secondPath);
+    let rows = await repo.listRows();
+    const first = rows.find((r) => r.path === firstPath)!;
+    const second = rows.find((r) => r.path === secondPath)!;
+
+    rows = await repo.renameById(first.id, "Work");
+    expect(rows.find((r) => r.id === first.id)?.label).toBe("Work");
+
+    rows = await repo.reorderById(second.id, "up");
+    const custom = rows.filter((r) => !r.isDefault);
+    expect(custom.map((r) => r.id)).toEqual([second.id, first.id]);
+  });
 });

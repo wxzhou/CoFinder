@@ -48,6 +48,28 @@ describe("ProfileRepository", () => {
     expect(st.mode & 0o777).toBe(0o600);
   });
 
+  it("persists remote favorites but not runtime credential flags", async () => {
+    const { repo, filePath } = await makeRepo();
+    await repo.upsert({
+      id: "p2",
+      alias: "Prod",
+      host: "example.com",
+      port: 22,
+      username: "alice",
+      authType: "password",
+      hasSavedPassword: true,
+      remoteFavorites: [{ id: "r1", label: "Logs", path: "/var/log", createdAt: 1 }],
+      createdAt: 1,
+      updatedAt: 1
+    });
+
+    const raw = await fs.readFile(filePath, "utf8");
+    expect(raw).toContain("remoteFavorites");
+    expect(raw).not.toContain("hasSavedPassword");
+    const loaded = await repo.loadAll();
+    expect(loaded[0].remoteFavorites?.[0]).toMatchObject({ label: "Logs", path: "/var/log" });
+  });
+
   it("returns empty list on corrupted JSON and does not throw", async () => {
     const { repo, filePath } = await makeRepo();
     await fs.writeFile(filePath, "{bad-json", "utf8");

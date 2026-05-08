@@ -15,7 +15,10 @@ export const IPC_CHANNELS = {
     getHomeDirectory: "remote:getHomeDirectory",
     rename: "remote:rename",
     delete: "remote:delete",
-    getInfo: "remote:getInfo"
+    getInfo: "remote:getInfo",
+    previewOpen: "remote:previewOpen",
+    previewClearForTab: "remote:previewClearForTab",
+    previewClearForConnection: "remote:previewClearForConnection"
   },
   transfer: {
     enqueueUpload: "transfer:enqueueUpload",
@@ -34,13 +37,19 @@ export const IPC_CHANNELS = {
     list: "localFavorites:list",
     add: "localFavorites:add",
     remove: "localFavorites:remove",
+    rename: "localFavorites:rename",
+    reorder: "localFavorites:reorder",
     resetDefaults: "localFavorites:resetDefaults"
   },
   profiles: {
     list: "profiles:list",
     save: "profiles:save",
     update: "profiles:update",
-    delete: "profiles:delete"
+    delete: "profiles:delete",
+    addRemoteFavorite: "profiles:addRemoteFavorite",
+    removeRemoteFavorite: "profiles:removeRemoteFavorite",
+    renameRemoteFavorite: "profiles:renameRemoteFavorite",
+    reorderRemoteFavorite: "profiles:reorderRemoteFavorite"
   },
   credentials: {
     isAvailable: "credentials:isAvailable"

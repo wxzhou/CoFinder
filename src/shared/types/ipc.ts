@@ -55,6 +55,8 @@ export type RemoteErrorCode =
   | "REMOTE_RENAME_FAILED"
   | "REMOTE_DELETE_FAILED"
   | "REMOTE_INFO_FAILED"
+  | "REMOTE_PREVIEW_UNSUPPORTED"
+  | "REMOTE_PREVIEW_FAILED"
   | "REMOTE_DISCONNECTED"
   | "REMOTE_UNKNOWN_ERROR"
   | "REMOTE_INVALID_INPUT"
@@ -181,6 +183,13 @@ export interface IpcApi {
       path: string;
       includeDirectorySize?: boolean;
     }) => Promise<IpcResponse<{ info: PathInfo }>>;
+    previewOpen: (request: {
+      tabId: string;
+      connectionId: string;
+      path: string;
+    }) => Promise<IpcResponse<{ opened: true; localPath: string; kind: "text" | "image" }>>;
+    previewClearForTab: (request: { tabId: string }) => Promise<IpcResponse<{ cleared: number }>>;
+    previewClearForConnection: (request: { connectionId: string }) => Promise<IpcResponse<{ cleared: number }>>;
   };
   transfer: {
     enqueueUpload: (request: EnqueueUploadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
@@ -199,6 +208,8 @@ export interface IpcApi {
     list: () => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
     add: (request: { path: string }) => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
     remove: (request: { id: string }) => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
+    rename: (request: { id: string; label: string }) => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
+    reorder: (request: { id: string; direction: "up" | "down" }) => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
     resetDefaults: () => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
   };
   profiles: {
@@ -206,6 +217,14 @@ export interface IpcApi {
     save: (request: ProfileUpsertPayload) => Promise<IpcResponse<ServerProfile>>;
     update: (request: ProfileUpsertPayload) => Promise<IpcResponse<ServerProfile>>;
     delete: (request: { id: string }) => Promise<IpcResponse<{ deleted: true }>>;
+    addRemoteFavorite: (request: { profileId: string; path: string }) => Promise<IpcResponse<ServerProfile>>;
+    removeRemoteFavorite: (request: { profileId: string; favoriteId: string }) => Promise<IpcResponse<ServerProfile>>;
+    renameRemoteFavorite: (request: { profileId: string; favoriteId: string; label: string }) => Promise<IpcResponse<ServerProfile>>;
+    reorderRemoteFavorite: (request: {
+      profileId: string;
+      favoriteId: string;
+      direction: "up" | "down";
+    }) => Promise<IpcResponse<ServerProfile>>;
   };
   credentials: {
     isAvailable: () => Promise<IpcResponse<{ available: boolean }>>;

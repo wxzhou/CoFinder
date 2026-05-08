@@ -19,6 +19,16 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 
 The following sections were written for **V1.1 M6**; they remain the functional baseline.
 
+## V1.3 interaction efficiency and remote preview
+
+- **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.
+- **Pane splitter:** drag the V12 pane divider; quit/reopen dev session and confirm ratio persists; double-click divider and confirm 50/50 reset.
+- **Tab reorder:** drag tabs into a new order; confirm active tab and local/remote pane state stay with the tab.
+- **Local favorites:** add current local folder; rename/reorder/remove it; restore default locations; confirm clicks affect local pane only.
+- **Remote favorites:** connect using a saved profile; add current remote path; rename/reorder/remove it; click a remote favorite and confirm only the remote pane navigates.
+- **Remote preview:** select a remote text file with no obvious text extension and choose `Preview Remote File`; repeat to confirm cached reopen; update the remote file and confirm CoFinder re-downloads before opening. Repeat with a PNG/JPEG/GIF/WebP image. Try a binary file and confirm an unsupported message.
+- **Preview cleanup:** open a remote preview, disconnect or close the tab, and confirm the cache entry is cleared by app behavior (no stale preview reuse after reconnect).
+
 ## Test Workspace
 
 - Local test root: `~/CoFinderSmokeTest/local`

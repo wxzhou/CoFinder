@@ -13,7 +13,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1 | v0.1.0 | Shipped |
 | V1.1 | v0.2.0 | Shipped |
 | V1.2 | v0.3.0 | Shipped |
-| V1.3 | v0.4.0 | Planned (dev tree may already bump `package.json`; not shipped until tagged) |
+| V1.3 | v0.4.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.4 | v0.5.0 | Planned |
 | V1.5 | v0.6.0 | Planned |
 | V1.6 | v0.7.0 | Planned |
@@ -42,7 +42,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 
 | Phase | Release | Theme |
 | --- | --- | --- |
-| V1.3 | v0.4.0 | Interaction Efficiency & Layout Control (+ security hardening on branch; see CHANGELOG **Unreleased**) |
+| V1.3 | v0.4.0 | Interaction Efficiency & Layout Control + limited read-only remote preview — implemented in dev tree |
 | V1.4 | v0.5.0 | Transfer Safety & Conflict Handling |
 | V1.5 | v0.6.0 | Drag-and-Drop Transfer & Selection |
 | V1.6 | v0.7.0 | Preferences MVP |
@@ -56,7 +56,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 These remain **unsupported**, **deferred**, or **non-goals** across current plans unless a future milestone explicitly adopts them:
 
 - **Remote edit auto-sync**
-- **Remote Quick Look**
+- **Full Remote Quick Look**. A limited read-only remote preview cache for text/images is planned for **V1.3**; it is not a full macOS Quick Look equivalent and does not support editing/sync.
 - **Full i18n** (no localized product shell in near phases)
 - **Full Preferences UI** before **V1.6** (earlier milestones stay minimal or use defaults only)
 - **Cross-platform** support (macOS-only product)

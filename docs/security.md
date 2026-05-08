@@ -32,6 +32,14 @@
   - renderer persisted state
   - user-facing error details
 
+## Remote Preview Cache
+
+- V1.3 remote preview is read-only from CoFinder's perspective.
+- Supported remote files are downloaded to an app-managed local cache/temp folder before opening.
+- CoFinder never uploads cached preview files back to the server and does not treat local viewer edits as remote edits.
+- Cached files are kept while the tab/connection is alive for faster re-open, then removed on disconnect, tab close, or app quit.
+- Cache metadata must not include passwords, tokens, or private keys.
+
 ## Removing Saved Data
 
 - Delete profile in Site Manager to remove profile + associated credential.

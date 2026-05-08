@@ -18,7 +18,7 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.2** sh
 | V1 | v0.1.0 | Shipped |
 | V1.1 | v0.2.0 | Shipped |
 | V1.2 | v0.3.0 | Shipped |
-| V1.3 | v0.4.0 | Planned |
+| V1.3 | v0.4.0 | Implemented in dev tree; not shipped until tagged |
 | V1.4 | v0.5.0 | Planned |
 | V1.5 | v0.6.0 | Planned |
 | V1.6 | v0.7.0 | Planned |
@@ -66,11 +66,16 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 ### Not Supported in V1-1.2
 
 - Remote edit auto-sync workflow
-- Quick Look for remote files
+- Full Quick Look for remote files
 - Drag selection
 - Drag-and-drop upload/download
 - Full Preferences UI
 - Full i18n
+
+### Implemented in V1.3 / v0.4.0 development tree
+
+- Interaction efficiency: keyboard shortcuts, resizable panes, tab reorder, local/remote favorites polish.
+- Limited read-only remote preview cache for sniffed text/images. This is not remote editing and does not sync local cached changes back to the server.
 
 ## Transfer Model
 

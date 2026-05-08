@@ -67,6 +67,7 @@ export type AppShellV12Props = {
   toolbar?: ReactNode | null;
   localPane: ReactNode;
   remotePane: ReactNode;
+  splitter?: ReactNode | null;
   drawer: ReactNode;
   /** Fixed corner dev hint; keep out of hero chrome. */
   devHint?: ReactNode | null;
@@ -94,6 +95,7 @@ export function AppShellV12(props: AppShellV12Props): ReactElement {
           {toolbar}
           <div className="cfv12-split v12m-split" aria-label="Dual pane workspace">
             {props.localPane}
+            {props.splitter ?? null}
             {props.remotePane}
           </div>
           {props.drawer}
