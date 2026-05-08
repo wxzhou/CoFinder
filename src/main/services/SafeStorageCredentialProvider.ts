@@ -1,7 +1,7 @@
 import { safeStorage } from "electron";
 import fs from "node:fs/promises";
-import path from "node:path";
 import type { CredentialProvider } from "./CredentialService";
+import { writePrivateUtf8File } from "../security/privateAtomicWrite";
 
 type CredentialFileV1 = {
   version: 1;
@@ -67,9 +67,6 @@ export class SafeStorageCredentialProvider implements CredentialProvider {
   }
 
   private async writeFile(data: CredentialFileV1): Promise<void> {
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    const tmp = `${this.filePath}.tmp`;
-    await fs.writeFile(tmp, `${JSON.stringify(data)}\n`, "utf8");
-    await fs.rename(tmp, this.filePath);
+    await writePrivateUtf8File(this.filePath, `${JSON.stringify(data)}\n`);
   }
 }

@@ -18,7 +18,10 @@ const api: IpcApi = {
     getHomeDirectory: (request) => ipcRenderer.invoke("remote:getHomeDirectory", request),
     rename: (request) => ipcRenderer.invoke("remote:rename", request),
     delete: (request) => ipcRenderer.invoke("remote:delete", request),
-    getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request)
+    getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request),
+    previewOpen: (request) => ipcRenderer.invoke("remote:previewOpen", request),
+    previewClearForTab: (request) => ipcRenderer.invoke("remote:previewClearForTab", request),
+    previewClearForConnection: (request) => ipcRenderer.invoke("remote:previewClearForConnection", request)
   },
   transfer: {
     enqueueUpload: (request) => ipcRenderer.invoke("transfer:enqueueUpload", request),
@@ -42,13 +45,19 @@ const api: IpcApi = {
     list: () => ipcRenderer.invoke("localFavorites:list"),
     add: (request) => ipcRenderer.invoke("localFavorites:add", request),
     remove: (request) => ipcRenderer.invoke("localFavorites:remove", request),
+    rename: (request) => ipcRenderer.invoke("localFavorites:rename", request),
+    reorder: (request) => ipcRenderer.invoke("localFavorites:reorder", request),
     resetDefaults: () => ipcRenderer.invoke("localFavorites:resetDefaults")
   },
   profiles: {
     list: () => ipcRenderer.invoke("profiles:list"),
     save: (request) => ipcRenderer.invoke("profiles:save", request),
     update: (request) => ipcRenderer.invoke("profiles:update", request),
-    delete: (request) => ipcRenderer.invoke("profiles:delete", request)
+    delete: (request) => ipcRenderer.invoke("profiles:delete", request),
+    addRemoteFavorite: (request) => ipcRenderer.invoke("profiles:addRemoteFavorite", request),
+    removeRemoteFavorite: (request) => ipcRenderer.invoke("profiles:removeRemoteFavorite", request),
+    renameRemoteFavorite: (request) => ipcRenderer.invoke("profiles:renameRemoteFavorite", request),
+    reorderRemoteFavorite: (request) => ipcRenderer.invoke("profiles:reorderRemoteFavorite", request)
   },
   credentials: {
     isAvailable: () => ipcRenderer.invoke("credentials:isAvailable")

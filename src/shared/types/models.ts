@@ -37,12 +37,20 @@ export interface ServerProfile {
   port: number;
   username: string;
   defaultRemotePath?: string;
+  remoteFavorites?: RemoteFavorite[];
   authType: "password" | "privateKey";
   privateKeyPath?: string;
   /** Runtime-only: set when listing profiles; never persisted in profiles.json */
   hasSavedPassword?: boolean;
   createdAt: number;
   updatedAt: number;
+}
+
+export interface RemoteFavorite {
+  id: string;
+  label: string;
+  path: string;
+  createdAt: number;
 }
 
 export interface ConnectionConfig {

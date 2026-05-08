@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
@@ -168,6 +168,11 @@ export function App(props: AppProps = {}) {
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [localHomePath, setLocalHomePath] = useState<string>("");
+  const [v12PaneRatio, setV12PaneRatio] = useState(() => {
+    const raw = window.localStorage.getItem("cofinder.v12PaneRatio");
+    const n = raw ? Number(raw) : 0.5;
+    return Number.isFinite(n) && n >= 0.25 && n <= 0.75 ? n : 0.5;
+  });
   const v12LocalInspTokenRef = useRef(0);
   const v12RemoteInspTokenRef = useRef(0);
   const v12LocalInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -291,48 +296,127 @@ export function App(props: AppProps = {}) {
       if (isQuickLook) {
         if (contextMenu) return;
         if (isEditableTarget(document.activeElement)) return;
+        if (activePane === "remote") {
+          setTabs((prev) =>
+            prev.map((item) =>
+              item.id === activeTab.id
+                ? {
+                    ...item,
+                    remotePane: {
+                      ...item.remotePane,
+                      error: "Remote Quick Look is not implemented yet. Double-click a remote file or use Open for read-only preview."
+                    }
+                  }
+                : item
+            )
+          );
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         void quickLookSelection(activeTab.id, activePane);
         event.preventDefault();
         event.stopPropagation();
         return;
       }
-      if (!isSelectAll) return;
+      if (isSelectAll) {
+        if (contextMenu) return;
+        if (isEditableTarget(document.activeElement)) return;
+
+        if (activePane === "local") {
+          const selectedState = selectAllRows(localPane.entries, "first");
+          setTabs((prev) =>
+            prev.map((tab) =>
+              tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, ...selectedState } } : tab
+            )
+          );
+          if (uiShell === "v12") {
+            cancelV12LocalInspRevealTimer();
+            setV12LocalInspectorReveal(true);
+          }
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        if (activePane === "remote") {
+          const selectedState = selectAllRows(remotePane.entries, "first");
+          setTabs((prev) =>
+            prev.map((tab) =>
+              tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, ...selectedState } } : tab
+            )
+          );
+          if (uiShell === "v12") {
+            cancelV12RemoteInspRevealTimer();
+            setV12RemoteInspectorReveal(true);
+          }
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+
+      const cmd = event.metaKey || event.ctrlKey;
+      if (!cmd && event.key !== "F2" && event.key !== "Delete" && event.key !== "Backspace") return;
       if (contextMenu) return;
       if (isEditableTarget(document.activeElement)) return;
 
-      if (activePane === "local") {
-        const selectedState = selectAllRows(localPane.entries, "first");
-        setTabs((prev) =>
-          prev.map((tab) =>
-            tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, ...selectedState } } : tab
-          )
-        );
-        if (uiShell === "v12") {
-          cancelV12LocalInspRevealTimer();
-          setV12LocalInspectorReveal(true);
-        }
+      const key = event.key.toLowerCase();
+      const prevent = () => {
         event.preventDefault();
         event.stopPropagation();
-      }
-      if (activePane === "remote") {
-        const selectedState = selectAllRows(remotePane.entries, "first");
-        setTabs((prev) =>
-          prev.map((tab) =>
-            tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, ...selectedState } } : tab
-          )
-        );
-        if (uiShell === "v12") {
-          cancelV12RemoteInspRevealTimer();
-          setV12RemoteInspectorReveal(true);
-        }
-        event.preventDefault();
-        event.stopPropagation();
+      };
+      if (event.key === "F2") {
+        openInlineRename(activeTab.id, activePane);
+        prevent();
+      } else if (event.key === "Delete" || event.key === "Backspace") {
+        openDeleteConfirm(activeTab.id, activePane);
+        prevent();
+      } else if (cmd && key === "i") {
+        void openInfoDialog(activeTab.id, activePane);
+        prevent();
+      } else if (cmd && event.shiftKey && key === "c") {
+        void copySelection(activeTab.id, activePane, "path");
+        prevent();
+      } else if (cmd && key === "r") {
+        if (activePane === "local" && localPane.currentPath) void navigateLocal(activeTab.id, localPane.currentPath, "replace");
+        if (activePane === "remote" && remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.currentPath, "replace", activeTab.id);
+        prevent();
+      } else if (cmd && key === "n") {
+        createTab();
+        prevent();
+      } else if (cmd && key === "w") {
+        void closeTab(activeTab.id);
+        prevent();
+      } else if (cmd && key === "]") {
+        const index = tabs.findIndex((tab) => tab.id === activeTab.id);
+        const next = tabs[(index + 1) % tabs.length];
+        if (next) setActiveTabId(next.id);
+        prevent();
+      } else if (cmd && key === "[") {
+        const index = tabs.findIndex((tab) => tab.id === activeTab.id);
+        const next = tabs[(index - 1 + tabs.length) % tabs.length];
+        if (next) setActiveTabId(next.id);
+        prevent();
+      } else if (cmd && key === "u") {
+        void enqueueUpload(activeTab.id);
+        prevent();
+      } else if (cmd && key === "d") {
+        void enqueueDownload(activeTab.id);
+        prevent();
+      } else if (cmd && key === "1") {
+        setActivePane("local");
+        prevent();
+      } else if (cmd && key === "2") {
+        setActivePane("remote");
+        prevent();
+      } else if (cmd && key === "k") {
+        openSiteManagerForTab(activeTab.id);
+        prevent();
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePane, contextMenu, localPane.entries, remotePane.entries, activeTab.id, setTabs, tabs, uiShell]);
+  }, [activePane, contextMenu, localPane, remotePane, activeTab.id, setTabs, tabs, uiShell]);
 
   async function loadTransferTasks(): Promise<void> {
     const res = await window.cofinder.transfer.list();
@@ -493,6 +577,12 @@ export function App(props: AppProps = {}) {
     } catch (err) {
       showV12FavoriteHint(err instanceof Error ? err.message : "Failed to restore defaults.");
     }
+  }
+
+  async function handleV12ReorderLocalFavorite(id: string, direction: "up" | "down"): Promise<void> {
+    const res = await window.cofinder.localFavorites.reorder({ id, direction });
+    if (res.ok) setV12LocalFavorites(res.data.favorites);
+    else showV12FavoriteHint(res.error.message);
   }
 
   const queueStats = useMemo(() => {
@@ -1271,13 +1361,7 @@ export function App(props: AppProps = {}) {
       if (tab.remotePane.connectionId) await listRemotePath(tab.remotePane.connectionId, entry.fullPath, "push", tabId);
       return;
     }
-    setTabs((prev) =>
-      prev.map((item) =>
-        item.id === tabId
-          ? { ...item, remotePane: { ...item.remotePane, error: "Remote file open/edit will be implemented later." } }
-          : item
-      )
-    );
+    await previewRemotePath(tabId, entry.fullPath);
   }
 
   async function enqueueUpload(tabId: string): Promise<void> {
@@ -1850,7 +1934,13 @@ export function App(props: AppProps = {}) {
       setTabs((prev) =>
         prev.map((item) =>
           item.id === tabId
-            ? { ...item, remotePane: { ...item.remotePane, error: "Quick Look for remote files is not supported in M5." } }
+            ? {
+                ...item,
+                remotePane: {
+                  ...item.remotePane,
+                  error: "Remote Quick Look is not implemented yet. Double-click a remote file or use Open for read-only preview."
+                }
+              }
             : item
         )
       );
@@ -1875,6 +1965,7 @@ export function App(props: AppProps = {}) {
   async function disconnectRemote(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId) return;
+    await window.cofinder.remote.previewClearForTab({ tabId });
     await window.cofinder.remote.disconnect({ connectionId: tab.remotePane.connectionId });
     setTabs((prev) =>
       prev.map((item) => {
@@ -1901,6 +1992,7 @@ export function App(props: AppProps = {}) {
     const closing = tabs[closingIndex];
     if (!closing) return;
     if (closing.remotePane.connectionId) {
+      await window.cofinder.remote.previewClearForTab({ tabId });
       await window.cofinder.remote.disconnect({ connectionId: closing.remotePane.connectionId });
     }
 
@@ -1935,6 +2027,17 @@ export function App(props: AppProps = {}) {
       onSelect={setActiveTabId}
       onAdd={createTab}
       onClose={(tabId) => void closeTab(tabId)}
+      onMove={(draggedId, targetId) => {
+        setTabs((prev) => {
+          const draggedIndex = prev.findIndex((tab) => tab.id === draggedId);
+          const targetIndex = prev.findIndex((tab) => tab.id === targetId);
+          if (draggedIndex < 0 || targetIndex < 0 || draggedIndex === targetIndex) return prev;
+          const next = [...prev];
+          const [dragged] = next.splice(draggedIndex, 1);
+          next.splice(targetIndex, 0, dragged);
+          return next;
+        });
+      }}
     />
   );
 
@@ -1944,10 +2047,13 @@ export function App(props: AppProps = {}) {
     uiShell === "v12" ? `v12m-pane ${activePane === "remote" ? "is-focus" : "is-blur"}` : `pane remote-pane ${activePane === "remote" ? "pane-active" : ""}`;
 
   const sm = siteManagerByTab[activeTab.id];
-  const activeProfileAlias =
-    remotePane.activeProfileId && sm?.profiles
-      ? (sm.profiles.find((p) => p.id === remotePane.activeProfileId)?.alias?.trim() ?? null)
+  const activeProfile =
+    remotePane.activeProfileId
+      ? v12EmbeddedRemoteCatalog.profiles.find((p) => p.id === remotePane.activeProfileId) ??
+        sm?.profiles.find((p) => p.id === remotePane.activeProfileId) ??
+        null
       : null;
+  const activeProfileAlias = activeProfile?.alias?.trim() ?? null;
   const localPaneTitleV12 = localPaneTitleFromPath(localPane.currentPath);
   const remotePaneTitleV12 = activeProfileAlias
     ? activeProfileAlias
@@ -2197,9 +2303,84 @@ export function App(props: AppProps = {}) {
     />
   );
 
+  function persistV12PaneRatio(next: number): void {
+    const clamped = Math.max(0.25, Math.min(0.75, next));
+    setV12PaneRatio(clamped);
+    window.localStorage.setItem("cofinder.v12PaneRatio", String(clamped));
+  }
+
+  function beginV12PaneResize(event: ReactMouseEvent<HTMLDivElement>): void {
+    event.preventDefault();
+    const split = event.currentTarget.parentElement;
+    if (!split) return;
+    const rect = split.getBoundingClientRect();
+    const onMove = (moveEvent: MouseEvent) => {
+      persistV12PaneRatio((moveEvent.clientX - rect.left) / rect.width);
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  async function previewRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const target = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !target || tab.remotePane.selectedFullPaths.length !== 1) return;
+    await previewRemotePath(tabId, target);
+  }
+
+  async function previewRemotePath(tabId: string, remotePath: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId) return;
+    const res = await window.cofinder.remote.previewOpen({
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      path: remotePath
+    });
+    if (!res.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: res.error.message } } : item
+        )
+      );
+      return;
+    }
+    setTabs((prev) =>
+      prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "" } } : item))
+    );
+  }
+
+  async function handleV12AddRemoteFavorite(): Promise<void> {
+    if (!activeProfile?.id || !remotePane.currentPath) return;
+    const res = await window.cofinder.profiles.addRemoteFavorite({ profileId: activeProfile.id, path: remotePane.currentPath });
+    if (!res.ok) {
+      showV12FavoriteHint(res.error.message);
+      return;
+    }
+    await refreshV12EmbeddedRemoteCatalog();
+  }
+
+  async function handleV12RemoveRemoteFavorite(favoriteId: string): Promise<void> {
+    if (!activeProfile?.id) return;
+    const res = await window.cofinder.profiles.removeRemoteFavorite({ profileId: activeProfile.id, favoriteId });
+    if (!res.ok) showV12FavoriteHint(res.error.message);
+    await refreshV12EmbeddedRemoteCatalog();
+  }
+
+  async function handleV12ReorderRemoteFavorite(favoriteId: string, direction: "up" | "down"): Promise<void> {
+    if (!activeProfile?.id) return;
+    const res = await window.cofinder.profiles.reorderRemoteFavorite({ profileId: activeProfile.id, favoriteId, direction });
+    if (!res.ok) showV12FavoriteHint(res.error.message);
+    await refreshV12EmbeddedRemoteCatalog();
+  }
+
   const localPaneEl = (
     <section
       className={localPaneSectionClass}
+      style={uiShell === "v12" ? { flex: `0 0 ${Math.round(v12PaneRatio * 1000) / 10}%` } : undefined}
       onMouseDown={uiShell === "v12" ? () => setActivePane("local") : undefined}
     >
       {uiShell === "v12" ? (
@@ -2541,6 +2722,7 @@ export function App(props: AppProps = {}) {
   const remotePaneEl = (
     <section
       className={remotePaneSectionClass}
+      style={uiShell === "v12" ? { flex: "1 1 0" } : undefined}
       onMouseDown={uiShell === "v12" ? () => setActivePane("remote") : undefined}
     >
       {uiShell === "v12" ? (
@@ -2967,12 +3149,25 @@ export function App(props: AppProps = {}) {
           devHint={import.meta.env.DEV ? <V12ProdDevHint /> : null}
           drawer={queueV12Drawer}
           localPane={localPaneEl}
+          splitter={
+            <div
+              className="v12m-pane-resizer"
+              role="separator"
+              aria-orientation="vertical"
+              title="Drag to resize panes. Double-click to reset."
+              onMouseDown={beginV12PaneResize}
+              onDoubleClick={() => persistV12PaneRatio(0.5)}
+            />
+          }
           remotePane={remotePaneEl}
           sidebar={
             <V12LocalFavoritesSidebar
               favorites={v12LocalFavorites}
               currentLocalPath={localPane.currentPath || "/"}
               hint={v12FavoriteHint}
+              remoteFavorites={activeProfile?.remoteFavorites ?? []}
+              remoteConnected={remoteConnected}
+              currentRemotePath={remotePane.currentPath || "/"}
               onSelectFavorite={(path) => {
                 setActivePane("local");
                 clearLocalSelection(activeTab.id);
@@ -2982,7 +3177,15 @@ export function App(props: AppProps = {}) {
               }}
               onAddCurrentPath={() => void handleV12AddLocalFavorite()}
               onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
+              onReorderFavorite={(id, direction) => void handleV12ReorderLocalFavorite(id, direction)}
               onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
+              onSelectRemoteFavorite={(path) => {
+                setActivePane("remote");
+                if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
+              }}
+              onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
+              onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
+              onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
             />
           }
         />
@@ -3006,6 +3209,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Rename
+                <span className="context-shortcut">F2</span>
               </button>
               <button
                 type="button"
@@ -3017,6 +3221,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Delete
+                <span className="context-shortcut">Del</span>
               </button>
               <button
                 type="button"
@@ -3028,6 +3233,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Get Info
+                <span className="context-shortcut">⌘I</span>
               </button>
               <button
                 type="button"
@@ -3069,6 +3275,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Upload
+                <span className="context-shortcut">⌘U</span>
               </button>
               <button
                 type="button"
@@ -3105,6 +3312,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Copy Full Path
+                <span className="context-shortcut">⌘⇧C</span>
               </button>
               <button
                 type="button"
@@ -3116,10 +3324,23 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Refresh
+                <span className="context-shortcut">⌘R</span>
               </button>
             </>
           ) : (
             <>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await previewRemoteSelection(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Open
+                <span className="context-shortcut">double-click</span>
+              </button>
               <button
                 type="button"
                 className="context-item"
@@ -3133,6 +3354,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Download
+                <span className="context-shortcut">⌘D</span>
               </button>
               <button
                 type="button"
@@ -3144,17 +3366,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Delete
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await quickLookSelection(contextMenu.tabId, "remote");
-                  setContextMenu(null);
-                }}
-              >
-                Quick Look
+                <span className="context-shortcut">Del</span>
               </button>
               <button
                 type="button"
@@ -3166,6 +3378,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Get Info
+                <span className="context-shortcut">⌘I</span>
               </button>
               <button
                 type="button"
@@ -3177,6 +3390,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Rename
+                <span className="context-shortcut">F2</span>
               </button>
               <button
                 type="button"
@@ -3197,6 +3411,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Copy Full Path
+                <span className="context-shortcut">⌘⇧C</span>
               </button>
               <button
                 type="button"
@@ -3210,6 +3425,7 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Refresh
+                <span className="context-shortcut">⌘R</span>
               </button>
             </>
           )}

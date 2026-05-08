@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ServerProfile } from "../../shared/types/models";
+import type { RemoteFavorite, ServerProfile } from "../../shared/types/models";
+import { writePrivateUtf8File } from "../security/privateAtomicWrite";
 
 type ProfilesFileV1 = {
   version: 1;
@@ -34,6 +35,9 @@ function sanitizeProfile(raw: unknown): ServerProfile | null {
     typeof raw.privateKeyPath === "string" && raw.privateKeyPath.trim()
       ? raw.privateKeyPath.trim()
       : undefined;
+  const remoteFavorites = Array.isArray(raw.remoteFavorites)
+    ? raw.remoteFavorites.map(sanitizeRemoteFavorite).filter((item): item is RemoteFavorite => !!item)
+    : undefined;
   const createdAt = typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt) ? raw.createdAt : Date.now();
   const updatedAt = typeof raw.updatedAt === "number" && Number.isFinite(raw.updatedAt) ? raw.updatedAt : createdAt;
   return {
@@ -43,6 +47,7 @@ function sanitizeProfile(raw: unknown): ServerProfile | null {
     port,
     username,
     defaultRemotePath,
+    remoteFavorites,
     authType,
     privateKeyPath,
     createdAt,
@@ -58,10 +63,30 @@ function stripForDisk(profile: ServerProfile): ServerProfile {
     port: profile.port,
     username: profile.username,
     defaultRemotePath: profile.defaultRemotePath,
+    remoteFavorites: profile.remoteFavorites?.map(stripRemoteFavorite),
     authType: profile.authType,
     privateKeyPath: profile.privateKeyPath,
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt
+  };
+}
+
+function sanitizeRemoteFavorite(raw: unknown): RemoteFavorite | null {
+  if (!isRecord(raw)) return null;
+  const id = typeof raw.id === "string" && raw.id.trim() ? raw.id.trim() : "";
+  const label = typeof raw.label === "string" && raw.label.trim() ? raw.label.trim().slice(0, 256) : "";
+  const remotePath = typeof raw.path === "string" && raw.path.trim() ? raw.path.trim() : "";
+  const createdAt = typeof raw.createdAt === "number" && Number.isFinite(raw.createdAt) ? raw.createdAt : Date.now();
+  if (!id || !label || !remotePath) return null;
+  return { id, label, path: remotePath, createdAt };
+}
+
+function stripRemoteFavorite(favorite: RemoteFavorite): RemoteFavorite {
+  return {
+    id: favorite.id,
+    label: favorite.label,
+    path: favorite.path,
+    createdAt: favorite.createdAt
   };
 }
 
@@ -94,10 +119,7 @@ export class ProfileRepository {
       version: 1,
       profiles: profiles.map(stripForDisk)
     };
-    await fs.mkdir(path.dirname(this.filePath), { recursive: true });
-    const tmp = `${this.filePath}.tmp`;
-    await fs.writeFile(tmp, `${JSON.stringify(disk, null, 2)}\n`, "utf8");
-    await fs.rename(tmp, this.filePath);
+    await writePrivateUtf8File(this.filePath, `${JSON.stringify(disk, null, 2)}\n`);
   }
 
   async upsert(profile: ServerProfile): Promise<void> {
@@ -118,6 +140,24 @@ export class ProfileRepository {
     if (next.length === all.length) return false;
     await this.saveAll(next);
     return true;
+  }
+
+  async updateRemoteFavorites(profileId: string, remoteFavorites: RemoteFavorite[]): Promise<ServerProfile> {
+    const all = await this.loadAll();
+    const idx = all.findIndex((p) => p.id === profileId);
+    if (idx < 0) {
+      const err = new Error("Profile not found.");
+      (err as Error & { code?: string }).code = "PROFILE_INVALID";
+      throw err;
+    }
+    const next: ServerProfile = {
+      ...all[idx],
+      remoteFavorites: remoteFavorites.map(stripRemoteFavorite),
+      updatedAt: Date.now()
+    };
+    all[idx] = next;
+    await this.saveAll(all);
+    return next;
   }
 }
 

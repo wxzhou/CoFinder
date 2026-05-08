@@ -29,6 +29,7 @@ import {
 import { ProfileRepository, defaultCredentialsPath, defaultProfilesPath } from "../services/ProfileRepository";
 import { SafeStorageCredentialProvider } from "../services/SafeStorageCredentialProvider";
 import { QuickLookService } from "../services/QuickLookService";
+import { RemotePreviewService } from "../services/RemotePreviewService";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -49,6 +50,7 @@ const remoteFileService = new RemoteFileService(connectionManager);
 const transferQueueService = new TransferQueueService();
 const settingsService = new SettingsService();
 const quickLookService = new QuickLookService();
+const remotePreviewService = new RemotePreviewService(connectionManager, app.getPath("temp"));
 
 const userData = app.getPath("userData");
 const localSidebarFavoritesRepository = new LocalSidebarFavoritesRepository(defaultLocalSidebarFavoritesPath(userData), () => ({
@@ -228,6 +230,7 @@ export function registerIpcHandlers(): void {
       const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:disconnect request.");
       const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
       await remoteFileService.disconnect(connectionId);
+      await remotePreviewService.clearForConnection(connectionId);
       return ok({ disconnected: true as const });
     } catch (error) {
       return toIpcError(error, "REMOTE_UNKNOWN_ERROR", "Unexpected remote error.");
@@ -273,6 +276,38 @@ export function registerIpcHandlers(): void {
       return ok({ info });
     } catch (error) {
       return toIpcError(error, "REMOTE_INFO_FAILED", "Failed to load remote path info.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.previewOpen, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:previewOpen request.");
+      const tabId = requiredId(body.tabId, "tabId", "REMOTE_INVALID_INPUT");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      return ok(await remotePreviewService.openPreview({ tabId, connectionId, remotePath: targetPath }));
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to preview remote file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.previewClearForTab, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:previewClearForTab request.");
+      const tabId = requiredId(body.tabId, "tabId", "REMOTE_INVALID_INPUT");
+      return ok({ cleared: await remotePreviewService.clearForTab(tabId) });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to clear remote preview cache.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.previewClearForConnection, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:previewClearForConnection request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      return ok({ cleared: await remotePreviewService.clearForConnection(connectionId) });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to clear remote preview cache.");
     }
   });
 
@@ -401,6 +436,31 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.localFavorites.rename, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid localFavorites:rename request.");
+      const id = requiredString(body.id, "id", "LOCAL_INVALID_INPUT");
+      const label = requiredString(body.label, "label", "LOCAL_INVALID_INPUT", undefined, { maxLength: 256 });
+      const favorites = await localSidebarFavoritesRepository.renameById(id, label);
+      return ok({ favorites });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_FAVORITES_PERSIST_FAILED", "Failed to rename favorite.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.localFavorites.reorder, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid localFavorites:reorder request.");
+      const id = requiredString(body.id, "id", "LOCAL_INVALID_INPUT");
+      const direction = body.direction === "up" ? "up" : body.direction === "down" ? "down" : null;
+      if (!direction) throw new AppError("LOCAL_INVALID_INPUT", "Direction must be up or down.");
+      const favorites = await localSidebarFavoritesRepository.reorderById(id, direction);
+      return ok({ favorites });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_FAVORITES_PERSIST_FAILED", "Failed to reorder favorite.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.localFavorites.resetDefaults, async (): Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>> => {
     try {
       const favorites = await localSidebarFavoritesRepository.resetDefaultLocations();
@@ -444,6 +504,53 @@ export function registerIpcHandlers(): void {
       return ok({ deleted: true as const });
     } catch (error) {
       return toIpcError(error, "PROFILE_DELETE_FAILED", "Failed to delete profile.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.profiles.addRemoteFavorite, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "PROFILE_INVALID", "Invalid profiles:addRemoteFavorite request.");
+      const profileId = requiredId(body.profileId, "profileId", "PROFILE_INVALID");
+      const remotePath = normalizeRemotePathInput(body.path, "PROFILE_INVALID", "path");
+      return ok(await addRemoteFavorite(profileId, remotePath));
+    } catch (error) {
+      return toIpcError(error, "PROFILE_SAVE_FAILED", "Failed to add remote favorite.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.profiles.removeRemoteFavorite, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "PROFILE_INVALID", "Invalid profiles:removeRemoteFavorite request.");
+      const profileId = requiredId(body.profileId, "profileId", "PROFILE_INVALID");
+      const favoriteId = requiredId(body.favoriteId, "favoriteId", "PROFILE_INVALID");
+      return ok(await removeRemoteFavorite(profileId, favoriteId));
+    } catch (error) {
+      return toIpcError(error, "PROFILE_SAVE_FAILED", "Failed to remove remote favorite.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.profiles.renameRemoteFavorite, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "PROFILE_INVALID", "Invalid profiles:renameRemoteFavorite request.");
+      const profileId = requiredId(body.profileId, "profileId", "PROFILE_INVALID");
+      const favoriteId = requiredId(body.favoriteId, "favoriteId", "PROFILE_INVALID");
+      const label = requiredString(body.label, "label", "PROFILE_INVALID", undefined, { maxLength: 256 });
+      return ok(await renameRemoteFavorite(profileId, favoriteId, label));
+    } catch (error) {
+      return toIpcError(error, "PROFILE_SAVE_FAILED", "Failed to rename remote favorite.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.profiles.reorderRemoteFavorite, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "PROFILE_INVALID", "Invalid profiles:reorderRemoteFavorite request.");
+      const profileId = requiredId(body.profileId, "profileId", "PROFILE_INVALID");
+      const favoriteId = requiredId(body.favoriteId, "favoriteId", "PROFILE_INVALID");
+      const direction = body.direction === "up" ? "up" : body.direction === "down" ? "down" : null;
+      if (!direction) throw new AppError("PROFILE_INVALID", "Direction must be up or down.");
+      return ok(await reorderRemoteFavorite(profileId, favoriteId, direction));
+    } catch (error) {
+      return toIpcError(error, "PROFILE_SAVE_FAILED", "Failed to reorder remote favorite.");
     }
   });
 
@@ -491,6 +598,7 @@ export async function shutdownMainProcessResources(): Promise<void> {
   registeredChannels.length = 0;
   isRegistered = false;
   await transferQueueService.shutdown();
+  await remotePreviewService.clearAll();
   await connectionManager.disconnectAll();
 }
 
@@ -517,6 +625,7 @@ async function upsertProfile(body: ProfileUpsertPayload): Promise<ServerProfile>
     port: body.port,
     username: body.username.trim(),
     defaultRemotePath: body.defaultRemotePath?.trim() || undefined,
+    remoteFavorites: existing?.remoteFavorites,
     authType: body.authType,
     privateKeyPath: body.privateKeyPath?.trim() || undefined,
     createdAt: existing?.createdAt ?? now,
@@ -550,6 +659,53 @@ async function upsertProfile(body: ProfileUpsertPayload): Promise<ServerProfile>
 
   const hasSavedPassword = await credentialService.has(id);
   return { ...profile, hasSavedPassword };
+}
+
+async function addRemoteFavorite(profileId: string, remotePath: string): Promise<ServerProfile> {
+  const profile = await getProfileOrThrow(profileId);
+  const current = profile.remoteFavorites ?? [];
+  if (current.some((f) => f.path === remotePath)) return profile;
+  const label = remoteFavoriteLabel(remotePath);
+  return profileRepository.updateRemoteFavorites(profileId, [
+    ...current,
+    { id: randomUUID(), label, path: remotePath, createdAt: Date.now() }
+  ]);
+}
+
+async function removeRemoteFavorite(profileId: string, favoriteId: string): Promise<ServerProfile> {
+  const profile = await getProfileOrThrow(profileId);
+  const next = (profile.remoteFavorites ?? []).filter((f) => f.id !== favoriteId);
+  return profileRepository.updateRemoteFavorites(profileId, next);
+}
+
+async function renameRemoteFavorite(profileId: string, favoriteId: string, label: string): Promise<ServerProfile> {
+  const profile = await getProfileOrThrow(profileId);
+  const next = (profile.remoteFavorites ?? []).map((f) => (f.id === favoriteId ? { ...f, label: label.trim() } : f));
+  return profileRepository.updateRemoteFavorites(profileId, next);
+}
+
+async function reorderRemoteFavorite(profileId: string, favoriteId: string, direction: "up" | "down"): Promise<ServerProfile> {
+  const profile = await getProfileOrThrow(profileId);
+  const next = [...(profile.remoteFavorites ?? [])];
+  const index = next.findIndex((f) => f.id === favoriteId);
+  if (index < 0) return profile;
+  const nextIndex = direction === "up" ? index - 1 : index + 1;
+  if (nextIndex < 0 || nextIndex >= next.length) return profile;
+  const [item] = next.splice(index, 1);
+  next.splice(nextIndex, 0, item);
+  return profileRepository.updateRemoteFavorites(profileId, next);
+}
+
+async function getProfileOrThrow(profileId: string): Promise<ServerProfile> {
+  const profile = (await profileRepository.loadAll()).find((p) => p.id === profileId);
+  if (!profile) throw new AppError("PROFILE_INVALID", "Profile not found.");
+  return profile;
+}
+
+function remoteFavoriteLabel(remotePath: string): string {
+  const normalized = remotePath.replace(/\/+$/, "") || "/";
+  if (normalized === "/") return "/";
+  return normalized.split("/").filter(Boolean).pop() || normalized;
 }
 
 async function deleteProfileById(id: string): Promise<void> {

@@ -133,6 +133,55 @@ export class LocalSidebarFavoritesRepository {
     return this.listRows();
   }
 
+  async renameById(id: string, label: string): Promise<LocalFavoriteListItem[]> {
+    const trimmed = label.trim().slice(0, 256);
+    if (!trimmed) {
+      const err = new Error("INVALID");
+      (err as Error & { code: string }).code = "LOCAL_INVALID_INPUT";
+      throw err;
+    }
+    const disk = await this.loadDiskSafe();
+    if (isDefaultFavoriteId(id)) {
+      const err = new Error("BUILT_IN");
+      (err as Error & { code: string }).code = "LOCAL_INVALID_INPUT";
+      throw err;
+    }
+    const index = disk.custom.findIndex((c) => c.id === id);
+    if (index < 0) {
+      const err = new Error("NOT_FOUND");
+      (err as Error & { code: string }).code = "LOCAL_FAVORITES_NOT_FOUND";
+      throw err;
+    }
+    const custom = [...disk.custom];
+    custom[index] = { ...custom[index], label: trimmed };
+    await this.saveDisk({ version: 1, custom, hiddenDefaultIds: disk.hiddenDefaultIds });
+    return this.listRows();
+  }
+
+  async reorderById(id: string, direction: "up" | "down"): Promise<LocalFavoriteListItem[]> {
+    const disk = await this.loadDiskSafe();
+    if (isDefaultFavoriteId(id)) {
+      const err = new Error("BUILT_IN");
+      (err as Error & { code: string }).code = "LOCAL_INVALID_INPUT";
+      throw err;
+    }
+    const custom = [...disk.custom];
+    const index = custom.findIndex((c) => c.id === id);
+    if (index < 0) {
+      const err = new Error("NOT_FOUND");
+      (err as Error & { code: string }).code = "LOCAL_FAVORITES_NOT_FOUND";
+      throw err;
+    }
+    const nextIndex = direction === "up" ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= custom.length) return this.listRows();
+    const [item] = custom.splice(index, 1);
+    custom.splice(nextIndex, 0, item);
+    const now = Date.now();
+    const reordered = custom.map((c, i) => ({ ...c, createdAt: now + i }));
+    await this.saveDisk({ version: 1, custom: reordered, hiddenDefaultIds: disk.hiddenDefaultIds });
+    return this.listRows();
+  }
+
   /** Show all built-in favorites again (does not remove custom entries). */
   async resetDefaultLocations(): Promise<LocalFavoriteListItem[]> {
     const disk = await this.loadDiskSafe();

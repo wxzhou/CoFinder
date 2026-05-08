@@ -5,6 +5,7 @@ import path from "node:path";
 import { posix as posixPath } from "node:path";
 import type { EnqueueDownloadRequest, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
 import type { TransferTask } from "../../shared/types/models";
+import { redactSensitivePlaintext } from "../security/redactSensitive";
 import { buildProcessEnv } from "../utils/processEnv";
 import { assertSafeRemotePath, isSafeHostOrUsername } from "../utils/pathSafety";
 
@@ -289,7 +290,7 @@ export class TransferQueueService {
     task.error = message;
     task.finishedAt = this.deps.now();
     this.appendLog(task, message);
-    if (detail) this.appendLog(task, detail.slice(0, 300));
+    if (detail) this.appendLog(task, redactSensitivePlaintext(detail.slice(0, 300)));
     this.emit();
   }
 
