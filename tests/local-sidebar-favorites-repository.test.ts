@@ -81,7 +81,7 @@ describe("LocalSidebarFavoritesRepository", () => {
     expect(rows.some((r) => r.path === extra)).toBe(true);
   });
 
-  it("renames and reorders custom favorites", async () => {
+  it("reorders custom favorites", async () => {
     const { repo, home } = await makeRepo();
     const firstPath = path.join(home, "first");
     const secondPath = path.join(home, "second");
@@ -92,9 +92,6 @@ describe("LocalSidebarFavoritesRepository", () => {
     let rows = await repo.listRows();
     const first = rows.find((r) => r.path === firstPath)!;
     const second = rows.find((r) => r.path === secondPath)!;
-
-    rows = await repo.renameById(first.id, "Work");
-    expect(rows.find((r) => r.id === first.id)?.label).toBe("Work");
 
     rows = await repo.reorderById(second.id, "up");
     const custom = rows.filter((r) => !r.isDefault);

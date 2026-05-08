@@ -21,7 +21,7 @@ import type {
   RemoteConnectRequest,
   TransferUpdatePayload
 } from "../shared/types/ipc";
-import type { LocalFileEntry, RemoteFavorite, RemoteFileEntry, ServerProfile, SortDirection, SortKey, TransferTask } from "../shared/types/models";
+import type { LocalFileEntry, RemoteFileEntry, ServerProfile, SortDirection, SortKey, TransferTask } from "../shared/types/models";
 
 type HistoryState = {
   backStack: string[];
@@ -577,16 +577,6 @@ export function App(props: AppProps = {}) {
     } catch (err) {
       showV12FavoriteHint(err instanceof Error ? err.message : "Failed to restore defaults.");
     }
-  }
-
-  async function handleV12RenameLocalFavorite(id: string): Promise<void> {
-    const current = v12LocalFavorites.find((f) => f.id === id);
-    if (!current || current.isDefault) return;
-    const label = window.prompt("Rename local favorite", current.label)?.trim();
-    if (!label) return;
-    const res = await window.cofinder.localFavorites.rename({ id, label });
-    if (res.ok) setV12LocalFavorites(res.data.favorites);
-    else showV12FavoriteHint(res.error.message);
   }
 
   async function handleV12ReorderLocalFavorite(id: string, direction: "up" | "down"): Promise<void> {
@@ -2380,19 +2370,6 @@ export function App(props: AppProps = {}) {
     await refreshV12EmbeddedRemoteCatalog();
   }
 
-  async function handleV12RenameRemoteFavorite(favorite: RemoteFavorite): Promise<void> {
-    if (!activeProfile?.id) return;
-    const label = window.prompt("Rename remote favorite", favorite.label)?.trim();
-    if (!label) return;
-    const res = await window.cofinder.profiles.renameRemoteFavorite({
-      profileId: activeProfile.id,
-      favoriteId: favorite.id,
-      label
-    });
-    if (!res.ok) showV12FavoriteHint(res.error.message);
-    await refreshV12EmbeddedRemoteCatalog();
-  }
-
   async function handleV12ReorderRemoteFavorite(favoriteId: string, direction: "up" | "down"): Promise<void> {
     if (!activeProfile?.id) return;
     const res = await window.cofinder.profiles.reorderRemoteFavorite({ profileId: activeProfile.id, favoriteId, direction });
@@ -3200,7 +3177,6 @@ export function App(props: AppProps = {}) {
               }}
               onAddCurrentPath={() => void handleV12AddLocalFavorite()}
               onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
-              onRenameFavorite={(id) => void handleV12RenameLocalFavorite(id)}
               onReorderFavorite={(id, direction) => void handleV12ReorderLocalFavorite(id, direction)}
               onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
               onSelectRemoteFavorite={(path) => {
@@ -3209,7 +3185,6 @@ export function App(props: AppProps = {}) {
               }}
               onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
               onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
-              onRenameRemoteFavorite={(favorite) => void handleV12RenameRemoteFavorite(favorite)}
               onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
             />
           }

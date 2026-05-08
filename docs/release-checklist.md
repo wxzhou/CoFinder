@@ -49,5 +49,5 @@
 - Shortcut smoke subset from `docs/smoke-test.md`.
 - V12 pane splitter persistence and reset.
 - Tab drag reorder.
-- Local and remote favorites add / rename / reorder / remove.
+- Local and remote favorites add / reorder / remove.
 - Remote read-only preview cache for sniffed text and images; verify cleanup on disconnect, tab close, and quit.

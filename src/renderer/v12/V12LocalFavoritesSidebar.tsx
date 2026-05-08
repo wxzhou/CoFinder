@@ -12,7 +12,6 @@ export type V12LocalFavoritesSidebarProps = {
   onSelectFavorite: (path: string) => void;
   onAddCurrentPath: () => void;
   onRemoveFavorite: (id: string) => void;
-  onRenameFavorite: (id: string) => void;
   onReorderFavorite: (id: string, direction: "up" | "down") => void;
   /** Restore Home / Desktop / Downloads / Documents after any were removed. */
   onRestoreDefaults: () => void;
@@ -22,7 +21,6 @@ export type V12LocalFavoritesSidebarProps = {
   onSelectRemoteFavorite: (path: string) => void;
   onAddCurrentRemotePath: () => void;
   onRemoveRemoteFavorite: (id: string) => void;
-  onRenameRemoteFavorite: (favorite: RemoteFavorite) => void;
   onReorderRemoteFavorite: (id: string, direction: "up" | "down") => void;
 };
 
@@ -63,7 +61,10 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
                 <span className="v12m-srow-ic" aria-hidden>
                   <V12Icon name="folder" />
                 </span>
-                <span className="v12m-srow-label">{f.label}</span>
+                <span className="v12m-srow-text">
+                  <span className="v12m-srow-label">{f.label}</span>
+                  <span className="v12m-srow-path">{f.path}</span>
+                </span>
               </button>
               <button
                 type="button"
@@ -80,14 +81,11 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
               </button>
               {!f.isDefault ? (
                 <span className="v12m-srow-tools">
-                  <button type="button" title="Rename" onClick={() => props.onRenameFavorite(f.id)}>
-                    Rename
-                  </button>
                   <button type="button" title="Move up" onClick={() => props.onReorderFavorite(f.id, "up")}>
-                    Up
+                    ↑
                   </button>
                   <button type="button" title="Move down" onClick={() => props.onReorderFavorite(f.id, "down")}>
-                    Down
+                    ↓
                   </button>
                 </span>
               ) : null}
@@ -143,7 +141,10 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
                   <span className="v12m-srow-ic" aria-hidden>
                     <V12Icon name="folder" />
                   </span>
-                  <span className="v12m-srow-label">{f.label}</span>
+                  <span className="v12m-srow-text">
+                    <span className="v12m-srow-label">{f.label}</span>
+                    <span className="v12m-srow-path">{f.path}</span>
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -159,14 +160,11 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
                   ×
                 </button>
                 <span className="v12m-srow-tools">
-                  <button type="button" title="Rename" onClick={() => props.onRenameRemoteFavorite(f)}>
-                    Rename
-                  </button>
                   <button type="button" title="Move up" onClick={() => props.onReorderRemoteFavorite(f.id, "up")}>
-                    Up
+                    ↑
                   </button>
                   <button type="button" title="Move down" onClick={() => props.onReorderRemoteFavorite(f.id, "down")}>
-                    Down
+                    ↓
                   </button>
                 </span>
               </div>
