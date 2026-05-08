@@ -19,6 +19,18 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 
 The following sections were written for **V1.1 M6**; they remain the functional baseline.
 
+## V1.4 transfer safety and retry
+
+- **Upload conflict:** create a local file whose name already exists in the remote test root, start upload, choose `cancel`, and confirm no queue task is created and the remote file is unchanged.
+- **Upload overwrite:** repeat the upload conflict, choose `overwrite`, wait for success, refresh remote pane, and confirm the remote content was replaced intentionally.
+- **Upload rename/keep both:** repeat with `rename`, wait for success, refresh remote pane, and confirm a `copy`-suffixed item appears while the original remains.
+- **Upload skip:** select two local files where one conflicts remotely, choose `skip`, and confirm only the non-conflicting item is queued/uploaded.
+- **Download conflict:** create a remote file whose name already exists in the local test root; verify `cancel`, `overwrite`, `rename`, and `skip` behave the same way on the local destination.
+- **Directory conflict:** repeat at least one upload or download conflict with a directory target and confirm the conflict prompt identifies it as a directory.
+- **Retry one failed task:** force an rsync failure (for example invalid remote permissions or temporarily unavailable destination), confirm failed task stays visible, then use `Retry` after fixing the cause.
+- **Retry all failed:** create two failed tasks, fix the cause, use `Retry failed`, and confirm tasks restart serially, one running at a time.
+- **Copy error detail:** on a failed task, use `Copy error` and confirm the clipboard contains the stable error code/message plus recent rsync detail without credentials.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.

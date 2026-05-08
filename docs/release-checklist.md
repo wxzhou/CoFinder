@@ -51,3 +51,11 @@
 - Tab drag reorder.
 - Local and remote favorites add / reorder / remove.
 - Remote read-only preview cache for sniffed text and images; verify cleanup on disconnect, tab close, and quit.
+
+## V1.4 v0.5.0 gates
+
+- `npm run typecheck`
+- Transfer conflict smoke subset from `docs/smoke-test.md`: upload/download overwrite, skip, rename/keep-both, and cancel.
+- Directory conflict smoke for at least one upload or download path.
+- Retry one failed task and retry all failed tasks; confirm the queue remains serial.
+- Failed task copy-error action; confirm copied detail includes stable code/message and no credentials.

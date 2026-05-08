@@ -21,10 +21,14 @@ export const IPC_CHANNELS = {
     previewClearForConnection: "remote:previewClearForConnection"
   },
   transfer: {
+    checkUploadConflicts: "transfer:checkUploadConflicts",
+    checkDownloadConflicts: "transfer:checkDownloadConflicts",
     enqueueUpload: "transfer:enqueueUpload",
     enqueueDownload: "transfer:enqueueDownload",
     cancel: "transfer:cancel",
     stop: "transfer:stop",
+    retry: "transfer:retry",
+    retryFailed: "transfer:retryFailed",
     list: "transfer:list",
     clearCompleted: "transfer:clearCompleted",
     onUpdate: "transfer:onUpdate"

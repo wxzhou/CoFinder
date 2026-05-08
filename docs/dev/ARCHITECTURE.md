@@ -32,8 +32,12 @@
 - Transfer:
   - `transfer:enqueueUpload`
   - `transfer:enqueueDownload`
+  - `transfer:checkUploadConflicts`
+  - `transfer:checkDownloadConflicts`
   - `transfer:cancel`
   - `transfer:stop`
+  - `transfer:retry`
+  - `transfer:retryFailed`
   - `transfer:list`
   - `transfer:clearCompleted`
   - push: `transfer:onUpdate`
@@ -55,8 +59,10 @@
   - Holds active SFTP client connections keyed by `connectionId`.
 - `TransferQueueService`
   - Global serial queue state machine.
+  - Upload/download target override support for conflict rename/keep-both.
   - rsync/ssh precheck and spawn.
-  - task lifecycle (`pending/running/success/failed/canceled/stopped`).
+  - task lifecycle (`pending/running/success/failed/canceled/stopped`, with shared model room for `checking/conflict/skipped`).
+  - stable transfer failure categories for renderer display/copy diagnostics.
   - update event fanout.
 - `ProfileRepository`
   - Non-sensitive profile persistence.
@@ -71,6 +77,7 @@
 - Transfer queue:
   - global in main process, not per tab.
   - each task binds to `tabId` for UI context.
+  - conflict choices are selected in renderer but revalidated/applied in main before enqueue.
 
 ## Validation and Error Contract
 
@@ -86,6 +93,7 @@
 - Password should not be logged, serialized in transfer tasks, or passed via rsync args.
 - Clipboard write goes through explicit `system:copyText`.
 - Path safety and rsync safety checks centralized in main utilities/services.
+- Transfer conflict checks and rename target generation run in main; renderer does not own overwrite policy.
 
 ## Lifecycle and Cleanup
 
@@ -101,4 +109,3 @@
 - Rename/delete/properties require both local and remote operation parity but current services have asymmetry.
 - Renderer has a large single container (`App.tsx`), so incremental extraction is safer than broad UI refactor.
 - Remote operations currently focus on browse/connect; destructive commands must add strict guardrails and explicit confirmations.
-

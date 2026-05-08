@@ -15,6 +15,9 @@ export type V12TransferDrawerProps = {
   onClearCompleted: () => void;
   onCancelTask: (taskId: string) => void | Promise<void>;
   onStopTask: (taskId: string) => void | Promise<void>;
+  onRetryTask: (taskId: string) => void | Promise<void>;
+  onRetryFailed: () => void | Promise<void>;
+  onCopyError: (taskId: string) => void | Promise<void>;
 };
 
 export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
@@ -70,6 +73,9 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
                 <button type="button" className="v12m-tq-btn" onClick={() => props.onClearCompleted()}>
                   Clear
                 </button>
+                <button type="button" className="v12m-tq-btn" onClick={() => void props.onRetryFailed()}>
+                  Retry failed
+                </button>
               </div>
             </div>
             {props.error ? <div className="cfv12p-error v12m-tq-err">{props.error}</div> : null}
@@ -100,6 +106,16 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
                         <button type="button" className="v12m-tq-act" onClick={() => void props.onStopTask(task.id)}>
                           Stop
                         </button>
+                      ) : null}
+                      {task.status === "failed" ? (
+                        <>
+                          <button type="button" className="v12m-tq-act" onClick={() => void props.onRetryTask(task.id)}>
+                            Retry
+                          </button>
+                          <button type="button" className="v12m-tq-act" onClick={() => void props.onCopyError(task.id)}>
+                            Copy error
+                          </button>
+                        </>
                       ) : null}
                     </div>
                   </div>

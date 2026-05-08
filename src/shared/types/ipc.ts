@@ -1,5 +1,5 @@
 import type { LocalFavoriteListItem } from "../localFavorites";
-import type { ConnectionConfig, RemoteFileEntry, ServerProfile, TransferTask } from "./models";
+import type { ConnectionConfig, EntryType, RemoteFileEntry, ServerProfile, TransferTask } from "./models";
 import type { LocalFileEntry } from "./models";
 
 export type LocalErrorCode =
@@ -69,6 +69,7 @@ export type RemoteErrorCode =
   | "CREDENTIAL_DELETE_FAILED"
   | "CREDENTIAL_UNAVAILABLE"
   | "TRANSFER_INVALID_REQUEST"
+  | "TRANSFER_CONFLICT"
   | "TRANSFER_PRECHECK_FAILED"
   | "TRANSFER_NOT_FOUND"
   | "TRANSFER_NOT_RUNNING"
@@ -125,6 +126,8 @@ export type EnqueueUploadRequest = {
   authType?: "password" | "privateKey";
   localSources: string[];
   remoteDestinationDir: string;
+  conflictPolicy?: TransferConflictPolicy;
+  remoteTargetOverrides?: Record<string, string>;
 };
 
 export type EnqueueDownloadRequest = {
@@ -137,6 +140,20 @@ export type EnqueueDownloadRequest = {
   authType?: "password" | "privateKey";
   remoteSources: string[];
   localDestinationDir: string;
+  conflictPolicy?: TransferConflictPolicy;
+  localTargetOverrides?: Record<string, string>;
+};
+
+export type TransferConflictPolicy = "prompt" | "overwrite" | "skip" | "rename" | "cancel";
+
+export type TransferConflict = {
+  source: string;
+  target: string;
+  targetType: EntryType;
+};
+
+export type TransferConflictCheckResponse = {
+  conflicts: TransferConflict[];
 };
 
 export type TransferUpdatePayload = {
@@ -192,10 +209,14 @@ export interface IpcApi {
     previewClearForConnection: (request: { connectionId: string }) => Promise<IpcResponse<{ cleared: number }>>;
   };
   transfer: {
+    checkUploadConflicts: (request: EnqueueUploadRequest) => Promise<IpcResponse<TransferConflictCheckResponse>>;
+    checkDownloadConflicts: (request: EnqueueDownloadRequest) => Promise<IpcResponse<TransferConflictCheckResponse>>;
     enqueueUpload: (request: EnqueueUploadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     enqueueDownload: (request: EnqueueDownloadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     cancel: (request: { taskId: string }) => Promise<IpcResponse<{ canceled: true }>>;
     stop: (request: { taskId: string }) => Promise<IpcResponse<{ stopped: true }>>;
+    retry: (request: { taskId: string }) => Promise<IpcResponse<{ retried: true }>>;
+    retryFailed: () => Promise<IpcResponse<{ retried: number }>>;
     list: () => Promise<IpcResponse<TransferTask[]>>;
     clearCompleted: () => Promise<IpcResponse<{ cleared: number }>>;
     onUpdate: (handler: (payload: TransferUpdatePayload) => void) => () => void;

@@ -24,10 +24,14 @@ const api: IpcApi = {
     previewClearForConnection: (request) => ipcRenderer.invoke("remote:previewClearForConnection", request)
   },
   transfer: {
+    checkUploadConflicts: (request) => ipcRenderer.invoke("transfer:checkUploadConflicts", request),
+    checkDownloadConflicts: (request) => ipcRenderer.invoke("transfer:checkDownloadConflicts", request),
     enqueueUpload: (request) => ipcRenderer.invoke("transfer:enqueueUpload", request),
     enqueueDownload: (request) => ipcRenderer.invoke("transfer:enqueueDownload", request),
     cancel: (request) => ipcRenderer.invoke("transfer:cancel", request),
     stop: (request) => ipcRenderer.invoke("transfer:stop", request),
+    retry: (request) => ipcRenderer.invoke("transfer:retry", request),
+    retryFailed: () => ipcRenderer.invoke("transfer:retryFailed"),
     list: () => ipcRenderer.invoke("transfer:list"),
     clearCompleted: () => ipcRenderer.invoke("transfer:clearCompleted"),
     onUpdate: (handler) => {

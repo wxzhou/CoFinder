@@ -19,6 +19,8 @@ import type {
   PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
+  TransferConflict,
+  TransferConflictPolicy,
   TransferUpdatePayload
 } from "../shared/types/ipc";
 import type { LocalFileEntry, RemoteFileEntry, ServerProfile, SortDirection, SortKey, TransferTask } from "../shared/types/models";
@@ -434,6 +436,24 @@ export function App(props: AppProps = {}) {
       return;
     }
     if (res.data.cleared === 0 && transferTasks.length === 0) setQueuePanelState("hidden");
+  }
+
+  async function retryTransferTask(taskId: string): Promise<void> {
+    const res = await window.cofinder.transfer.retry({ taskId });
+    if (!res.ok) setQueueError(res.error.message);
+  }
+
+  async function retryFailedTransfers(): Promise<void> {
+    const res = await window.cofinder.transfer.retryFailed();
+    if (!res.ok) setQueueError(res.error.message);
+  }
+
+  async function copyTransferError(taskId: string): Promise<void> {
+    const task = transferTasks.find((item) => item.id === taskId);
+    if (!task) return;
+    const text = [task.errorCode ? `Code: ${task.errorCode}` : "", task.error, ...task.rawLog.slice(-20)].filter(Boolean).join("\n");
+    const res = await window.cofinder.system.copyText({ text });
+    if (!res.ok) setQueueError(res.error.message);
   }
 
   async function navigateLocal(
@@ -1406,7 +1426,9 @@ export function App(props: AppProps = {}) {
       localSources: selected,
       remoteDestinationDir: tab.remotePane.currentPath
     };
-    const result = await window.cofinder.transfer.enqueueUpload(payload);
+    const checked = await resolveTransferConflicts("upload", payload);
+    if (!checked) return;
+    const result = await window.cofinder.transfer.enqueueUpload(checked as EnqueueUploadRequest);
     if (!result.ok) {
       setTabs((prev) =>
         prev.map((item) =>
@@ -1463,7 +1485,9 @@ export function App(props: AppProps = {}) {
       remoteSources: selected,
       localDestinationDir: tab.localPane.currentPath
     };
-    const result = await window.cofinder.transfer.enqueueDownload(payload);
+    const checked = await resolveTransferConflicts("download", payload);
+    if (!checked) return;
+    const result = await window.cofinder.transfer.enqueueDownload(checked as EnqueueDownloadRequest);
     if (!result.ok) {
       setTabs((prev) =>
         prev.map((item) =>
@@ -2189,6 +2213,11 @@ export function App(props: AppProps = {}) {
           <span className="queue-summary">{summarizeQueue()}</span>
         </div>
         <div className="queue-controls">
+          {queueStats.failedCount > 0 ? (
+            <button type="button" className="toolbar-button" onClick={() => void retryFailedTransfers()}>
+              Retry failed
+            </button>
+          ) : null}
           <button type="button" className="toolbar-button" onClick={() => setQueuePanelState("collapsed")}>
             Minimize
           </button>
@@ -2252,6 +2281,16 @@ export function App(props: AppProps = {}) {
                     Stop
                   </button>
                 ) : null}
+                {task.status === "failed" ? (
+                  <>
+                    <button type="button" className="toolbar-button" onClick={() => void retryTransferTask(task.id)}>
+                      Retry
+                    </button>
+                    <button type="button" className="toolbar-button" onClick={() => void copyTransferError(task.id)}>
+                      Copy error
+                    </button>
+                  </>
+                ) : null}
               </span>
             </div>
           ))
@@ -2300,8 +2339,42 @@ export function App(props: AppProps = {}) {
         const res = await window.cofinder.transfer.stop({ taskId });
         if (!res.ok) setQueueError(res.error.message);
       }}
+      onRetryTask={(taskId) => retryTransferTask(taskId)}
+      onRetryFailed={() => retryFailedTransfers()}
+      onCopyError={(taskId) => copyTransferError(taskId)}
     />
   );
+
+  async function resolveTransferConflicts(
+    direction: "upload" | "download",
+    request: EnqueueUploadRequest | EnqueueDownloadRequest
+  ): Promise<EnqueueUploadRequest | EnqueueDownloadRequest | null> {
+    const result =
+      direction === "upload"
+        ? await window.cofinder.transfer.checkUploadConflicts(request as EnqueueUploadRequest)
+        : await window.cofinder.transfer.checkDownloadConflicts(request as EnqueueDownloadRequest);
+    if (!result.ok) {
+      setQueueError(result.error.message);
+      return null;
+    }
+    if (result.data.conflicts.length === 0) return { ...request, conflictPolicy: "prompt" };
+    const policy = promptForConflictPolicy(result.data.conflicts);
+    if (policy === "cancel") return null;
+    if (policy === "skip") {
+      const conflictSources = new Set(result.data.conflicts.map((c) => c.source));
+      if (direction === "upload") {
+        const upload = request as EnqueueUploadRequest;
+        const localSources = upload.localSources.filter((source) => !conflictSources.has(source));
+        if (localSources.length === 0) return null;
+        return { ...upload, localSources, conflictPolicy: "skip" };
+      }
+      const download = request as EnqueueDownloadRequest;
+      const remoteSources = download.remoteSources.filter((source) => !conflictSources.has(source));
+      if (remoteSources.length === 0) return null;
+      return { ...download, remoteSources, conflictPolicy: "skip" };
+    }
+    return { ...request, conflictPolicy: policy };
+  }
 
   function persistV12PaneRatio(next: number): void {
     const clamped = Math.max(0.25, Math.min(0.75, next));
@@ -3639,4 +3712,19 @@ function computeHistory(
 function getTabNumber(id: string, tabs: UiTabState[]): number {
   const index = tabs.findIndex((tab) => tab.id === id);
   return index >= 0 ? index + 1 : 1;
+}
+
+function promptForConflictPolicy(conflicts: TransferConflict[]): Exclude<TransferConflictPolicy, "prompt"> {
+  const preview = conflicts
+    .slice(0, 5)
+    .map((conflict) => `- ${conflict.target} (${conflict.targetType})`)
+    .join("\n");
+  const more = conflicts.length > 5 ? `\n...and ${conflicts.length - 5} more` : "";
+  const answer = window.prompt(
+    `Destination already exists for ${conflicts.length} item(s):\n${preview}${more}\n\nType one option: overwrite, skip, rename, cancel`,
+    "rename"
+  );
+  const normalized = answer?.trim().toLowerCase();
+  if (normalized === "overwrite" || normalized === "skip" || normalized === "rename") return normalized;
+  return "cancel";
 }

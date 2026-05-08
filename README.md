@@ -2,24 +2,24 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-**`package.json` version:** `0.4.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.3.0** (tags, GitHub Release, user-facing “what’s out”).
+**`package.json` version:** `0.5.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.4.0** (tags, GitHub Release, user-facing “what’s out”).
 
 ## Versioning
 
 CoFinder uses two parallel naming schemes:
 
 - **Product milestone** (V1, V1.1, V1.2, …): labels for development phases and plan documents (`docs/dev/V1.*_PLAN.md`, `docs/roadmap.md`). They do **not** equal the numeric field in `package.json`.
-- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.4.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
+- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.5.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
 
-Past releases are **not** retroactively re-tagged. Product milestone **V1.2** shipped as **`v0.3.0`**; **V1.3** is planned to ship as **`v0.4.0`** when ready.
+Past releases are **not** retroactively re-tagged. Product milestone **V1.3** shipped as **`v0.4.0`**; **V1.4** is planned to ship as **`v0.5.0`** when ready.
 
 | Product milestone | Release version / tag | Status |
 | --- | --- | --- |
 | V1 | v0.1.0 | Shipped |
 | V1.1 | v0.2.0 | Shipped |
 | V1.2 | v0.3.0 | Shipped |
-| V1.3 | v0.4.0 | Implemented in dev tree; not shipped until tagged |
-| V1.4 | v0.5.0 | Planned |
+| V1.3 | v0.4.0 | Shipped |
+| V1.4 | v0.5.0 | Implemented in dev tree; not shipped until tagged |
 | V1.5 | v0.6.0 | Planned |
 | V1.6 | v0.7.0 | Planned |
 | V1.7 | v0.8.0 | Planned |
@@ -63,7 +63,7 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 - **M5 — packaging:** `electron-builder` (macOS dmg + zip), `npm run package` / `npm run dist`, artifacts under `release/`
 - **M5 — documentation:** `docs/smoke-test.md`, `docs/release-checklist.md`, `docs/security.md`, `docs/roadmap.md`; `npm run check:secrets`
 
-### Not Supported in V1-1.2
+### Not Supported in V1-1.4
 
 - Remote edit auto-sync workflow
 - Full Quick Look for remote files
@@ -72,7 +72,13 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 - Full Preferences UI
 - Full i18n
 
-### Implemented in V1.3 / v0.4.0 development tree
+### Implemented in V1.4 / v0.5.0 development tree
+
+- Transfer safety: upload/download conflict detection before enqueue, with user-selected overwrite, skip, rename/keep-both, or cancel behavior.
+- Queue recovery: retry individual failed transfers or retry all failed transfers while preserving source, destination, tab, direction, and connection metadata.
+- Stable transfer failure categories for rsync missing, SSH BatchMode failure, permission denied, path not found, no space left, remote disconnect, and unknown errors; failed queue items can copy diagnostic detail.
+
+### Implemented in V1.3 / v0.4.0
 
 - Interaction efficiency: keyboard shortcuts, resizable panes, tab reorder, local/remote favorites polish.
 - Limited read-only remote preview cache for sniffed text/images. This is not remote editing and does not sync local cached changes back to the server.
@@ -81,6 +87,7 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 
 - Remote browse uses SFTP password auth.
 - rsync upload/download currently requires SSH key or passwordless SSH (BatchMode).
+- Existing transfer targets are checked before enqueue; overwrite/skip/rename/cancel choices are validated again in the main process.
 - CoFinder does **not** use `sshpass` and does not pass saved password to rsync.
 
 ## Security Notes
