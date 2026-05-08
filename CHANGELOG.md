@@ -4,11 +4,18 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v0.3.0.** The repo may temporarily use **`package.json` 0.4.0** during development so local **`npm run build` / `npm run dist`** does not overwrite the **v0.3.0** release identity—do **not** treat that as shipped until **v0.4.0** is tagged and this file gains a **`## v0.4.0`** section.
+- **Latest shipped release: v0.4.0.** The repo may temporarily use **`package.json` 0.5.0** during development so local **`npm run build` / `npm run dist`** does not overwrite the **v0.4.0** release identity—do **not** treat that as shipped until **v0.5.0** is tagged and this file gains a **`## v0.5.0`** section.
 
 ## Unreleased
 
-**Target:** v0.4.0 / product milestone **V1.3** (draft notes—not shipped).
+**Target:** v0.5.0 / product milestone **V1.4** (draft notes—not shipped).
+
+- Transfer conflict handling: upload/download checks detect existing local or remote targets before enqueue and support overwrite, skip, rename/keep-both, and cancel choices.
+- Transfer queue recovery: failed tasks can be retried individually or as a group while preserving original transfer metadata.
+- Transfer error taxonomy: failed tasks now carry stable categories for rsync missing, SSH BatchMode failure, permission denied, path not found, no space left, remote disconnect, and unknown errors; failed queue rows can copy diagnostic details.
+- Queue safety: transfer queue startup is serialized across preflight/retry paths so retry-all cannot start multiple tasks concurrently.
+
+## v0.4.0 — Product milestone V1.3
 
 - Security/runtime hardening (on branch): Electron **37.x**, **0o600** writes for **`profiles.json`** / **`credentials.enc.json`**, IPC **`error.detail`** + **`logBoot`** redaction (`password`, `passphrase`, `privateKey`, `token`), transfer failure detail scrubbing (`docs/security.md`).
 - V1.3 interaction efficiency: keyboard shortcut MVP, V12 pane splitter with persisted ratio, tab drag reorder, local favorites reorder, and per-profile remote favorites.

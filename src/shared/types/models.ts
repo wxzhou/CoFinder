@@ -3,12 +3,23 @@ export type SortKey = "name" | "size" | "mtime";
 export type SortDirection = "asc" | "desc";
 export type TransferDirection = "upload" | "download";
 export type TransferStatus =
+  | "checking"
+  | "conflict"
   | "pending"
   | "running"
   | "success"
+  | "skipped"
   | "failed"
   | "canceled"
   | "stopped";
+export type TransferErrorCategory =
+  | "rsync_not_found"
+  | "ssh_batchmode_failed"
+  | "permission_denied"
+  | "path_not_found"
+  | "no_space_left"
+  | "remote_disconnected"
+  | "unknown";
 
 export interface FileEntry {
   name: string;
@@ -136,4 +147,5 @@ export interface TransferTask {
   startedAt?: number;
   finishedAt?: number;
   error?: string;
+  errorCode?: TransferErrorCategory;
 }

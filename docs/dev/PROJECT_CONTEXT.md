@@ -22,7 +22,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 - Profile persistence in `profiles.json`; credentials in `credentials.enc.json`.
 - v12 local sidebar favorites in `local-sidebar-favorites.json` under userData (`custom`, optional `hiddenDefaultIds`; `localFavorites:*` IPC).
 - Multi-tab isolation for local/remote pane state.
-- Global serial transfer queue (upload/download via `rsync`).
+- Global serial transfer queue (upload/download via `rsync`) with conflict detection, rename/skip/overwrite/cancel policy, retry, and stable failure categories.
 - Multi-select (`Cmd`/`Shift` click + `Cmd/Ctrl+A`) and context menus.
 - IPC unified response shape: `{ ok: true, data }` or `{ ok: false, error }`.
 
@@ -54,6 +54,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 
 - Tab isolation: closing/disconnecting one tab must not break others.
 - Queue scope: queue is global; tasks carry `tabId`.
+- Queue execution is serial, including retry/retry-all paths.
 - IPC input validation stays in main process (renderer is untrusted input).
 - App quit must clean up: transfer queue shutdown and connection disconnect-all.
 - Packaged app must resolve assets and tools (`PATH` augmentation for `ssh`/`rsync`).
@@ -83,4 +84,3 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 
 - No V1.1 implementation details.
 - No speculative architecture rewrite.
-

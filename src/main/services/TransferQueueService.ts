@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { posix as posixPath } from "node:path";
 import type { EnqueueDownloadRequest, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
-import type { TransferTask } from "../../shared/types/models";
+import type { TransferErrorCategory, TransferTask } from "../../shared/types/models";
 import { redactSensitivePlaintext } from "../security/redactSensitive";
 import { buildProcessEnv } from "../utils/processEnv";
 import { assertSafeRemotePath, isSafeHostOrUsername } from "../utils/pathSafety";
@@ -30,6 +30,7 @@ type TransferQueueDeps = {
 export class TransferQueueService {
   private tasks: TransferTask[] = [];
   private running: RunningContext | null = null;
+  private pumpInFlight = false;
   private listeners = new Set<(payload: TransferUpdatePayload) => void>();
   private readonly deps: TransferQueueDeps;
 
@@ -62,7 +63,7 @@ export class TransferQueueService {
       validateLocalPath(source);
       await ensureExistingPath(this.deps.pathExists, source);
       const sourceName = path.basename(source);
-      const remotePath = validateRsyncPath(posixPath.join(request.remoteDestinationDir, sourceName));
+      const remotePath = validateRsyncPath(request.remoteTargetOverrides?.[source] ?? posixPath.join(request.remoteDestinationDir, sourceName));
       const task = this.makeTask({
         tabId: request.tabId,
         direction: "upload",
@@ -98,7 +99,8 @@ export class TransferQueueService {
     for (const source of request.remoteSources) {
       const remotePath = validateRsyncPath(source);
       const sourceName = posixPath.basename(remotePath);
-      const localPath = path.join(request.localDestinationDir, sourceName);
+      const localPath = request.localTargetOverrides?.[source] ?? path.join(request.localDestinationDir, sourceName);
+      validateLocalPath(localPath);
       const task = this.makeTask({
         tabId: request.tabId,
         direction: "download",
@@ -111,7 +113,7 @@ export class TransferQueueService {
         destination: localPath,
         sourceDisplay: `${request.username}@${request.host}:${remotePath}`,
         destinationDisplay: localPath,
-        localPath: request.localDestinationDir,
+        localPath,
         remotePath
       });
       this.tasks.push(task);
@@ -143,9 +145,53 @@ export class TransferQueueService {
     return { stopped: true };
   }
 
+  async retry(taskId: string): Promise<{ retried: true }> {
+    const task = this.tasks.find((item) => item.id === taskId);
+    if (!task) throw transferError("TRANSFER_NOT_FOUND", "Transfer task not found.");
+    if (task.status !== "failed") throw transferError("TRANSFER_INVALID_REQUEST", "Only failed tasks can be retried.");
+    task.status = "pending";
+    task.startedAt = undefined;
+    task.finishedAt = undefined;
+    task.error = undefined;
+    task.errorCode = undefined;
+    task.percent = undefined;
+    task.speed = undefined;
+    task.eta = undefined;
+    task.currentFile = undefined;
+    task.progressText = undefined;
+    task.rawLog = [];
+    this.emit();
+    void this.pump();
+    return { retried: true };
+  }
+
+  async retryFailed(): Promise<{ retried: number }> {
+    let retried = 0;
+    for (const task of this.tasks) {
+      if (task.status !== "failed") continue;
+      task.status = "pending";
+      task.startedAt = undefined;
+      task.finishedAt = undefined;
+      task.error = undefined;
+      task.errorCode = undefined;
+      task.percent = undefined;
+      task.speed = undefined;
+      task.eta = undefined;
+      task.currentFile = undefined;
+      task.progressText = undefined;
+      task.rawLog = [];
+      retried += 1;
+    }
+    if (retried > 0) {
+      this.emit();
+      void this.pump();
+    }
+    return { retried };
+  }
+
   clearCompleted(): { cleared: number } {
     const before = this.tasks.length;
-    this.tasks = this.tasks.filter((task) => task.status === "running" || task.status === "pending");
+    this.tasks = this.tasks.filter((task) => task.status === "running" || task.status === "pending" || task.status === "checking" || task.status === "conflict");
     const cleared = before - this.tasks.length;
     if (cleared > 0) this.emit();
     return { cleared };
@@ -176,10 +222,15 @@ export class TransferQueueService {
   }
 
   private async pump(): Promise<void> {
-    if (this.running) return;
+    if (this.running || this.pumpInFlight) return;
     const next = this.tasks.find((task) => task.status === "pending");
     if (!next) return;
-    await this.runTask(next);
+    this.pumpInFlight = true;
+    try {
+      await this.runTask(next);
+    } finally {
+      this.pumpInFlight = false;
+    }
     void this.pump();
   }
 
@@ -232,6 +283,7 @@ export class TransferQueueService {
         task.error = (error as NodeJS.ErrnoException).code === "ENOENT"
           ? "rsync is not installed or not found in PATH"
           : "Failed to start rsync process.";
+        task.errorCode = classifyTransferFailure(task.error);
         this.appendLog(task, task.error);
         this.running = null;
         this.emit();
@@ -244,13 +296,17 @@ export class TransferQueueService {
         } else if (signal) {
           task.status = "stopped";
           task.error = "Transfer stopped by user.";
+          task.errorCode = "unknown";
           this.appendLog(task, task.error);
         } else if (code === 0) {
           task.status = "success";
+          task.errorCode = undefined;
           this.appendLog(task, "Transfer completed successfully.");
         } else {
           task.status = "failed";
-          task.error = `rsync exited with code ${code ?? -1}.`;
+          const recent = task.rawLog.slice(-20).join("\n");
+          task.errorCode = classifyTransferFailure(recent);
+          task.error = humanTransferError(task.errorCode, code ?? -1);
           this.appendLog(task, task.error);
         }
         this.running = null;
@@ -288,6 +344,7 @@ export class TransferQueueService {
   private failTask(task: TransferTask, message: string, detail?: string): void {
     task.status = "failed";
     task.error = message;
+    task.errorCode = classifyTransferFailure(`${message}\n${detail ?? ""}`);
     task.finishedAt = this.deps.now();
     this.appendLog(task, message);
     if (detail) this.appendLog(task, redactSensitivePlaintext(detail.slice(0, 300)));
@@ -306,6 +363,26 @@ export class TransferQueueService {
     }));
   }
 
+}
+
+function classifyTransferFailure(text: string): TransferErrorCategory {
+  if (/rsync is not installed|not found in PATH|ENOENT/i.test(text)) return "rsync_not_found";
+  if (/BatchMode|Permission denied \(publickey\)|SSH key\/passwordless/i.test(text)) return "ssh_batchmode_failed";
+  if (/No space left/i.test(text)) return "no_space_left";
+  if (/Permission denied|EACCES|EPERM/i.test(text)) return "permission_denied";
+  if (/No such file|not found|ENOENT|No such path/i.test(text)) return "path_not_found";
+  if (/Connection reset|Connection lost|disconnect|Broken pipe|timed out/i.test(text)) return "remote_disconnected";
+  return "unknown";
+}
+
+function humanTransferError(category: TransferErrorCategory, exitCode: number): string {
+  if (category === "permission_denied") return "Transfer failed: permission denied.";
+  if (category === "path_not_found") return "Transfer failed: path not found.";
+  if (category === "no_space_left") return "Transfer failed: no space left on destination.";
+  if (category === "remote_disconnected") return "Transfer failed: remote connection was interrupted.";
+  if (category === "rsync_not_found") return "rsync is not installed or not found in PATH";
+  if (category === "ssh_batchmode_failed") return "SSH key/passwordless login required for rsync transfer.";
+  return `rsync exited with code ${exitCode}.`;
 }
 
 async function ensureExistingPath(pathExists: (fullPath: string) => Promise<boolean>, fullPath: string): Promise<void> {

@@ -1,5 +1,7 @@
 import { app, BrowserWindow, clipboard, ipcMain } from "electron";
 import { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import { IPC_CHANNELS } from "./channels";
 import {
   AppError,
@@ -37,12 +39,14 @@ import type {
   ProfileUpsertPayload,
   RemoteConnectRequest,
   RemoteConnectResponse,
+  TransferConflict,
+  TransferConflictCheckResponse,
   TransferUpdatePayload,
   RemoteListDirectoryRequest,
   RemoteListDirectoryResponse
 } from "../../shared/types/ipc";
 import type { LocalFavoriteListItem } from "../../shared/localFavorites";
-import type { ServerProfile } from "../../shared/types/models";
+import type { EntryType, ServerProfile } from "../../shared/types/models";
 
 const localFileService = new LocalFileService();
 const connectionManager = new ConnectionManager();
@@ -312,21 +316,37 @@ export function registerIpcHandlers(): void {
   });
 
   registerChannel(
+    IPC_CHANNELS.transfer.checkUploadConflicts,
+    async (_event, request: unknown): Promise<IpcResponse<TransferConflictCheckResponse>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:checkUploadConflicts request.");
+        const req = parseUploadRequest(body);
+        return ok({ conflicts: await checkUploadConflicts(req) });
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Failed to check upload conflicts.");
+      }
+    }
+  );
+
+  registerChannel(
+    IPC_CHANNELS.transfer.checkDownloadConflicts,
+    async (_event, request: unknown): Promise<IpcResponse<TransferConflictCheckResponse>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:checkDownloadConflicts request.");
+        const req = parseDownloadRequest(body);
+        return ok({ conflicts: await checkDownloadConflicts(req) });
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Failed to check download conflicts.");
+      }
+    }
+  );
+
+  registerChannel(
     IPC_CHANNELS.transfer.enqueueUpload,
     async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
       try {
         const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueUpload request.");
-        const data = await transferQueueService.enqueueUpload({
-          tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
-          profileId: optionalString(body.profileId),
-          connectionId: optionalString(body.connectionId),
-          host: requiredHost(body.host, "TRANSFER_INVALID_REQUEST"),
-          port: requiredPort(body.port, "TRANSFER_INVALID_REQUEST"),
-          username: requiredUsername(body.username, "TRANSFER_INVALID_REQUEST"),
-          authType: body.authType === "privateKey" ? "privateKey" : "password",
-          localSources: Array.isArray(body.localSources) ? body.localSources.map((v) => String(v)) : [],
-          remoteDestinationDir: normalizeRemotePathInput(body.remoteDestinationDir, "TRANSFER_INVALID_REQUEST")
-        });
+        const data = await transferQueueService.enqueueUpload(await prepareUploadForPolicy(parseUploadRequest(body)));
         return ok(data);
       } catch (error) {
         return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
@@ -339,17 +359,7 @@ export function registerIpcHandlers(): void {
     async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
       try {
         const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueDownload request.");
-        const data = await transferQueueService.enqueueDownload({
-          tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
-          profileId: optionalString(body.profileId),
-          connectionId: optionalString(body.connectionId),
-          host: requiredHost(body.host, "TRANSFER_INVALID_REQUEST"),
-          port: requiredPort(body.port, "TRANSFER_INVALID_REQUEST"),
-          username: requiredUsername(body.username, "TRANSFER_INVALID_REQUEST"),
-          authType: body.authType === "privateKey" ? "privateKey" : "password",
-          remoteSources: Array.isArray(body.remoteSources) ? body.remoteSources.map((v) => String(v)) : [],
-          localDestinationDir: validateLocalPathInput(body.localDestinationDir, "TRANSFER_INVALID_REQUEST")
-        });
+        const data = await transferQueueService.enqueueDownload(await prepareDownloadForPolicy(parseDownloadRequest(body)));
         return ok(data);
       } catch (error) {
         return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
@@ -373,6 +383,26 @@ export function registerIpcHandlers(): void {
       const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:stop request.");
       const taskId = requiredId(body.taskId, "taskId", "TRANSFER_INVALID_REQUEST");
       const data = await transferQueueService.stop(taskId);
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.transfer.retry, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:retry request.");
+      const taskId = requiredId(body.taskId, "taskId", "TRANSFER_INVALID_REQUEST");
+      const data = await transferQueueService.retry(taskId);
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.transfer.retryFailed, async () => {
+    try {
+      const data = await transferQueueService.retryFailed();
       return ok(data);
     } catch (error) {
       return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
@@ -745,4 +775,180 @@ function validateProfileUpsertPayload(input: unknown): ProfileUpsertPayload {
     password: optionalString(body.password),
     savePassword: Boolean(body.savePassword)
   };
+}
+
+function parseUploadRequest(body: Record<string, unknown>): EnqueueUploadRequest {
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    profileId: optionalString(body.profileId),
+    connectionId: optionalString(body.connectionId),
+    host: requiredHost(body.host, "TRANSFER_INVALID_REQUEST"),
+    port: requiredPort(body.port, "TRANSFER_INVALID_REQUEST"),
+    username: requiredUsername(body.username, "TRANSFER_INVALID_REQUEST"),
+    authType: body.authType === "privateKey" ? "privateKey" : "password",
+    localSources: Array.isArray(body.localSources) ? body.localSources.map((v) => validateLocalPathInput(v, "TRANSFER_INVALID_REQUEST")) : [],
+    remoteDestinationDir: normalizeRemotePathInput(body.remoteDestinationDir, "TRANSFER_INVALID_REQUEST"),
+    conflictPolicy: parseConflictPolicy(body.conflictPolicy),
+    remoteTargetOverrides: parseStringMap(body.remoteTargetOverrides, "remoteTargetOverrides")
+  };
+}
+
+function parseDownloadRequest(body: Record<string, unknown>): EnqueueDownloadRequest {
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    profileId: optionalString(body.profileId),
+    connectionId: optionalString(body.connectionId),
+    host: requiredHost(body.host, "TRANSFER_INVALID_REQUEST"),
+    port: requiredPort(body.port, "TRANSFER_INVALID_REQUEST"),
+    username: requiredUsername(body.username, "TRANSFER_INVALID_REQUEST"),
+    authType: body.authType === "privateKey" ? "privateKey" : "password",
+    remoteSources: Array.isArray(body.remoteSources)
+      ? body.remoteSources.map((v) => normalizeRemotePathInput(v, "TRANSFER_INVALID_REQUEST"))
+      : [],
+    localDestinationDir: validateLocalPathInput(body.localDestinationDir, "TRANSFER_INVALID_REQUEST"),
+    conflictPolicy: parseConflictPolicy(body.conflictPolicy),
+    localTargetOverrides: parseStringMap(body.localTargetOverrides, "localTargetOverrides")
+  };
+}
+
+function parseConflictPolicy(value: unknown): EnqueueUploadRequest["conflictPolicy"] {
+  if (value === "overwrite" || value === "skip" || value === "rename" || value === "cancel" || value === "prompt") return value;
+  return "prompt";
+}
+
+function parseStringMap(value: unknown, field: string): Record<string, string> | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new AppError("TRANSFER_INVALID_REQUEST", `${field} must be an object.`);
+  }
+  const out: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof raw === "string" && raw.trim()) out[key] = raw;
+  }
+  return out;
+}
+
+async function checkUploadConflicts(request: EnqueueUploadRequest): Promise<TransferConflict[]> {
+  if (!request.connectionId) throw new AppError("TRANSFER_INVALID_REQUEST", "Connection id is required for upload conflict checks.");
+  const connection = connectionManager.getConnection(request.connectionId);
+  if (!connection) throw new AppError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+  const client = connection.client as unknown as { stat: (remotePath: string) => Promise<{ type?: string | number }> };
+  const conflicts: TransferConflict[] = [];
+  for (const source of request.localSources) {
+    const target = normalizeRemotePathInput(
+      request.remoteTargetOverrides?.[source] ?? path.posix.join(request.remoteDestinationDir, path.basename(source)),
+      "TRANSFER_INVALID_REQUEST"
+    );
+    try {
+      const stat = await client.stat(target);
+      conflicts.push({ source, target, targetType: remoteStatType(stat.type) });
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
+    }
+  }
+  return conflicts;
+}
+
+async function checkDownloadConflicts(request: EnqueueDownloadRequest): Promise<TransferConflict[]> {
+  const conflicts: TransferConflict[] = [];
+  for (const source of request.remoteSources) {
+    const target = validateLocalPathInput(
+      request.localTargetOverrides?.[source] ?? path.join(request.localDestinationDir, path.posix.basename(source)),
+      "TRANSFER_INVALID_REQUEST"
+    );
+    try {
+      const stat = await fs.lstat(target);
+      conflicts.push({ source, target, targetType: localStatType(stat) });
+    } catch (error) {
+      if (!isMissingPathError(error)) throw error;
+    }
+  }
+  return conflicts;
+}
+
+async function prepareUploadForPolicy(request: EnqueueUploadRequest): Promise<EnqueueUploadRequest> {
+  const policy = request.conflictPolicy ?? "prompt";
+  if (policy === "cancel") throw new AppError("TRANSFER_INVALID_REQUEST", "Transfer canceled.");
+  if (policy === "overwrite") return request;
+  const conflicts = await checkUploadConflicts(request);
+  if (conflicts.length === 0) return request;
+  if (policy === "prompt") throw new AppError("TRANSFER_CONFLICT", "Destination already exists. Choose how to resolve the conflict.");
+  const conflictSources = new Set(conflicts.map((c) => c.source));
+  if (policy === "skip") {
+    return { ...request, localSources: request.localSources.filter((source) => !conflictSources.has(source)) };
+  }
+  const remoteTargetOverrides = { ...(request.remoteTargetOverrides ?? {}) };
+  for (const conflict of conflicts) {
+    remoteTargetOverrides[conflict.source] = await nextAvailableRemotePath(request.connectionId!, conflict.target);
+  }
+  return { ...request, remoteTargetOverrides };
+}
+
+async function prepareDownloadForPolicy(request: EnqueueDownloadRequest): Promise<EnqueueDownloadRequest> {
+  const policy = request.conflictPolicy ?? "prompt";
+  if (policy === "cancel") throw new AppError("TRANSFER_INVALID_REQUEST", "Transfer canceled.");
+  if (policy === "overwrite") return request;
+  const conflicts = await checkDownloadConflicts(request);
+  if (conflicts.length === 0) return request;
+  if (policy === "prompt") throw new AppError("TRANSFER_CONFLICT", "Destination already exists. Choose how to resolve the conflict.");
+  const conflictSources = new Set(conflicts.map((c) => c.source));
+  if (policy === "skip") {
+    return { ...request, remoteSources: request.remoteSources.filter((source) => !conflictSources.has(source)) };
+  }
+  const localTargetOverrides = { ...(request.localTargetOverrides ?? {}) };
+  for (const conflict of conflicts) {
+    localTargetOverrides[conflict.source] = await nextAvailableLocalPath(conflict.target);
+  }
+  return { ...request, localTargetOverrides };
+}
+
+async function nextAvailableRemotePath(connectionId: string, target: string): Promise<string> {
+  const connection = connectionManager.getConnection(connectionId);
+  if (!connection) throw new AppError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+  const client = connection.client as unknown as { stat: (remotePath: string) => Promise<unknown> };
+  const parsed = path.posix.parse(target);
+  for (let i = 1; i < 1000; i += 1) {
+    const candidate = path.posix.join(parsed.dir, `${parsed.name} copy${i === 1 ? "" : ` ${i}`}${parsed.ext}`);
+    try {
+      await client.stat(candidate);
+    } catch (error) {
+      if (isMissingPathError(error)) return candidate;
+      throw error;
+    }
+  }
+  throw new AppError("TRANSFER_INVALID_REQUEST", "Could not find available remote name.");
+}
+
+async function nextAvailableLocalPath(target: string): Promise<string> {
+  const parsed = path.parse(target);
+  for (let i = 1; i < 1000; i += 1) {
+    const candidate = path.join(parsed.dir, `${parsed.name} copy${i === 1 ? "" : ` ${i}`}${parsed.ext}`);
+    try {
+      await fs.lstat(candidate);
+    } catch (error) {
+      if (isMissingPathError(error)) return candidate;
+      throw error;
+    }
+  }
+  throw new AppError("TRANSFER_INVALID_REQUEST", "Could not find available local name.");
+}
+
+function isMissingPathError(error: unknown): boolean {
+  const code = typeof error === "object" && error !== null && "code" in error ? String((error as { code: unknown }).code) : "";
+  const message = typeof error === "object" && error !== null && "message" in error ? String((error as { message: unknown }).message) : "";
+  return code === "ENOENT" || /No such file|no such path|does not exist|ENOENT/i.test(message);
+}
+
+function remoteStatType(type: unknown): EntryType {
+  if (type === "d" || type === "directory" || type === 2) return "directory";
+  if (type === "l" || type === "symlink") return "symlink";
+  if (type === "-" || type === "file" || type === 1) return "file";
+  return "unknown";
+}
+
+function localStatType(stat: { isDirectory: () => boolean; isFile: () => boolean; isSymbolicLink: () => boolean }): EntryType {
+  if (stat.isDirectory()) return "directory";
+  if (stat.isFile()) return "file";
+  if (stat.isSymbolicLink()) return "symlink";
+  return "unknown";
 }

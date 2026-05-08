@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
 import { TransferQueueService } from "../src/main/services/TransferQueueService";
-import type { EnqueueUploadRequest } from "../src/shared/types/ipc";
+import type { EnqueueDownloadRequest, EnqueueUploadRequest } from "../src/shared/types/ipc";
 
 class FakeProc extends EventEmitter {
   stdout = new EventEmitter();
@@ -23,6 +23,16 @@ const baseUpload: EnqueueUploadRequest = {
   username: "alice",
   localSources: ["/tmp/source.txt"],
   remoteDestinationDir: "/remote",
+  authType: "password"
+};
+
+const baseDownload: EnqueueDownloadRequest = {
+  tabId: "tab-a",
+  host: "example.com",
+  port: 22,
+  username: "alice",
+  remoteSources: ["/remote/source.txt"],
+  localDestinationDir: "/tmp",
   authType: "password"
 };
 
@@ -94,6 +104,27 @@ describe("TransferQueueService state machine", () => {
     expect(tasks[0].destination).toContain("/remote/");
   });
 
+  it("uses conflict target overrides when enqueueing upload and download tasks", async () => {
+    const { service } = createService({ procs: [new FakeProc(), new FakeProc()] });
+
+    await service.enqueueUpload({
+      ...baseUpload,
+      localSources: ["/tmp/source.txt"],
+      remoteTargetOverrides: { "/tmp/source.txt": "/remote/source copy.txt" }
+    });
+    await service.enqueueDownload({
+      ...baseDownload,
+      remoteSources: ["/remote/source.txt"],
+      localTargetOverrides: { "/remote/source.txt": "/tmp/source copy.txt" }
+    });
+
+    const tasks = service.list();
+    expect(tasks[0].destination).toBe("/remote/source copy.txt");
+    expect(tasks[0].remotePath).toBe("/remote/source copy.txt");
+    expect(tasks[1].destination).toBe("/tmp/source copy.txt");
+    expect(tasks[1].localPath).toBe("/tmp/source copy.txt");
+  });
+
   it("cancels pending task", async () => {
     const p1 = new FakeProc();
     const { service } = createService({ procs: [p1] });
@@ -136,6 +167,25 @@ describe("TransferQueueService state machine", () => {
     });
   });
 
+  it("classifies common rsync failures with stable error codes", async () => {
+    const p1 = new FakeProc();
+    const { service, spawnProcess } = createService({ procs: [p1] });
+    await service.enqueueUpload(baseUpload);
+    await vi.waitFor(() => {
+      expect(spawnProcess).toHaveBeenCalledTimes(1);
+      expect(service.list()[0].status).toBe("running");
+    });
+
+    p1.stderr.emit("data", Buffer.from("rsync: [sender] change_dir failed: Permission denied (13)\n"));
+    p1.emit("close", 23, null);
+
+    await vi.waitFor(() => {
+      expect(service.list()[0].status).toBe("failed");
+      expect(service.list()[0].errorCode).toBe("permission_denied");
+      expect(service.list()[0].error).toMatch(/permission denied/i);
+    });
+  });
+
   it("fails task when ssh BatchMode preflight fails", async () => {
     const { service } = createService({
       runCommand: async (command) => {
@@ -147,6 +197,7 @@ describe("TransferQueueService state machine", () => {
     await vi.waitFor(() => {
       expect(service.list()[0].status).toBe("failed");
       expect(service.list()[0].error).toContain("SSH key/passwordless login required");
+      expect(service.list()[0].errorCode).toBe("ssh_batchmode_failed");
     });
   });
 
@@ -161,6 +212,52 @@ describe("TransferQueueService state machine", () => {
     await vi.waitFor(() => {
       expect(service.list()[0].status).toBe("failed");
       expect(service.list()[0].error).toContain("rsync is not installed or not found in PATH");
+      expect(service.list()[0].errorCode).toBe("rsync_not_found");
+    });
+  });
+
+  it("retries a failed task preserving transfer metadata", async () => {
+    const p1 = new FakeProc();
+    const p2 = new FakeProc();
+    const { service, spawnProcess } = createService({ procs: [p1, p2] });
+    await service.enqueueUpload(baseUpload);
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1));
+
+    p1.emit("close", 23, null);
+    await vi.waitFor(() => expect(service.list()[0].status).toBe("failed"));
+    const failedTask = service.list()[0];
+
+    await service.retry(failedTask.id);
+    await vi.waitFor(() => {
+      expect(spawnProcess).toHaveBeenCalledTimes(2);
+      const retried = service.list()[0];
+      expect(retried.status).toBe("running");
+      expect(retried.source).toBe(failedTask.source);
+      expect(retried.destination).toBe(failedTask.destination);
+      expect(retried.error).toBeUndefined();
+      expect(retried.errorCode).toBeUndefined();
+    });
+  });
+
+  it("retries all failed tasks", async () => {
+    const p1 = new FakeProc();
+    const p2 = new FakeProc();
+    const p3 = new FakeProc();
+    const { service, spawnProcess } = createService({ procs: [p1, p2, p3] });
+    await service.enqueueUpload({ ...baseUpload, localSources: ["/tmp/a.txt", "/tmp/b.txt"] });
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1));
+    p1.emit("close", 23, null);
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(2));
+    p2.emit("close", 23, null);
+    await vi.waitFor(() => expect(service.list().every((task) => task.status === "failed")).toBe(true));
+
+    const res = await service.retryFailed();
+
+    expect(res.retried).toBe(2);
+    await vi.waitFor(() => {
+      expect(spawnProcess).toHaveBeenCalledTimes(3);
+      const statuses = service.list().map((task) => task.status);
+      expect(statuses).toEqual(["running", "pending"]);
     });
   });
 
