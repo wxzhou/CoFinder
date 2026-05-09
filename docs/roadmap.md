@@ -14,8 +14,8 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.1 | v0.2.0 | Shipped |
 | V1.2 | v0.3.0 | Shipped |
 | V1.3 | v0.4.0 | Shipped |
-| V1.4 | v0.5.0 | Implemented in dev tree (not shipped until tagged) |
-| V1.5 | v0.6.0 | Planned |
+| V1.4 | v0.5.0 | Shipped |
+| V1.5 | v0.6.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.6 | v0.7.0 | Planned |
 | V1.7 | v0.8.0 | Planned |
 | V1.8 | v0.9.0 | Planned |
@@ -43,8 +43,8 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | Phase | Release | Theme |
 | --- | --- | --- |
 | V1.3 | v0.4.0 | Interaction Efficiency & Layout Control + limited read-only remote preview — shipped |
-| V1.4 | v0.5.0 | Transfer Safety & Conflict Handling — implemented in dev tree |
-| V1.5 | v0.6.0 | Drag-and-Drop Transfer & Selection |
+| V1.4 | v0.5.0 | Transfer Safety & Conflict Handling — shipped |
+| V1.5 | v0.6.0 | Drag-and-Drop Transfer & Selection — implemented in dev tree |
 | V1.6 | v0.7.0 | Preferences MVP |
 | V1.7 | v0.8.0 | Search, Filter, and Navigation |
 | V1.8 | v0.9.0 | Remote Operations Expansion |
@@ -62,4 +62,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 - **Cross-platform** support (macOS-only product)
 - **IDE-like** features (project model, SCM integration, etc.)
 
-Drag-and-drop transfer and marquee selection are **planned for V1.5**, contingent on **V1.4** conflict handling—not available in shipped builds today.
+Drag-and-drop transfer and marquee selection are implemented in the **V1.5 / v0.6.0 development tree** and remain unshipped until v0.6.0 is tagged.

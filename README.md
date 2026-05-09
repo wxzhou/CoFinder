@@ -2,16 +2,16 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-**`package.json` version:** `0.5.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.4.0** (tags, GitHub Release, user-facing “what’s out”).
+**`package.json` version:** `0.6.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.5.0** (tags, GitHub Release, user-facing “what’s out”).
 
 ## Versioning
 
 CoFinder uses two parallel naming schemes:
 
 - **Product milestone** (V1, V1.1, V1.2, …): labels for development phases and plan documents (`docs/dev/V1.*_PLAN.md`, `docs/roadmap.md`). They do **not** equal the numeric field in `package.json`.
-- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.5.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
+- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.6.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
 
-Past releases are **not** retroactively re-tagged. Product milestone **V1.3** shipped as **`v0.4.0`**; **V1.4** is planned to ship as **`v0.5.0`** when ready.
+Past releases are **not** retroactively re-tagged. Product milestone **V1.4** shipped as **`v0.5.0`**; **V1.5** is planned to ship as **`v0.6.0`** when ready.
 
 | Product milestone | Release version / tag | Status |
 | --- | --- | --- |
@@ -19,8 +19,8 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.3** sh
 | V1.1 | v0.2.0 | Shipped |
 | V1.2 | v0.3.0 | Shipped |
 | V1.3 | v0.4.0 | Shipped |
-| V1.4 | v0.5.0 | Implemented in dev tree; not shipped until tagged |
-| V1.5 | v0.6.0 | Planned |
+| V1.4 | v0.5.0 | Shipped |
+| V1.5 | v0.6.0 | Implemented in dev tree; not shipped until tagged |
 | V1.6 | v0.7.0 | Planned |
 | V1.7 | v0.8.0 | Planned |
 | V1.8 | v0.9.0 | Planned |
@@ -63,16 +63,21 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 - **M5 — packaging:** `electron-builder` (macOS dmg + zip), `npm run package` / `npm run dist`, artifacts under `release/`
 - **M5 — documentation:** `docs/smoke-test.md`, `docs/release-checklist.md`, `docs/security.md`, `docs/roadmap.md`; `npm run check:secrets`
 
-### Not Supported in V1-1.4
+### Not Supported in V1-1.5
 
 - Remote edit auto-sync workflow
 - Full Quick Look for remote files
-- Drag selection
-- Drag-and-drop upload/download
 - Full Preferences UI
 - Full i18n
 
-### Implemented in V1.4 / v0.5.0 development tree
+### Implemented in V1.5 / v0.6.0 development tree
+
+- Drag selected files/folders between panes to upload or download through the existing V1.4 conflict-safe transfer path.
+- Drag files/folders from Finder into the remote pane to upload.
+- Drop feedback for valid directory/current-folder targets and invalid targets.
+- Marquee selection from pane background, with additive selection when using `Cmd` or `Shift`.
+
+### Implemented in V1.4 / v0.5.0
 
 - Transfer safety: upload/download conflict detection before enqueue, with user-selected overwrite, skip, rename/keep-both, or cancel behavior.
 - Queue recovery: retry individual failed transfers or retry all failed transfers while preserving source, destination, tab, direction, and connection metadata.

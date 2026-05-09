@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent, ReactElement } from "react";
+import type { DragEvent, KeyboardEvent, MouseEvent, ReactElement } from "react";
 import type { SortDirection, SortKey } from "../../../shared/types/models";
 import "./v12-pane.css";
 
@@ -22,6 +22,14 @@ export type V12FileListProps = {
   onRowContextMenu: (entry: V12FileListEntry, event: MouseEvent<HTMLDivElement>) => void;
   onRowDoubleClick: (entry: V12FileListEntry) => void;
   onBackgroundMouseDown: (event: MouseEvent<HTMLDivElement>) => void;
+  onBackgroundDragOver?: (event: DragEvent<HTMLDivElement>) => void;
+  onBackgroundDrop?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave?: (event: DragEvent<HTMLDivElement>) => void;
+  onRowDragStart?: (entry: V12FileListEntry, event: DragEvent<HTMLDivElement>) => void;
+  onRowDragOver?: (entry: V12FileListEntry, event: DragEvent<HTMLDivElement>) => void;
+  onRowDrop?: (entry: V12FileListEntry, event: DragEvent<HTMLDivElement>) => void;
+  onRowDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
+  getRowClassName?: (entry: V12FileListEntry) => string;
   /** Inline rename for one row */
   inlineRename:
     | {
@@ -67,7 +75,13 @@ export function V12FileList(props: V12FileListProps): ReactElement {
           </span>
         </div>
       </div>
-      <div className="cfv12p-list" onMouseDown={props.onBackgroundMouseDown}>
+      <div
+        className="cfv12p-list"
+        onMouseDown={props.onBackgroundMouseDown}
+        onDragOver={props.onBackgroundDragOver}
+        onDrop={props.onBackgroundDrop}
+        onDragLeave={props.onDragLeave}
+      >
         {props.entries.map((entry) => {
           const selected = props.selectedFullPaths.includes(entry.fullPath);
           const renaming = props.inlineRename?.sourcePath === entry.fullPath;
@@ -75,7 +89,15 @@ export function V12FileList(props: V12FileListProps): ReactElement {
             <div
               key={entry.fullPath}
               role="row"
-              className={rowClass(selected, props.isPaneActive)}
+              draggable={!renaming}
+              data-pane-row="true"
+              data-marquee-pane={props.pane}
+              data-full-path={entry.fullPath}
+              className={`${rowClass(selected, props.isPaneActive)} ${props.getRowClassName?.(entry) ?? ""}`.trim()}
+              onDragStart={(e) => props.onRowDragStart?.(entry, e)}
+              onDragOver={(e) => props.onRowDragOver?.(entry, e)}
+              onDrop={(e) => props.onRowDrop?.(entry, e)}
+              onDragEnd={(e) => props.onRowDragEnd?.(e)}
               onClick={(e) => props.onRowClick(entry, e)}
               onContextMenu={(e) => props.onRowContextMenu(entry, e)}
               onDoubleClick={() => props.onRowDoubleClick(entry)}

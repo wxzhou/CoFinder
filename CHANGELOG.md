@@ -4,11 +4,18 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v0.4.0.** The repo may temporarily use **`package.json` 0.5.0** during development so local **`npm run build` / `npm run dist`** does not overwrite the **v0.4.0** release identity—do **not** treat that as shipped until **v0.5.0** is tagged and this file gains a **`## v0.5.0`** section.
+- **Latest shipped release: v0.5.0.** The repo may temporarily use **`package.json` 0.6.0** during development so local **`npm run build` / `npm run dist`** does not overwrite the **v0.5.0** release identity—do **not** treat that as shipped until **v0.6.0** is tagged and this file gains a **`## v0.6.0`** section.
 
 ## Unreleased
 
-**Target:** v0.5.0 / product milestone **V1.4** (draft notes—not shipped).
+**Target:** v0.6.0 / product milestone **V1.5** (draft notes—not shipped).
+
+- Drag-and-drop transfer: drag selected local items to the remote pane to upload, and selected remote items to the local pane to download.
+- Finder-to-remote upload: drag files/folders from Finder into the remote pane.
+- Drop target feedback: current-pane drops target the current directory, directory-row drops target that directory, invalid row drops show forbidden feedback.
+- Marquee selection: drag from pane background to select rows, with additive selection via `Cmd`/`Shift`.
+
+## v0.5.0 — Product milestone V1.4
 
 - Transfer conflict handling: upload/download checks detect existing local or remote targets before enqueue and support overwrite, skip, rename/keep-both, and cancel choices.
 - Transfer queue recovery: failed tasks can be retried individually or as a group while preserving original transfer metadata.

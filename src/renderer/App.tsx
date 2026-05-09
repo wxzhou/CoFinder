@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+  type MouseEvent as ReactMouseEvent
+} from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
@@ -11,7 +19,17 @@ import { V12PaneFootStatus, V12ProdDevHint, V12VisualFileList, V12VisualLocation
 import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
-import { applyRowSelection, clearSelectionState, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
+import {
+  applyMarqueeSelection,
+  applyRowSelection,
+  clearSelectionState,
+  normalizeContextSelection,
+  normalizeDragRect,
+  selectAllRows,
+  stringifySelection,
+  type MarqueeRowRect,
+  type SelectionState
+} from "./selection";
 import type { LocalFavoriteListItem } from "../shared/localFavorites";
 import type {
   EnqueueDownloadRequest,
@@ -95,6 +113,29 @@ type InfoDialogState = {
 
 type ActivePane = "local" | "remote";
 
+type TransferDragPayload = {
+  kind: "cofinder-transfer";
+  pane: ActivePane;
+  tabId: string;
+  paths: string[];
+};
+
+type DropTargetState = {
+  pane: ActivePane;
+  path: string;
+  valid: boolean;
+};
+
+type MarqueeState = {
+  pane: ActivePane;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  additive: boolean;
+  baseSelection: SelectionState;
+};
+
 type SiteManagerTabState = {
   open: boolean;
   profiles: ServerProfile[];
@@ -115,6 +156,7 @@ type UiTabState = {
 };
 
 const AUTO_HIDE_DELAY_MS = 10_000;
+const COFINDER_TRANSFER_MIME = "application/x-cofinder-transfer";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
 /** After a row `click` with `detail === 1`, wait this long before showing inspector so a double-click rarely mounts the column. Cmd+A bypasses. If already revealed, no delay and no hide. */
@@ -169,6 +211,8 @@ export function App(props: AppProps = {}) {
   const infoRequestTokenRef = useRef(0);
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
+  const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
+  const [marquee, setMarquee] = useState<MarqueeState | null>(null);
   const [localHomePath, setLocalHomePath] = useState<string>("");
   const [v12PaneRatio, setV12PaneRatio] = useState(() => {
     const raw = window.localStorage.getItem("cofinder.v12PaneRatio");
@@ -266,6 +310,34 @@ export function App(props: AppProps = {}) {
     void loadTransferTasks();
     return off;
   }, []);
+
+  useEffect(() => {
+    if (!marquee) return;
+    const onMove = (event: MouseEvent) => {
+      const rect = normalizeDragRect(marquee.startX, marquee.startY, event.clientX, event.clientY);
+      const rows: MarqueeRowRect[] = Array.from(
+        document.querySelectorAll<HTMLElement>(`[data-marquee-pane="${marquee.pane}"][data-full-path]`)
+      ).map((row) => {
+        const bounds = row.getBoundingClientRect();
+        return {
+          fullPath: row.dataset.fullPath ?? "",
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom
+        };
+      });
+      updatePaneSelection(activeTab.id, marquee.pane, applyMarqueeSelection(rows, rect, marquee.baseSelection, { additive: marquee.additive }));
+      setMarquee((prev) => (prev ? { ...prev, currentX: event.clientX, currentY: event.clientY } : prev));
+    };
+    const onUp = () => setMarquee(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [activeTab.id, marquee]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -1384,10 +1456,10 @@ export function App(props: AppProps = {}) {
     await previewRemotePath(tabId, entry.fullPath);
   }
 
-  async function enqueueUpload(tabId: string): Promise<void> {
+  async function enqueueUpload(tabId: string, options?: { localSources?: string[]; remoteDestinationDir?: string }): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const selected = tab.localPane.selectedFullPaths;
+    const selected = options?.localSources ?? tab.localPane.selectedFullPaths;
     if (selected.length === 0) {
       setTabs((prev) =>
         prev.map((item) =>
@@ -1424,7 +1496,7 @@ export function App(props: AppProps = {}) {
       username: tab.remotePane.username,
       authType: tab.remotePane.authType,
       localSources: selected,
-      remoteDestinationDir: tab.remotePane.currentPath
+      remoteDestinationDir: options?.remoteDestinationDir ?? tab.remotePane.currentPath
     };
     const checked = await resolveTransferConflicts("upload", payload);
     if (!checked) return;
@@ -1445,10 +1517,10 @@ export function App(props: AppProps = {}) {
     setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
   }
 
-  async function enqueueDownload(tabId: string): Promise<void> {
+  async function enqueueDownload(tabId: string, options?: { remoteSources?: string[]; localDestinationDir?: string }): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const selected = tab.remotePane.selectedFullPaths;
+    const selected = options?.remoteSources ?? tab.remotePane.selectedFullPaths;
     if (selected.length === 0) {
       setTabs((prev) =>
         prev.map((item) =>
@@ -1483,7 +1555,7 @@ export function App(props: AppProps = {}) {
       username: tab.remotePane.username,
       authType: tab.remotePane.authType,
       remoteSources: selected,
-      localDestinationDir: tab.localPane.currentPath
+      localDestinationDir: options?.localDestinationDir ?? tab.localPane.currentPath
     };
     const checked = await resolveTransferConflicts("download", payload);
     if (!checked) return;
@@ -1502,6 +1574,178 @@ export function App(props: AppProps = {}) {
       )
     );
     setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
+  }
+
+  function updatePaneSelection(tabId: string, pane: ActivePane, selection: SelectionState): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id !== tabId
+          ? tab
+          : pane === "local"
+            ? { ...tab, localPane: { ...tab.localPane, ...selection } }
+            : { ...tab, remotePane: { ...tab.remotePane, ...selection } }
+      )
+    );
+  }
+
+  function setPaneError(tabId: string, pane: ActivePane, message: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id !== tabId
+          ? tab
+          : pane === "local"
+            ? { ...tab, localPane: { ...tab.localPane, error: message } }
+            : { ...tab, remotePane: { ...tab.remotePane, error: message } }
+      )
+    );
+  }
+
+  function beginTransferDrag(pane: ActivePane, entry: LocalFileEntry | RemoteFileEntry, event: ReactDragEvent<HTMLElement>): void {
+    const tab = tabs.find((item) => item.id === activeTab.id);
+    if (!tab) return;
+    const paneState = pane === "local" ? tab.localPane : tab.remotePane;
+    const paths = paneState.selectedFullPaths.includes(entry.fullPath) ? paneState.selectedFullPaths : [entry.fullPath];
+    if (!paneState.selectedFullPaths.includes(entry.fullPath)) {
+      updatePaneSelection(activeTab.id, pane, { selectedFullPaths: [entry.fullPath], selectionAnchorFullPath: entry.fullPath });
+    }
+    const payload: TransferDragPayload = { kind: "cofinder-transfer", pane, tabId: activeTab.id, paths };
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(COFINDER_TRANSFER_MIME, JSON.stringify(payload));
+    event.dataTransfer.setData("text/plain", paths.join("\n"));
+  }
+
+  function parseTransferDrag(event: ReactDragEvent<HTMLElement>): TransferDragPayload | null {
+    const raw = event.dataTransfer.getData(COFINDER_TRANSFER_MIME);
+    if (!raw) return null;
+    try {
+      const payload = JSON.parse(raw) as Partial<TransferDragPayload>;
+      if (
+        payload.kind === "cofinder-transfer" &&
+        (payload.pane === "local" || payload.pane === "remote") &&
+        typeof payload.tabId === "string" &&
+        Array.isArray(payload.paths) &&
+        payload.paths.every((path) => typeof path === "string")
+      ) {
+        return payload as TransferDragPayload;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  function finderDropPaths(event: ReactDragEvent<HTMLElement>): string[] {
+    return Array.from(event.dataTransfer.files)
+      .map((file) => (file as File & { path?: string }).path ?? "")
+      .filter(Boolean);
+  }
+
+  function hasFinderFiles(event: ReactDragEvent<HTMLElement>): boolean {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
+
+  function canDropOnPane(targetPane: ActivePane, event: ReactDragEvent<HTMLElement>): boolean {
+    const payload = parseTransferDrag(event);
+    if (targetPane === "remote") {
+      return !!remotePane.connectionId && ((payload?.pane === "local" && payload.tabId === activeTab.id) || hasFinderFiles(event));
+    }
+    return !!localPane.currentPath && payload?.pane === "remote" && payload.tabId === activeTab.id;
+  }
+
+  function handleTransferDragOver(
+    targetPane: ActivePane,
+    targetPath: string,
+    event: ReactDragEvent<HTMLElement>,
+    options?: { requireDirectory?: boolean; entryType?: string }
+  ): void {
+    const rowValid = !options?.requireDirectory || options.entryType === "directory";
+    const valid = rowValid && canDropOnPane(targetPane, event);
+    event.preventDefault();
+    event.dataTransfer.dropEffect = valid ? "copy" : "none";
+    setDropTarget({ pane: targetPane, path: targetPath, valid });
+  }
+
+  async function handleTransferDrop(targetPane: ActivePane, targetPath: string, event: ReactDragEvent<HTMLElement>): Promise<void> {
+    event.preventDefault();
+    const payload = parseTransferDrag(event);
+    const finderPaths = finderDropPaths(event);
+    setDropTarget(null);
+
+    if (targetPane === "remote") {
+      if (payload?.pane === "local" && payload.tabId === activeTab.id) {
+        await enqueueUpload(activeTab.id, { localSources: payload.paths, remoteDestinationDir: targetPath });
+        return;
+      }
+      if (finderPaths.length > 0) {
+        await enqueueUpload(activeTab.id, { localSources: finderPaths, remoteDestinationDir: targetPath });
+        return;
+      }
+      setPaneError(activeTab.id, "remote", "Drop local files here to upload.");
+      return;
+    }
+
+    if (payload?.pane === "remote" && payload.tabId === activeTab.id) {
+      await enqueueDownload(activeTab.id, { remoteSources: payload.paths, localDestinationDir: targetPath });
+      return;
+    }
+    setPaneError(activeTab.id, "local", "Drop remote files here to download.");
+  }
+
+  function handleDirectoryRowDragOver(
+    targetPane: ActivePane,
+    entry: LocalFileEntry | RemoteFileEntry,
+    event: ReactDragEvent<HTMLElement>
+  ): void {
+    event.stopPropagation();
+    handleTransferDragOver(targetPane, entry.fullPath, event, { requireDirectory: true, entryType: entry.type });
+  }
+
+  async function handleDirectoryRowDrop(
+    targetPane: ActivePane,
+    entry: LocalFileEntry | RemoteFileEntry,
+    event: ReactDragEvent<HTMLElement>
+  ): Promise<void> {
+    event.stopPropagation();
+    if (entry.type !== "directory") {
+      event.preventDefault();
+      setDropTarget(null);
+      setPaneError(activeTab.id, targetPane, "Drop onto a folder or empty pane area.");
+      return;
+    }
+    await handleTransferDrop(targetPane, entry.fullPath, event);
+  }
+
+  function handleTransferDragLeave(event: ReactDragEvent<HTMLElement>): void {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(null);
+  }
+
+  function rowDropClass(pane: ActivePane, path: string): string {
+    if (!dropTarget || dropTarget.pane !== pane || dropTarget.path !== path) return "";
+    return dropTarget.valid ? "drop-target-valid" : "drop-target-invalid";
+  }
+
+  function beginMarqueeSelection(pane: ActivePane, event: ReactMouseEvent<HTMLElement>): void {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("[data-pane-row],button,input,textarea,select")) return;
+    const tab = tabs.find((item) => item.id === activeTab.id);
+    if (!tab) return;
+    const baseSelection =
+      pane === "local"
+        ? { selectedFullPaths: tab.localPane.selectedFullPaths, selectionAnchorFullPath: tab.localPane.selectionAnchorFullPath }
+        : { selectedFullPaths: tab.remotePane.selectedFullPaths, selectionAnchorFullPath: tab.remotePane.selectionAnchorFullPath };
+    event.preventDefault();
+    setActivePane(pane);
+    setMarquee({
+      pane,
+      startX: event.clientX,
+      startY: event.clientY,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      additive: event.metaKey || event.shiftKey,
+      baseSelection
+    });
+    if (!event.metaKey && !event.shiftKey) updatePaneSelection(activeTab.id, pane, clearSelectionState());
   }
 
   function handleLocalRowClick(
@@ -2473,6 +2717,7 @@ export function App(props: AppProps = {}) {
               <div className="v12m-pane-main v12m-pane-main--stack">
                 {localPane.error ? <div className="cfv12p-error">{localPane.error}</div> : null}
                 <V12VisualFileList
+                  pane="local"
                   isPaneActive={activePane === "local"}
                   entries={sortedEntries}
                   sortKey={localPane.sortKey}
@@ -2511,12 +2756,16 @@ export function App(props: AppProps = {}) {
                     void handleRowDoubleClick(activeTab.id, entry);
                   }}
                   onBackgroundMouseDown={(event) => {
-                    setActivePane("local");
-                    const target = event.target as HTMLElement | null;
-                    if (!target?.closest(".v12m-lrow")) {
-                      clearLocalSelection(activeTab.id);
-                    }
+                    beginMarqueeSelection("local", event);
                   }}
+                  onBackgroundDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
+                  onBackgroundDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
+                  onDragLeave={handleTransferDragLeave}
+                  onRowDragStart={(entry, event) => beginTransferDrag("local", entry, event)}
+                  onRowDragOver={(entry, event) => handleDirectoryRowDragOver("local", entry, event)}
+                  onRowDrop={(entry, event) => void handleDirectoryRowDrop("local", entry, event)}
+                  onRowDragEnd={() => setDropTarget(null)}
+                  getRowClassName={(entry) => rowDropClass("local", entry.fullPath)}
                   inlineRename={
                     inlineRename && inlineRename.pane === "local" && inlineRename.tabId === activeTab.id
                       ? {
@@ -2673,12 +2922,11 @@ export function App(props: AppProps = {}) {
           <div
             className={`table-wrap ${activePane === "local" ? "table-wrap-active" : ""}`}
             onMouseDown={(event) => {
-              setActivePane("local");
-              const target = event.target as HTMLElement | null;
-              if (!target?.closest("tbody tr")) {
-                clearLocalSelection(activeTab.id);
-              }
+              beginMarqueeSelection("local", event);
             }}
+            onDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
+            onDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
+            onDragLeave={handleTransferDragLeave}
           >
             <table className="file-table">
               <colgroup>
@@ -2705,7 +2953,15 @@ export function App(props: AppProps = {}) {
                 {sortedEntries.map((entry) => (
                   <tr
                     key={entry.fullPath}
-                    className={localPane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
+                    draggable={!(inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath)}
+                    data-pane-row="true"
+                    data-marquee-pane="local"
+                    data-full-path={entry.fullPath}
+                    className={`${localPane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""} ${rowDropClass("local", entry.fullPath)}`.trim()}
+                    onDragStart={(event) => beginTransferDrag("local", entry, event)}
+                    onDragOver={(event) => handleDirectoryRowDragOver("local", entry, event)}
+                    onDrop={(event) => void handleDirectoryRowDrop("local", entry, event)}
+                    onDragEnd={() => setDropTarget(null)}
                     onClick={(event) => {
                       if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
                       if (
@@ -2861,6 +3117,7 @@ export function App(props: AppProps = {}) {
                 <div className="v12m-pane-main v12m-pane-main--stack">
                   {remotePane.error ? <div className="cfv12p-error">{remotePane.error}</div> : null}
                   <V12VisualFileList
+                    pane="remote"
                     isPaneActive={activePane === "remote"}
                     entries={sortedRemoteEntries}
                     sortKey={remotePane.sortKey}
@@ -2899,12 +3156,16 @@ export function App(props: AppProps = {}) {
                       void handleRemoteDoubleClick(activeTab.id, entry);
                     }}
                     onBackgroundMouseDown={(event) => {
-                      setActivePane("remote");
-                      const target = event.target as HTMLElement | null;
-                      if (!target?.closest(".v12m-lrow")) {
-                        clearRemoteSelection(activeTab.id);
-                      }
+                      beginMarqueeSelection("remote", event);
                     }}
+                    onBackgroundDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
+                    onBackgroundDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
+                    onDragLeave={handleTransferDragLeave}
+                    onRowDragStart={(entry, event) => beginTransferDrag("remote", entry, event)}
+                    onRowDragOver={(entry, event) => handleDirectoryRowDragOver("remote", entry, event)}
+                    onRowDrop={(entry, event) => void handleDirectoryRowDrop("remote", entry, event)}
+                    onRowDragEnd={() => setDropTarget(null)}
+                    getRowClassName={(entry) => rowDropClass("remote", entry.fullPath)}
                     inlineRename={
                       inlineRename && inlineRename.pane === "remote" && inlineRename.tabId === activeTab.id
                         ? {
@@ -3072,12 +3333,11 @@ export function App(props: AppProps = {}) {
               <div
                 className={`table-wrap ${activePane === "remote" ? "table-wrap-active" : ""}`}
                 onMouseDown={(event) => {
-                  setActivePane("remote");
-                  const target = event.target as HTMLElement | null;
-                  if (!target?.closest("tbody tr")) {
-                    clearRemoteSelection(activeTab.id);
-                  }
+                  beginMarqueeSelection("remote", event);
                 }}
+                onDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
+                onDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
+                onDragLeave={handleTransferDragLeave}
               >
                 <table className="file-table">
                   <colgroup>
@@ -3104,7 +3364,15 @@ export function App(props: AppProps = {}) {
                     {sortedRemoteEntries.map((entry) => (
                       <tr
                         key={entry.fullPath}
-                        className={remotePane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
+                        draggable={!(inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath)}
+                        data-pane-row="true"
+                        data-marquee-pane="remote"
+                        data-full-path={entry.fullPath}
+                        className={`${remotePane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""} ${rowDropClass("remote", entry.fullPath)}`.trim()}
+                        onDragStart={(event) => beginTransferDrag("remote", entry, event)}
+                        onDragOver={(event) => handleDirectoryRowDragOver("remote", entry, event)}
+                        onDrop={(event) => void handleDirectoryRowDrop("remote", entry, event)}
+                        onDragEnd={() => setDropTarget(null)}
                         onClick={(event) => {
                           if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
                           if (
@@ -3193,6 +3461,18 @@ export function App(props: AppProps = {}) {
     </section>
   );
 
+  const marqueeOverlay = marquee ? (
+    <div
+      className="marquee-rect"
+      style={{
+        left: `${normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).left}px`,
+        top: `${normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).top}px`,
+        width: `${normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).right - normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).left}px`,
+        height: `${normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).bottom - normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).top}px`
+      }}
+    />
+  ) : null;
+
   return (
     <div className={uiShell === "v12" ? "app-shell app-shell--v12" : "app-shell"}>
       {uiShell === "v11" ? (
@@ -3254,6 +3534,7 @@ export function App(props: AppProps = {}) {
               onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
               onSelectRemoteFavorite={(path) => {
                 setActivePane("remote");
+                clearRemoteSelection(activeTab.id);
                 if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
               }}
               onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
@@ -3264,6 +3545,7 @@ export function App(props: AppProps = {}) {
         />
       )}
       {uiShell === "v11" ? queueV11Section : null}
+      {marqueeOverlay}
       {contextMenu ? (
         <div
           className="context-menu"

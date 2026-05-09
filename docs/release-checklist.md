@@ -59,3 +59,12 @@
 - Directory conflict smoke for at least one upload or download path.
 - Retry one failed task and retry all failed tasks; confirm the queue remains serial.
 - Failed task copy-error action; confirm copied detail includes stable code/message and no credentials.
+
+## V1.5 v0.6.0 gates
+
+- `npm run typecheck`
+- Drag local selected file(s)/folder(s) to remote pane and confirm upload queues through the conflict dialog when needed.
+- Drag remote selected file(s)/folder(s) to local pane and confirm download queues through the conflict dialog when needed.
+- Drag Finder file/folder to remote pane and confirm upload; drag Finder item to local pane and confirm no transfer.
+- Verify valid directory/current-folder drop feedback and invalid file-row drop feedback.
+- Verify marquee replace and `Cmd`/`Shift` additive marquee selection.

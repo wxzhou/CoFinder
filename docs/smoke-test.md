@@ -31,6 +31,19 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Retry all failed:** create two failed tasks, fix the cause, use `Retry failed`, and confirm tasks restart serially, one running at a time.
 - **Copy error detail:** on a failed task, use `Copy error` and confirm the clipboard contains the stable error code/message plus recent rsync detail without credentials.
 
+## V1.5 drag-and-drop transfer and marquee selection
+
+- **Local → remote drag upload:** select one local file, drag it to empty space in the connected remote pane, release, resolve any conflict prompt, and confirm a queued upload appears.
+- **Local multi-select / directory drag:** select multiple local items including a folder, drag them to the remote pane, and confirm one queued upload task per selected source.
+- **Remote → local drag download:** select one remote file, drag it to empty space in the local pane, release, resolve any conflict prompt, and confirm a queued download appears.
+- **Directory row drop target:** drag a local file onto a remote folder row and confirm the upload target is that folder; repeat remote file onto a local folder row for download.
+- **Invalid row drop:** drag onto a file row and confirm forbidden/invalid feedback appears and no task is queued.
+- **Finder → remote upload:** drag a file or folder from Finder into the connected remote pane and confirm upload uses the same conflict dialog and queue path.
+- **Finder non-goal:** drag from Finder into the local pane and confirm it does not enqueue a transfer.
+- **Marquee replace:** drag from empty pane background across several rows and confirm the selection becomes exactly the intersected rows.
+- **Marquee additive:** hold `Cmd` or `Shift`, drag a marquee over additional rows, and confirm existing selection is preserved while hit rows are added.
+- **Gesture priority:** confirm splitter drag still resizes panes, row drag starts transfer, background drag starts marquee, single click selects, and double click opens/enters directories.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.

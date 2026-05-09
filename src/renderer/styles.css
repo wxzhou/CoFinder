@@ -362,6 +362,28 @@ body,
   background: color-mix(in srgb, var(--bg-selected) 96%, transparent);
 }
 
+.drop-target-valid {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--bg-selected) 72%, transparent);
+}
+
+.drop-target-invalid {
+  outline: 2px solid #d14343;
+  outline-offset: -2px;
+  background: #fff1f1;
+  cursor: not-allowed;
+}
+
+.marquee-rect {
+  position: fixed;
+  z-index: 2500;
+  pointer-events: none;
+  border: 1px solid color-mix(in srgb, var(--accent) 78%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-radius: 3px;
+}
+
 .pane-status {
   display: flex;
   gap: var(--space-3);
