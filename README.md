@@ -2,16 +2,16 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-**`package.json` version:** `0.8.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.5.0** (tags, GitHub Release, user-facing “what’s out”).
+**`package.json` version:** `0.9.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.5.0** (tags, GitHub Release, user-facing “what’s out”).
 
 ## Versioning
 
 CoFinder uses two parallel naming schemes:
 
 - **Product milestone** (V1, V1.1, V1.2, …): labels for development phases and plan documents (`docs/dev/V1.*_PLAN.md`, `docs/roadmap.md`). They do **not** equal the numeric field in `package.json`.
-- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.8.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
+- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.9.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
 
-Past releases are **not** retroactively re-tagged. Product milestone **V1.4** shipped as **`v0.5.0`**; **V1.5**, **V1.6**, and **V1.7** are implemented in the development tree and are not shipped until their tags/releases are created.
+Past releases are **not** retroactively re-tagged. Product milestone **V1.4** shipped as **`v0.5.0`**; **V1.5** through **V1.8** are implemented in the development tree and are not shipped until their tags/releases are created.
 
 | Product milestone | Release version / tag | Status |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.4** sh
 | V1.5 | v0.6.0 | Implemented in dev tree; not shipped until tagged |
 | V1.6 | v0.7.0 | Implemented in dev tree; not shipped until tagged |
 | V1.7 | v0.8.0 | Implemented in dev tree; not shipped until tagged |
-| V1.8 | v0.9.0 | Planned |
+| V1.8 | v0.9.0 | Implemented in dev tree; not shipped until tagged |
 | V1.9 | v0.10.0 | Planned |
 | V2.0 | v1.0.0 | Planned stable release |
 
@@ -63,12 +63,35 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 - **M5 — packaging:** `electron-builder` (macOS dmg + zip), `npm run package` / `npm run dist`, artifacts under `release/`
 - **M5 — documentation:** `docs/smoke-test.md`, `docs/release-checklist.md`, `docs/security.md`, `docs/roadmap.md`; `npm run check:secrets`
 
-### Not Supported in V1-1.7
+### Not Supported in V1-1.8
 
 - Remote edit auto-sync workflow
 - Full Quick Look for remote files
 - Full-disk or content search; V1.7 filtering only narrows the current visible listing by file/folder name.
+- Full remote ACL editor; V1.8 only supports basic octal chmod.
+- Remote duplicate for directories or files larger than 50 MB.
 - Full i18n
+
+### Implemented in V1.8 / v0.9.0 development tree
+
+- Remote mkdir with main-process validation and refresh.
+- Basic remote chmod via three-digit octal mode.
+- Remote file duplicate for files up to 50 MB, using SFTP get/put in main process.
+- Local "Open Terminal Here" and remote "Open SSH Terminal Here"; SSH terminal commands never include saved passwords.
+- Remote symlink display from SFTP listing/stat where available.
+- Remote directory size is calculated asynchronously with cancel support and traversal caps.
+
+### Remote Capabilities Matrix
+
+| Capability | Local | Remote |
+| --- | --- | --- |
+| Browse / sort / filter | Yes | Yes |
+| Rename / delete / Get Info | Yes | Yes |
+| New folder | Planned | Yes |
+| Permissions | Read/display | Basic octal chmod |
+| Duplicate | Deferred | Files up to 50 MB |
+| Terminal here | Terminal.app | SSH Terminal.app, password not injected |
+| Directory size | Async | Async, capped, cancelable |
 
 ### Implemented in V1.7 / v0.8.0 development tree
 

@@ -24,6 +24,18 @@ type RemoteStatItem = {
   mode?: number;
 };
 
+export type RemoteDirectorySizeOptions = {
+  signal?: AbortSignal;
+  maxEntries?: number;
+  maxDepth?: number;
+};
+
+export type RemoteDirectorySizeResult = {
+  size: number;
+  visitedEntries: number;
+  capped: boolean;
+};
+
 class RemoteServiceError extends Error {
   constructor(
     public readonly code: RemoteErrorCode,
@@ -187,6 +199,57 @@ export class RemoteFileService {
     return deleted;
   }
 
+  async makeDirectory(connectionId: string, parentPath: string, name: string): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const trimmedName = this.validateNewChildName(name);
+    const targetPath = posixPath.join(this.normalizeRemotePath(parentPath), trimmedName);
+    try {
+      const client = connection.client as unknown as { mkdir: (path: string) => Promise<unknown> };
+      await client.mkdir(targetPath);
+      return targetPath;
+    } catch (error) {
+      throw this.mapMkdirError(error);
+    }
+  }
+
+  async chmodPath(connectionId: string, targetPath: string, mode: number): Promise<void> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    if (!Number.isInteger(mode) || mode < 0 || mode > 0o777) {
+      throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Permissions must be an octal mode from 000 to 777.");
+    }
+    try {
+      const client = connection.client as unknown as { chmod: (path: string, mode: number) => Promise<unknown> };
+      await client.chmod(this.normalizeRemotePath(targetPath), mode);
+    } catch (error) {
+      throw this.mapChmodError(error);
+    }
+  }
+
+  async duplicateFile(connectionId: string, targetPath: string): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    try {
+      const client = connection.client as unknown as RemoteDuplicateClient;
+      const stat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      if (resolveRemoteType(stat) !== "file") {
+        throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only remote files can be duplicated in this version.");
+      }
+      if ((stat.size ?? 0) > 50 * 1024 * 1024) {
+        throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Remote duplicate is limited to files up to 50 MB.");
+      }
+      const destinationPath = await this.nextDuplicatePath(client, normalizedPath);
+      const data = await client.get(normalizedPath);
+      await client.put(data, destinationPath);
+      return destinationPath;
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapDuplicateError(error);
+    }
+  }
+
   async getPathInfo(connectionId: string, targetPath: string, options?: { includeDirectorySize?: boolean }): Promise<PathInfo> {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
@@ -213,8 +276,43 @@ export class RemoteFileService {
     }
   }
 
+  async calculateDirectorySize(
+    connectionId: string,
+    targetPath: string,
+    options: RemoteDirectorySizeOptions = {}
+  ): Promise<RemoteDirectorySizeResult> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const stat = (await connection.client.stat(normalizedPath)) as RemoteStatItem;
+    if (resolveRemoteType(stat) !== "directory") {
+      throw new RemoteServiceError("REMOTE_NOT_DIRECTORY", "Remote path is not a directory.");
+    }
+    try {
+      const state = { visitedEntries: 0, capped: false };
+      const size = await this.getRemoteDirectorySizeLimited(connection.client as unknown as RemoteDeleteClient, normalizedPath, {
+        signal: options.signal,
+        maxEntries: options.maxEntries ?? 20_000,
+        maxDepth: options.maxDepth ?? 32,
+        depth: 0,
+        state
+      });
+      return { size, visitedEntries: state.visitedEntries, capped: state.capped };
+    } catch (error) {
+      throw this.mapInfoError(error);
+    }
+  }
+
   private normalizeRemotePath(inputPath: string): string {
     return normalizeRemotePosixPath(inputPath.trim() || "/");
+  }
+
+  private validateNewChildName(name: string): string {
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === "." || trimmed === ".." || trimmed.includes("/") || trimmed.includes("\\")) {
+      throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Remote name is invalid.");
+    }
+    return trimmed;
   }
 
   private mapRemoteEntry(basePath: string, entry: RemoteListItem): RemoteFileEntry {
@@ -324,6 +422,57 @@ export class RemoteFileService {
     return total;
   }
 
+  private async getRemoteDirectorySizeLimited(
+    client: RemoteDeleteClient,
+    targetPath: string,
+    opts: {
+      signal?: AbortSignal;
+      maxEntries: number;
+      maxDepth: number;
+      depth: number;
+      state: { visitedEntries: number; capped: boolean };
+    }
+  ): Promise<number> {
+    if (opts.signal?.aborted) throw new RemoteServiceError("REMOTE_DIRECTORY_SIZE_FAILED", "Remote directory size was canceled.");
+    if (opts.depth > opts.maxDepth || opts.state.visitedEntries >= opts.maxEntries) {
+      opts.state.capped = true;
+      return 0;
+    }
+    const entries = (await client.list(targetPath)) as RemoteListItem[];
+    let total = 0;
+    for (const entry of entries) {
+      if (opts.signal?.aborted) throw new RemoteServiceError("REMOTE_DIRECTORY_SIZE_FAILED", "Remote directory size was canceled.");
+      if (entry.name === "." || entry.name === "..") continue;
+      opts.state.visitedEntries += 1;
+      if (opts.state.visitedEntries > opts.maxEntries) {
+        opts.state.capped = true;
+        break;
+      }
+      const childPath = targetPath === "/" ? `/${entry.name}` : posixPath.join(targetPath, entry.name);
+      if (entry.type === "d") {
+        total += await this.getRemoteDirectorySizeLimited(client, childPath, { ...opts, depth: opts.depth + 1 });
+      } else if (entry.type === "-") {
+        total += entry.size ?? 0;
+      }
+    }
+    return total;
+  }
+
+  private async nextDuplicatePath(client: RemoteDuplicateClient, sourcePath: string): Promise<string> {
+    const dir = posixPath.dirname(sourcePath);
+    const parsed = posixPath.parse(sourcePath);
+    for (let i = 1; i <= 999; i += 1) {
+      const suffix = i === 1 ? " copy" : ` copy ${i}`;
+      const candidate = posixPath.join(dir, `${parsed.name}${suffix}${parsed.ext}`);
+      try {
+        await client.stat(candidate);
+      } catch {
+        return candidate;
+      }
+    }
+    throw new RemoteServiceError("REMOTE_DUPLICATE_FAILED", "Could not find an available duplicate name.");
+  }
+
   private mapDeleteError(error: unknown): RemoteServiceError {
     const message =
       typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote delete failed";
@@ -354,6 +503,31 @@ export class RemoteFileService {
     return new RemoteServiceError("REMOTE_INFO_FAILED", "Failed to load remote path info.", message);
   }
 
+  private mapMkdirError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote mkdir failed";
+    if (/already exists|EEXIST/i.test(message)) return new RemoteServiceError("REMOTE_MKDIR_FAILED", "Remote directory already exists.", message);
+    if (/EACCES|Permission denied/i.test(message)) return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    if (/No such file|ENOENT/i.test(message)) return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote parent path does not exist.", message);
+    return new RemoteServiceError("REMOTE_MKDIR_FAILED", "Failed to create remote directory.", message);
+  }
+
+  private mapChmodError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote chmod failed";
+    if (/EACCES|Permission denied/i.test(message)) return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    if (/No such file|ENOENT/i.test(message)) return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    return new RemoteServiceError("REMOTE_CHMOD_FAILED", "Failed to change remote permissions.", message);
+  }
+
+  private mapDuplicateError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote duplicate failed";
+    if (/EACCES|Permission denied/i.test(message)) return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    if (/No such file|ENOENT/i.test(message)) return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    return new RemoteServiceError("REMOTE_DUPLICATE_FAILED", "Failed to duplicate remote file.", message);
+  }
+
   private extractRawError(error: unknown): { name: string; code: string; message: string } {
     const err = error as { name?: unknown; code?: unknown; message?: unknown };
     return {
@@ -374,6 +548,11 @@ type RemoteDeleteClient = {
   list: (path: string) => Promise<unknown[]>;
   delete: (path: string) => Promise<unknown>;
   rmdir: (path: string) => Promise<unknown>;
+};
+
+type RemoteDuplicateClient = RemoteDeleteClient & {
+  get: (path: string) => Promise<Buffer | NodeJS.ReadableStream>;
+  put: (input: Buffer | NodeJS.ReadableStream, path: string) => Promise<unknown>;
 };
 
 function unique(items: string[]): string[] {

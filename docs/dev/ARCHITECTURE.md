@@ -29,6 +29,8 @@
   - `remote:listDirectory`
   - `remote:disconnect`
   - `remote:getHomeDirectory`
+  - `remote:mkdir`, `remote:chmod`, `remote:duplicate`
+  - `remote:directorySizeStart`, `remote:directorySizeCancel`, push `remote:directorySizeUpdate`
 - Transfer:
   - `transfer:enqueueUpload`
   - `transfer:enqueueDownload`
@@ -49,6 +51,7 @@
   - `settings:set`
 - System:
   - `system:copyText`
+  - `system:openTerminal`, `system:openSshTerminal`
 
 ## Service Responsibilities
 
@@ -58,6 +61,7 @@
 - `RemoteFileService`
   - SFTP connect/list/disconnect/home.
   - Remote path normalization and remote error mapping.
+  - Remote mkdir, chmod, file duplicate, symlink type mapping, and capped directory-size traversal.
 - `ConnectionManager`
   - Holds active SFTP client connections keyed by `connectionId`.
 - `TransferQueueService`
@@ -103,6 +107,7 @@
 
 - Credentials never embedded in `ServerProfile`.
 - Password should not be logged, serialized in transfer tasks, or passed via rsync args.
+- Terminal launch never reads or injects saved passwords.
 - Clipboard write goes through explicit `system:copyText`.
 - Path safety and rsync safety checks centralized in main utilities/services.
 - Transfer conflict checks and rename target generation run in main; renderer does not own overwrite policy.

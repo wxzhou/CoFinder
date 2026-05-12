@@ -25,6 +25,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 - V1.7 navigation efficiency stores transient local and per-profile remote recents in renderer localStorage (`cofinder.recent.*`); these are non-secret paths and do not add IPC or main-process files.
 - Multi-tab isolation for local/remote pane state.
 - Global serial transfer queue (upload/download via `rsync`) with conflict detection, rename/skip/overwrite/cancel policy, retry, and stable failure categories.
+- V1.8 remote operations: mkdir, basic chmod, file duplicate up to 50 MB, SSH Terminal here without password injection, and cancelable capped directory-size jobs.
 - Multi-select (`Cmd`/`Shift` click + `Cmd/Ctrl+A`), marquee selection, drag-and-drop transfer, and context menus.
 - IPC unified response shape: `{ ok: true, data }` or `{ ok: false, error }`.
 
@@ -60,6 +61,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 - Drag-and-drop transfer must route through the same enqueue/conflict pipeline as toolbar/context menu transfers.
 - IPC input validation stays in main process (renderer is untrusted input).
 - App quit must clean up: transfer queue shutdown and connection disconnect-all.
+- Remote recursive operations must stay capped/cancelable and avoid following symlink cycles.
 - Packaged app must resolve assets and tools (`PATH` augmentation for `ssh`/`rsync`).
 
 ## Known Design Constraints

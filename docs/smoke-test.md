@@ -69,6 +69,16 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **History dropdown:** navigate A -> B -> C in local and remote panes, use Back/Forward buttons and the History dropdown to jump among entries, and confirm tab-local history remains isolated.
 - **Boundary check:** confirm favorites remain pinned sidebar shortcuts, recents are transient history, and Site Manager profiles are only connection records.
 
+## V1.8 remote operations expansion
+
+- **Remote mkdir:** connect to the isolated remote test root, use New Folder, create a disposable folder, refresh, and confirm it appears. Try an invalid name containing `/` and confirm a clear validation error.
+- **Remote chmod:** create/select a disposable remote file, use Change Permissions, enter `640`, refresh/Get Info, and confirm permissions update where the server supports chmod. Restore permissions before cleanup if needed.
+- **Remote duplicate:** select a small remote file, use Duplicate File, and confirm a `copy`-suffixed file appears with the same content. Try a directory and confirm duplicate is rejected.
+- **Copy path polish:** select a remote file and use Copy Full Path; confirm the clipboard contains the normalized remote path only, not credentials.
+- **Terminal here:** use local Open Terminal Here and confirm Terminal opens in the local folder. Use remote Open SSH Terminal Here and confirm the command opens an SSH session targeting host/user/path without prompting CoFinder to expose saved passwords.
+- **Symlink display:** in a remote fixture containing a symlink, confirm the listing/Get Info identifies it as `symlink` and directory size does not follow it as a directory.
+- **Remote directory size:** Get Info on a remote directory, confirm size starts calculating asynchronously, then test Cancel. Repeat on a small directory and confirm size completes without freezing the UI.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.
@@ -101,6 +111,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - Browse remote directories and test remote path input navigation.
 - Try a non-existent remote path and verify current directory state remains usable.
 - Disconnect and reconnect from Site Manager.
+- For V1.8 remote operation tests, use only `/mnt/gpfs1/Users/zhouwenxiong/CoFinder_test` on `sge` or another isolated disposable test root.
 
 ## Tabs Smoke (M3)
 

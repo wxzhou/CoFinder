@@ -91,3 +91,14 @@
 - Confirm remote path autocomplete uses only current connection/profile known paths and does not crawl the server.
 - Confirm local recents and per-profile remote recents can be cleared.
 - Confirm Back/Forward buttons and History dropdowns remain per-pane and per-tab.
+
+## V1.8 v0.9.0 gates
+
+- `npm run typecheck`
+- Remote mkdir succeeds in an isolated remote test directory and invalid names are rejected.
+- Remote chmod accepts only three octal digits and updates permissions when the server allows it.
+- Remote duplicate works for a small file and rejects directories / oversized files.
+- Local Terminal here and remote SSH Terminal here launch without putting saved passwords in command lines.
+- Remote symlink entries display as symlink where SFTP exposes them.
+- Remote directory size runs asynchronously, can be canceled, and shows a partial/capped result for huge trees.
+- Inspect logs/clipboard/terminal command text for absence of saved passwords or private keys.

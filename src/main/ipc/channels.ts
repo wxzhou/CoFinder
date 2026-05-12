@@ -16,6 +16,12 @@ export const IPC_CHANNELS = {
     rename: "remote:rename",
     delete: "remote:delete",
     getInfo: "remote:getInfo",
+    mkdir: "remote:mkdir",
+    chmod: "remote:chmod",
+    duplicate: "remote:duplicate",
+    directorySizeStart: "remote:directorySizeStart",
+    directorySizeCancel: "remote:directorySizeCancel",
+    directorySizeUpdate: "remote:directorySizeUpdate",
     previewOpen: "remote:previewOpen",
     previewClearForTab: "remote:previewClearForTab",
     previewClearForConnection: "remote:previewClearForConnection"
@@ -61,6 +67,8 @@ export const IPC_CHANNELS = {
   system: {
     copyText: "system:copyText",
     quickLook: "system:quickLook",
+    openTerminal: "system:openTerminal",
+    openSshTerminal: "system:openSshTerminal",
     getAppVersion: "system:getAppVersion"
   }
 } as const;

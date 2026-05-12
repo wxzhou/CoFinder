@@ -44,6 +44,7 @@ import type {
   PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
+  RemoteDirectorySizeUpdatePayload,
   TransferConflict,
   TransferConflictPolicy,
   TransferUpdatePayload
@@ -118,6 +119,8 @@ type InfoDialogState = {
   pane: "local" | "remote";
   info: PathInfo;
   isSizeLoading: boolean;
+  sizeJobId?: string;
+  sizeCapped?: boolean;
 };
 
 type ActivePane = "local" | "remote";
@@ -446,6 +449,31 @@ export function App(props: AppProps = {}) {
       setTransferTasks(payload.tasks);
     });
     void loadTransferTasks();
+    return off;
+  }, []);
+
+  useEffect(() => {
+    const off = window.cofinder.remote.onDirectorySizeUpdate((payload: RemoteDirectorySizeUpdatePayload) => {
+      setInfoDialog((prev) => {
+        if (!prev || prev.sizeJobId !== payload.jobId) return prev;
+        if (payload.status === "success") {
+          return {
+            ...prev,
+            isSizeLoading: false,
+            sizeCapped: payload.capped,
+            info: { ...prev.info, size: payload.size ?? prev.info.size }
+          };
+        }
+        if (payload.status === "failed") {
+          return { ...prev, isSizeLoading: false };
+        }
+        if (payload.status === "canceled") {
+          return { ...prev, isSizeLoading: false, sizeJobId: undefined };
+        }
+        return prev;
+      });
+      if (payload.status === "failed" && payload.error) setQueueError(payload.error);
+    });
     return off;
   }, []);
 
@@ -2349,22 +2377,89 @@ export function App(props: AppProps = {}) {
     if (shouldLoadSize) {
       const connectionId = tab.remotePane.connectionId;
       void (async () => {
-        const sizeRes = await window.cofinder.remote.getInfo({
+        const sizeRes = await window.cofinder.remote.directorySizeStart({
           connectionId,
-          path: targetPath,
-          includeDirectorySize: true
+          path: targetPath
         });
         if (!sizeRes.ok) return;
         setInfoDialog((prev) => {
           if (!prev || infoRequestTokenRef.current !== token) return prev;
           return {
             ...prev,
-            info: { ...prev.info, size: sizeRes.data.info.size },
-            isSizeLoading: false
+            sizeJobId: sizeRes.data.jobId
           };
         });
       })();
     }
+  }
+
+  async function createRemoteDirectory(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId) return;
+    const name = window.prompt("New remote folder name");
+    if (!name?.trim()) return;
+    const result = await window.cofinder.remote.mkdir({
+      connectionId: tab.remotePane.connectionId,
+      parentPath: tab.remotePane.currentPath,
+      name
+    });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+  }
+
+  async function chmodRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const entry = tab.remotePane.entries.find((item) => item.fullPath === targetPath);
+    const mode = window.prompt("Remote permissions mode (octal)", entry?.permissions ? rwxToOctal(entry.permissions) : "644");
+    if (!mode) return;
+    const result = await window.cofinder.remote.chmod({ connectionId: tab.remotePane.connectionId, path: targetPath, mode });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+  }
+
+  async function duplicateRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const result = await window.cofinder.remote.duplicate({ connectionId: tab.remotePane.connectionId, path: targetPath });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId
+          ? { ...item, remotePane: { ...item.remotePane, selectedFullPaths: [result.data.newPath], selectionAnchorFullPath: result.data.newPath } }
+          : item
+      )
+    );
+  }
+
+  async function openTerminalHere(tabId: string, pane: "local" | "remote"): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "local") {
+      const result = await window.cofinder.system.openTerminal({ path: tab.localPane.currentPath });
+      if (!result.ok) setQueueError(result.error.message);
+      return;
+    }
+    if (!tab.remotePane.host || !tab.remotePane.username || !tab.remotePane.port) return;
+    const result = await window.cofinder.system.openSshTerminal({
+      host: tab.remotePane.host,
+      username: tab.remotePane.username,
+      port: tab.remotePane.port,
+      remotePath: tab.remotePane.currentPath
+    });
+    if (!result.ok) setQueueError(result.error.message);
   }
 
   async function quickLookSelection(tabId: string, pane: "local" | "remote"): Promise<void> {
@@ -2606,10 +2701,12 @@ export function App(props: AppProps = {}) {
         connectActionAriaLabel={remoteConnected ? "Disconnect" : "Connect"}
         onUpload={() => void enqueueUpload(activeTab.id)}
         onDownload={() => void enqueueDownload(activeTab.id)}
+        onNewFolder={() => void createRemoteDirectory(activeTab.id)}
         uploadDisabled={localPane.selectedFullPaths.length === 0 || !remotePane.connectionId}
         downloadDisabled={
           remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId
         }
+        newFolderDisabled={!remotePane.connectionId}
         onDelete={() => openDeleteConfirm(activeTab.id, activePane)}
         deleteDisabled={
           activePane === "local"
@@ -3253,6 +3350,9 @@ export function App(props: AppProps = {}) {
             >
               Upload
             </button>
+            <button type="button" className="toolbar-button" onClick={() => void openTerminalHere(activeTab.id, "local")}>
+              Terminal
+            </button>
           </div>
 
           {localNavTools}
@@ -3642,6 +3742,12 @@ export function App(props: AppProps = {}) {
                   onClick={() => void enqueueDownload(activeTab.id)}
                 >
                   Download
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void createRemoteDirectory(activeTab.id)}>
+                  New Folder
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void openTerminalHere(activeTab.id, "remote")}>
+                  SSH Terminal
                 </button>
                 <button type="button" className="toolbar-button" onClick={() => void disconnectRemote(activeTab.id)}>
                   Disconnect
@@ -4165,6 +4271,16 @@ export function App(props: AppProps = {}) {
                 type="button"
                 className="context-item"
                 onClick={async () => {
+                  await openTerminalHere(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Open Terminal Here
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
                   const tab = tabs.find((t) => t.id === contextMenu.tabId);
                   if (tab) await navigateLocal(contextMenu.tabId, tab.localPane.currentPath, "replace");
                   setContextMenu(null);
@@ -4206,6 +4322,16 @@ export function App(props: AppProps = {}) {
               <button
                 type="button"
                 className="context-item"
+                onClick={async () => {
+                  await createRemoteDirectory(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                New Folder
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) === 0}
                 onClick={() => {
                   openDeleteConfirm(contextMenu.tabId, "remote");
@@ -4242,6 +4368,28 @@ export function App(props: AppProps = {}) {
               <button
                 type="button"
                 className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await chmodRemoteSelection(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Change Permissions
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await duplicateRemoteSelection(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Duplicate File
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 onClick={async () => {
                   await copySelection(contextMenu.tabId, "remote", "name");
                   setContextMenu(null);
@@ -4259,6 +4407,16 @@ export function App(props: AppProps = {}) {
               >
                 Copy Full Path
                 <span className="context-shortcut">⌘⇧C</span>
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await openTerminalHere(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Open SSH Terminal Here
               </button>
               <button
                 type="button"
@@ -4320,9 +4478,20 @@ export function App(props: AppProps = {}) {
                   <span className="info-size-loading">
                     <span className="info-spinner" aria-hidden="true" />
                     Calculating...
+                    {infoDialog.sizeJobId ? (
+                      <button
+                        type="button"
+                        className="toolbar-button"
+                        onClick={() => {
+                          if (infoDialog.sizeJobId) void window.cofinder.remote.directorySizeCancel({ jobId: infoDialog.sizeJobId });
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
                   </span>
                 ) : (
-                  formatSize(infoDialog.info.size)
+                  `${formatSize(infoDialog.info.size)}${infoDialog.sizeCapped ? " (partial)" : ""}`
                 )}
               </dd>
               <dt>Modified</dt>
@@ -4335,6 +4504,15 @@ export function App(props: AppProps = {}) {
               <dd>{infoDialog.info.group ?? "-"}</dd>
             </dl>
             <div className="info-actions">
+              {infoDialog.pane === "remote" && infoDialog.info.type !== "unknown" ? (
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  onClick={() => void chmodRemoteSelection(activeTab.id)}
+                >
+                  Chmod
+                </button>
+              ) : null}
               <button type="button" className="toolbar-button" onClick={() => setInfoDialog(null)}>
                 Close
               </button>
@@ -4503,6 +4681,20 @@ function promptForConflictPolicy(conflicts: TransferConflict[]): Exclude<Transfe
   const normalized = answer?.trim().toLowerCase();
   if (normalized === "overwrite" || normalized === "skip" || normalized === "rename") return normalized;
   return "cancel";
+}
+
+function rwxToOctal(input: string): string {
+  if (!/^[r-][w-][x-][r-][w-][x-][r-][w-][x-]$/.test(input)) return "644";
+  const chunks = [input.slice(0, 3), input.slice(3, 6), input.slice(6, 9)];
+  return chunks
+    .map((chunk) => {
+      let value = 0;
+      if (chunk[0] === "r") value += 4;
+      if (chunk[1] === "w") value += 2;
+      if (chunk[2] === "x") value += 1;
+      return String(value);
+    })
+    .join("");
 }
 
 function readLastLocalPath(): string {

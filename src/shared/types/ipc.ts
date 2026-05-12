@@ -55,6 +55,10 @@ export type RemoteErrorCode =
   | "REMOTE_RENAME_FAILED"
   | "REMOTE_DELETE_FAILED"
   | "REMOTE_INFO_FAILED"
+  | "REMOTE_MKDIR_FAILED"
+  | "REMOTE_CHMOD_FAILED"
+  | "REMOTE_DUPLICATE_FAILED"
+  | "REMOTE_DIRECTORY_SIZE_FAILED"
   | "REMOTE_PREVIEW_UNSUPPORTED"
   | "REMOTE_PREVIEW_FAILED"
   | "REMOTE_DISCONNECTED"
@@ -186,6 +190,17 @@ export type TransferUpdatePayload = {
   tasks: TransferTask[];
 };
 
+export type RemoteDirectorySizeUpdatePayload = {
+  jobId: string;
+  connectionId: string;
+  path: string;
+  status: "running" | "success" | "failed" | "canceled";
+  size?: number;
+  visitedEntries?: number;
+  capped?: boolean;
+  error?: string;
+};
+
 /** Sent from Site Manager to create/update a profile; password is never persisted in profiles.json. */
 export type ProfileUpsertPayload = {
   id?: string;
@@ -226,6 +241,12 @@ export interface IpcApi {
       path: string;
       includeDirectorySize?: boolean;
     }) => Promise<IpcResponse<{ info: PathInfo }>>;
+    mkdir: (request: { connectionId: string; parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
+    chmod: (request: { connectionId: string; path: string; mode: string }) => Promise<IpcResponse<{ changed: true }>>;
+    duplicate: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ duplicated: true; newPath: string }>>;
+    directorySizeStart: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ jobId: string }>>;
+    directorySizeCancel: (request: { jobId: string }) => Promise<IpcResponse<{ canceled: true }>>;
+    onDirectorySizeUpdate: (handler: (payload: RemoteDirectorySizeUpdatePayload) => void) => () => void;
     previewOpen: (request: {
       tabId: string;
       connectionId: string;
@@ -279,6 +300,8 @@ export interface IpcApi {
   system: {
     copyText: (request: { text: string }) => Promise<IpcResponse<{ copied: true }>>;
     quickLook: (request: { path: string }) => Promise<IpcResponse<{ opened: true }>>;
+    openTerminal: (request: { path: string }) => Promise<IpcResponse<{ opened: true }>>;
+    openSshTerminal: (request: { host: string; port: number; username: string; remotePath?: string }) => Promise<IpcResponse<{ opened: true }>>;
     getAppVersion: () => Promise<IpcResponse<{ version: string }>>;
   };
 }

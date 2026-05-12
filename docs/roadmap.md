@@ -18,7 +18,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.5 | v0.6.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.6 | v0.7.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.7 | v0.8.0 | Implemented in dev tree (not shipped until tagged) |
-| V1.8 | v0.9.0 | Planned |
+| V1.8 | v0.9.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.9 | v0.10.0 | Planned |
 | V2.0 | v1.0.0 | Planned stable release |
 
@@ -47,7 +47,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V1.5 | v0.6.0 | Drag-and-Drop Transfer & Selection — implemented in dev tree |
 | V1.6 | v0.7.0 | Preferences MVP — implemented in dev tree |
 | V1.7 | v0.8.0 | Search, Filter, and Navigation — implemented in dev tree |
-| V1.8 | v0.9.0 | Remote Operations Expansion |
+| V1.8 | v0.9.0 | Remote Operations Expansion — implemented in dev tree |
 | V1.9 | v0.10.0 | Packaging, Updates, and Reliability |
 | V2.0 | v1.0.0 | Stable Personal Release |
 
@@ -58,9 +58,10 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 - **Remote edit auto-sync**
 - **Full Remote Quick Look**. A limited read-only remote preview cache for text/images exists from **V1.3**; it is not a full macOS Quick Look equivalent and does not support editing/sync.
 - **Indexed/full-text search** (V1.7 only filters current listings and suggests already-known paths)
+- **Full ACL editor / remote shell file-manager mode** (V1.8 ships curated remote operations only)
 - **Full i18n** (no localized product shell in near phases)
 - **Plugin-sized Preferences UI** (V1.6 keeps preferences curated and small)
 - **Cross-platform** support (macOS-only product)
 - **IDE-like** features (project model, SCM integration, etc.)
 
-Drag-and-drop transfer, marquee selection, Preferences MVP, and navigation efficiency are implemented in the development tree. They remain unshipped until their matching release tags are created.
+Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, and remote operations expansion are implemented in the development tree. They remain unshipped until their matching release tags are created.

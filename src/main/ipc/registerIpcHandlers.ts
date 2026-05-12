@@ -1,4 +1,5 @@
 import { app, BrowserWindow, clipboard, ipcMain } from "electron";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -42,6 +43,7 @@ import type {
   TransferConflict,
   TransferConflictCheckResponse,
   TransferUpdatePayload,
+  RemoteDirectorySizeUpdatePayload,
   RemoteListDirectoryRequest,
   RemoteListDirectoryResponse
 } from "../../shared/types/ipc";
@@ -69,6 +71,7 @@ const credentialService = new CredentialService(credentialProvider);
 const registeredChannels: string[] = [];
 let transferOff: (() => void) | null = null;
 let isRegistered = false;
+const remoteSizeJobs = new Map<string, AbortController>();
 
 function registerChannel<TArgs extends unknown[], TResult>(
   channel: string,
@@ -280,6 +283,105 @@ export function registerIpcHandlers(): void {
       return ok({ info });
     } catch (error) {
       return toIpcError(error, "REMOTE_INFO_FAILED", "Failed to load remote path info.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.mkdir, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:mkdir request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const parentPath = normalizeRemotePathInput(body.parentPath, "REMOTE_INVALID_INPUT", "parentPath");
+      const name = requiredString(body.name, "name", "REMOTE_INVALID_INPUT", undefined, { maxLength: 255 });
+      const createdPath = await remoteFileService.makeDirectory(connectionId, parentPath, name);
+      return ok({ created: true as const, path: createdPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_MKDIR_FAILED", "Failed to create remote directory.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.chmod, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:chmod request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const modeText = requiredString(body.mode, "mode", "REMOTE_INVALID_INPUT");
+      if (!/^[0-7]{3}$/.test(modeText)) throw new AppError("REMOTE_INVALID_INPUT", "Mode must be three octal digits, for example 644.");
+      await remoteFileService.chmodPath(connectionId, targetPath, Number.parseInt(modeText, 8));
+      return ok({ changed: true as const });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_CHMOD_FAILED", "Failed to change remote permissions.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.duplicate, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:duplicate request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const newPath = await remoteFileService.duplicateFile(connectionId, targetPath);
+      return ok({ duplicated: true as const, newPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_DUPLICATE_FAILED", "Failed to duplicate remote file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.directorySizeStart, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:directorySizeStart request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const jobId = randomUUID();
+      const controller = new AbortController();
+      remoteSizeJobs.set(jobId, controller);
+      sendRemoteDirectorySizeUpdate({ jobId, connectionId, path: targetPath, status: "running" });
+      void (async () => {
+        try {
+          const result = await remoteFileService.calculateDirectorySize(connectionId, targetPath, { signal: controller.signal });
+          if (controller.signal.aborted) {
+            sendRemoteDirectorySizeUpdate({ jobId, connectionId, path: targetPath, status: "canceled" });
+            return;
+          }
+          sendRemoteDirectorySizeUpdate({
+            jobId,
+            connectionId,
+            path: targetPath,
+            status: "success",
+            size: result.size,
+            visitedEntries: result.visitedEntries,
+            capped: result.capped
+          });
+        } catch (error) {
+          if (controller.signal.aborted) {
+            sendRemoteDirectorySizeUpdate({ jobId, connectionId, path: targetPath, status: "canceled" });
+            return;
+          }
+          const ipc = toIpcError(error, "REMOTE_DIRECTORY_SIZE_FAILED", "Failed to calculate remote directory size.");
+          sendRemoteDirectorySizeUpdate({
+            jobId,
+            connectionId,
+            path: targetPath,
+            status: "failed",
+            error: ipc.error.message
+          });
+        } finally {
+          remoteSizeJobs.delete(jobId);
+        }
+      })();
+      return ok({ jobId });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_DIRECTORY_SIZE_FAILED", "Failed to start remote directory size.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.directorySizeCancel, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:directorySizeCancel request.");
+      const jobId = requiredId(body.jobId, "jobId", "REMOTE_INVALID_INPUT");
+      remoteSizeJobs.get(jobId)?.abort();
+      remoteSizeJobs.delete(jobId);
+      return ok({ canceled: true as const });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_DIRECTORY_SIZE_FAILED", "Failed to cancel remote directory size.");
     }
   });
 
@@ -622,6 +724,32 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.system.openTerminal, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "SYSTEM_INVALID_INPUT", "Invalid system:openTerminal request.");
+      const targetPath = validateLocalPathInput(body.path, "SYSTEM_INVALID_INPUT");
+      await runDetached("open", ["-a", "Terminal", targetPath]);
+      return ok({ opened: true as const });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_INVALID_INPUT", "Failed to open Terminal.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.system.openSshTerminal, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "SYSTEM_INVALID_INPUT", "Invalid system:openSshTerminal request.");
+      const host = requiredHost(body.host, "SYSTEM_INVALID_INPUT");
+      const username = requiredUsername(body.username, "SYSTEM_INVALID_INPUT");
+      const port = requiredPort(body.port, "SYSTEM_INVALID_INPUT");
+      const remotePath = optionalString(body.remotePath) ? normalizeRemotePathInput(body.remotePath, "SYSTEM_INVALID_INPUT", "remotePath") : undefined;
+      const command = buildSshTerminalCommand(username, host, port, remotePath);
+      await runDetached("osascript", ["-e", `tell application "Terminal" to do script ${JSON.stringify(command)}`]);
+      return ok({ opened: true as const });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_INVALID_INPUT", "Failed to open SSH terminal.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.system.getAppVersion, () => {
     try {
       return ok({ version: app.getVersion() });
@@ -631,9 +759,38 @@ export function registerIpcHandlers(): void {
   });
 }
 
+function sendRemoteDirectorySizeUpdate(payload: RemoteDirectorySizeUpdatePayload): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send(IPC_CHANNELS.remote.directorySizeUpdate, payload);
+  }
+}
+
+async function runDetached(command: string, args: string[]): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, { detached: true, stdio: "ignore" });
+    child.once("error", reject);
+    child.once("spawn", () => {
+      child.unref();
+      resolve();
+    });
+  });
+}
+
+function buildSshTerminalCommand(username: string, host: string, port: number, remotePath?: string): string {
+  const base = `ssh -p ${port} ${username}@${host}`;
+  if (!remotePath) return base;
+  return `${base} -t ${shellSingleQuote(`cd ${remotePath} && exec "$SHELL" -l`)}`;
+}
+
+function shellSingleQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
 export async function shutdownMainProcessResources(): Promise<void> {
   transferOff?.();
   transferOff = null;
+  for (const controller of remoteSizeJobs.values()) controller.abort();
+  remoteSizeJobs.clear();
   for (const channel of registeredChannels) {
     ipcMain.removeHandler(channel);
   }

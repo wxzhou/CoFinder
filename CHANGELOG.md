@@ -8,7 +8,13 @@
 
 ## Unreleased
 
-**Target:** v0.8.0 / product milestone **V1.7** (draft notes—not shipped). V1.5/v0.6.0 and V1.6/v0.7.0 are also present in the development tree but remain unshipped until tagged.
+**Target:** v0.9.0 / product milestone **V1.8** (draft notes—not shipped). V1.5-v1.7 development-tree milestones remain unshipped until tagged.
+
+- Remote operations expansion: mkdir, basic chmod, file duplicate, local Terminal here, and remote SSH Terminal here.
+- Remote directory size now uses an async cancelable job with traversal caps instead of blocking recursive UI work.
+- Remote symlink entries are surfaced as symlink where SFTP exposes that type.
+- Security caveat documented: SSH terminal launch never places saved passwords on command lines.
+- Remote operation tests cover mkdir, chmod, duplicate, and capped directory-size traversal.
 
 - Current-directory quick filter for local and remote panes, including the V12 toolbar search box for the focused pane.
 - Path autocomplete uses known locations only: local favorites/recents/history and remote current-tab/per-profile recents/favorites/history. It does not perform indexed search or background SFTP crawling.

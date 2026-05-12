@@ -25,6 +25,13 @@
 - Recent locations must not store passwords, tokens, private keys, saved credentials, or command arguments.
 - Remote path autocomplete uses already-known paths only and does not crawl the server.
 
+## Terminal Invocation Rules
+
+- Local "Open Terminal Here" launches Terminal.app at a validated local path.
+- Remote "Open SSH Terminal Here" launches Terminal.app with `ssh -p <port> <user>@<host>` and an optional remote `cd`.
+- Saved passwords are never read for terminal launch and are never placed on command lines, shell scripts, environment variables, or logs.
+- Host, username, port, and remote path are validated in main before terminal launch.
+
 ## IPC details and main logs
 
 - IPC failure payloads still use `{ ok, error }`; **`error.detail`** is length-limited and passed through a minimal scrubber for patterns such as `password`, `passphrase`, `privateKey`, and `token`.
