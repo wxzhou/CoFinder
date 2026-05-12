@@ -19,8 +19,10 @@ export type V12ToolbarProps = {
 
   onUpload: () => void;
   onDownload: () => void;
+  onNewFolder: () => void;
   uploadDisabled: boolean;
   downloadDisabled: boolean;
+  newFolderDisabled: boolean;
 
   onDelete: () => void;
   deleteDisabled: boolean;
@@ -31,6 +33,12 @@ export type V12ToolbarProps = {
   onInspectorToggle: () => void;
   inspectorToggleDisabled: boolean;
   inspectorTogglePressed: boolean;
+
+  onPreferences: () => void;
+
+  searchValue: string;
+  searchPlaceholder: string;
+  onSearchChange: (value: string) => void;
 };
 
 /**
@@ -119,9 +127,10 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
         <button
           type="button"
           className="v12m-tb"
-          title="New folder (not available in this version)"
+          title="New remote folder"
           aria-label="New folder"
-          disabled
+          disabled={props.newFolderDisabled}
+          onClick={() => props.onNewFolder()}
         >
           <V12TbIcon name="folder-badge-plus" />
         </button>
@@ -177,15 +186,23 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
         >
           <V12TbIcon name="sidebar-right" />
         </button>
+        <button
+          type="button"
+          className="v12m-tb"
+          title="Preferences"
+          aria-label="Preferences"
+          onClick={() => props.onPreferences()}
+        >
+          <V12TbIcon name="gear" />
+        </button>
       </div>
       <input
         className="v12m-search"
-        placeholder="Search"
-        readOnly
-        aria-label="Search"
-        aria-disabled="true"
-        tabIndex={-1}
-        title="Search (not available)"
+        placeholder={props.searchPlaceholder}
+        value={props.searchValue}
+        onChange={(event) => props.onSearchChange(event.target.value)}
+        aria-label="Filter current pane"
+        title="Filter current pane by name"
       />
     </div>
   );

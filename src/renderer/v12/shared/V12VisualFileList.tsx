@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent, ReactElement } from "react";
+import type { DragEvent, KeyboardEvent, MouseEvent, ReactElement } from "react";
 import type { FileEntry, SortDirection, SortKey } from "../../../shared/types/models";
 import { V12Icon } from "./V12Icons";
 
@@ -6,6 +6,7 @@ import { V12Icon } from "./V12Icons";
 export type V12VisualFileRow = FileEntry;
 
 export type V12VisualFileListProps<T extends FileEntry> = {
+  pane: "local" | "remote";
   isPaneActive: boolean;
   entries: T[];
   sortKey: SortKey;
@@ -16,6 +17,14 @@ export type V12VisualFileListProps<T extends FileEntry> = {
   onRowContextMenu: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
   onRowDoubleClick: (entry: T) => void;
   onBackgroundMouseDown: (event: MouseEvent<HTMLDivElement>) => void;
+  onBackgroundDragOver?: (event: DragEvent<HTMLDivElement>) => void;
+  onBackgroundDrop?: (event: DragEvent<HTMLDivElement>) => void;
+  onDragLeave?: (event: DragEvent<HTMLDivElement>) => void;
+  onRowDragStart?: (entry: T, event: DragEvent<HTMLDivElement>) => void;
+  onRowDragOver?: (entry: T, event: DragEvent<HTMLDivElement>) => void;
+  onRowDrop?: (entry: T, event: DragEvent<HTMLDivElement>) => void;
+  onRowDragEnd?: (event: DragEvent<HTMLDivElement>) => void;
+  getRowClassName?: (entry: T) => string;
   inlineRename:
     | {
         sourcePath: string;
@@ -58,7 +67,14 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
         </span>
         <span className="v12m-kind">Kind</span>
       </div>
-      <div className="v12m-list" role="list" onMouseDown={props.onBackgroundMouseDown}>
+      <div
+        className="v12m-list"
+        role="list"
+        onMouseDown={props.onBackgroundMouseDown}
+        onDragOver={props.onBackgroundDragOver}
+        onDrop={props.onBackgroundDrop}
+        onDragLeave={props.onDragLeave}
+      >
         {props.entries.map((entry) => {
           const selected = props.selectedFullPaths.includes(entry.fullPath);
           const sel = rowSelClass(selected, props.isPaneActive);
@@ -68,7 +84,15 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
             <div
               key={entry.fullPath}
               role="listitem"
-              className={`v12m-lrow ${sel}`.trim()}
+              draggable={!renaming}
+              data-pane-row="true"
+              data-marquee-pane={props.pane}
+              data-full-path={entry.fullPath}
+              className={`v12m-lrow ${sel} ${props.getRowClassName?.(entry) ?? ""}`.trim()}
+              onDragStart={(e) => props.onRowDragStart?.(entry, e)}
+              onDragOver={(e) => props.onRowDragOver?.(entry, e)}
+              onDrop={(e) => props.onRowDrop?.(entry, e)}
+              onDragEnd={(e) => props.onRowDragEnd?.(e)}
               onClick={(e) => props.onRowClick(entry, e)}
               onContextMenu={(e) => props.onRowContextMenu(entry, e)}
               onDoubleClick={() => props.onRowDoubleClick(entry)}

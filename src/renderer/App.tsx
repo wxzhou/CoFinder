@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+  type MouseEvent as ReactMouseEvent
+} from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
@@ -11,14 +19,32 @@ import { V12PaneFootStatus, V12ProdDevHint, V12VisualFileList, V12VisualLocation
 import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
-import { applyRowSelection, clearSelectionState, normalizeContextSelection, selectAllRows, stringifySelection } from "./selection";
+import {
+  addRecentPath,
+  buildPathSuggestions,
+  filterEntriesByName,
+  type RecentPath
+} from "./navigationEfficiency";
+import {
+  applyMarqueeSelection,
+  applyRowSelection,
+  clearSelectionState,
+  normalizeContextSelection,
+  normalizeDragRect,
+  selectAllRows,
+  stringifySelection,
+  type MarqueeRowRect,
+  type SelectionState
+} from "./selection";
 import type { LocalFavoriteListItem } from "../shared/localFavorites";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
+  AppSettings,
   PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
+  RemoteDirectorySizeUpdatePayload,
   TransferConflict,
   TransferConflictPolicy,
   TransferUpdatePayload
@@ -34,6 +60,7 @@ type RemoteConnectionStatus = "disconnected" | "connecting" | "connected" | "fai
 type LocalPaneState = {
   currentPath: string;
   pathInput: string;
+  filterText: string;
   entries: LocalFileEntry[];
   selectedFullPaths: string[];
   selectionAnchorFullPath: string | null;
@@ -54,6 +81,7 @@ type RemotePaneState = {
   homePath: string;
   currentPath: string;
   pathInput: string;
+  filterText: string;
   entries: RemoteFileEntry[];
   selectedFullPaths: string[];
   selectionAnchorFullPath: string | null;
@@ -91,9 +119,34 @@ type InfoDialogState = {
   pane: "local" | "remote";
   info: PathInfo;
   isSizeLoading: boolean;
+  sizeJobId?: string;
+  sizeCapped?: boolean;
 };
 
 type ActivePane = "local" | "remote";
+
+type TransferDragPayload = {
+  kind: "cofinder-transfer";
+  pane: ActivePane;
+  tabId: string;
+  paths: string[];
+};
+
+type DropTargetState = {
+  pane: ActivePane;
+  path: string;
+  valid: boolean;
+};
+
+type MarqueeState = {
+  pane: ActivePane;
+  startX: number;
+  startY: number;
+  currentX: number;
+  currentY: number;
+  additive: boolean;
+  baseSelection: SelectionState;
+};
 
 type SiteManagerTabState = {
   open: boolean;
@@ -115,10 +168,42 @@ type UiTabState = {
 };
 
 const AUTO_HIDE_DELAY_MS = 10_000;
+const COFINDER_TRANSFER_MIME = "application/x-cofinder-transfer";
+const COFINDER_LAST_LOCAL_PATH_KEY = "cofinder.lastLocalPath";
+const COFINDER_LOCAL_RECENTS_KEY = "cofinder.recent.localPaths.v1";
+const COFINDER_REMOTE_RECENTS_KEY = "cofinder.recent.remotePathsByProfile.v1";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
 /** After a row `click` with `detail === 1`, wait this long before showing inspector so a double-click rarely mounts the column. Cmd+A bypasses. If already revealed, no delay and no hide. */
 const V12_INSPECTOR_CLICK_GAP_MS = 350;
+
+const DEFAULT_RENDERER_SETTINGS: AppSettings = {
+  schemaVersion: 2,
+  general: {
+    defaultLocalPath: "",
+    restoreLastSession: false,
+    confirmBeforeDelete: true,
+    showHiddenFiles: false,
+    firstRunOnboardingDismissed: false
+  },
+  transfer: {
+    defaultConflictPolicy: "prompt",
+    queueAutoHideDelayMs: AUTO_HIDE_DELAY_MS,
+    preserveTimestamps: true
+  },
+  appearance: {
+    rowDensity: "comfortable",
+    defaultInspectorVisible: false,
+    defaultPaneRatio: 0.5,
+    sidebarVisible: true
+  }
+};
+
+type PreferencesState = {
+  open: boolean;
+  draft: AppSettings;
+  error: string;
+};
 
 type QueuePanelState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
 type PlainClickRecord = {
@@ -162,6 +247,18 @@ export function App(props: AppProps = {}) {
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
   const [queueError, setQueueError] = useState<string>("");
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_RENDERER_SETTINGS);
+  const [preferences, setPreferences] = useState<PreferencesState>({
+    open: false,
+    draft: DEFAULT_RENDERER_SETTINGS,
+    error: ""
+  });
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
+  const [localRecentPaths, setLocalRecentPaths] = useState<RecentPath[]>(() => readRecentPathList(COFINDER_LOCAL_RECENTS_KEY));
+  const [remoteRecentPathsByProfile, setRemoteRecentPathsByProfile] = useState<Record<string, RecentPath[]>>(() =>
+    readRemoteRecentPathsByProfile()
+  );
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
@@ -169,6 +266,8 @@ export function App(props: AppProps = {}) {
   const infoRequestTokenRef = useRef(0);
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
+  const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
+  const [marquee, setMarquee] = useState<MarqueeState | null>(null);
   const [localHomePath, setLocalHomePath] = useState<string>("");
   const [v12PaneRatio, setV12PaneRatio] = useState(() => {
     const raw = window.localStorage.getItem("cofinder.v12PaneRatio");
@@ -232,9 +331,31 @@ export function App(props: AppProps = {}) {
   );
 
   useEffect(() => {
-    void initializeLocalHome(tabState.firstTabId);
+    void (async () => {
+      const res = await window.cofinder.settings.get();
+      const settings = res.ok ? res.data : DEFAULT_RENDERER_SETTINGS;
+      if (!res.ok) setQueueError(res.error.message);
+      setAppSettings(settings);
+      setPreferences((prev) => ({ ...prev, draft: settings }));
+      setOnboardingOpen(!settings.general.firstRunOnboardingDismissed);
+      setV12PaneRatio(settings.appearance.defaultPaneRatio);
+      setV12LocalInspectorReveal(settings.appearance.defaultInspectorVisible);
+      setV12RemoteInspectorReveal(settings.appearance.defaultInspectorVisible);
+      const restoredLocalPath = settings.general.restoreLastSession ? readLastLocalPath() : "";
+      await initializeLocalHome(tabState.firstTabId, restoredLocalPath || settings.general.defaultLocalPath);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!appSettings.general.restoreLastSession) {
+      window.localStorage.removeItem(COFINDER_LAST_LOCAL_PATH_KEY);
+      return;
+    }
+    if (localPane.currentPath) {
+      window.localStorage.setItem(COFINDER_LAST_LOCAL_PATH_KEY, localPane.currentPath);
+    }
+  }, [appSettings.general.restoreLastSession, localPane.currentPath]);
   useEffect(() => {
     void (async () => {
       const result = await window.cofinder.system.getAppVersion();
@@ -243,7 +364,7 @@ export function App(props: AppProps = {}) {
       }
     })();
   }, []);
-  async function initializeLocalHome(tabId: string): Promise<void> {
+  async function initializeLocalHome(tabId: string, preferredPath?: string): Promise<void> {
     const homeRes = await window.cofinder.local.getHomePath();
     if (!homeRes.ok) {
       setTabs((prev) =>
@@ -255,7 +376,75 @@ export function App(props: AppProps = {}) {
     }
     const homePath = homeRes.data.homePath;
     setLocalHomePath(homePath);
-    await navigateLocal(tabId, homePath, "replace");
+    await navigateLocal(tabId, preferredPath?.trim() || homePath, "replace");
+  }
+
+  function updateLocalFilter(tabId: string, value: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              localPane: {
+                ...tab.localPane,
+                filterText: value,
+                selectedFullPaths: [],
+                selectionAnchorFullPath: null
+              }
+            }
+          : tab
+      )
+    );
+  }
+
+  function updateRemoteFilter(tabId: string, value: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              remotePane: {
+                ...tab.remotePane,
+                filterText: value,
+                selectedFullPaths: [],
+                selectionAnchorFullPath: null
+              }
+            }
+          : tab
+      )
+    );
+  }
+
+  function rememberLocalRecent(targetPath: string): void {
+    setLocalRecentPaths((prev) => {
+      const next = addRecentPath(prev, targetPath);
+      writeJsonLocalStorage(COFINDER_LOCAL_RECENTS_KEY, next);
+      return next;
+    });
+  }
+
+  function rememberRemoteRecent(profileId: string | null | undefined, targetPath: string): void {
+    if (!profileId) return;
+    setRemoteRecentPathsByProfile((prev) => {
+      const next = { ...prev, [profileId]: addRecentPath(prev[profileId] ?? [], targetPath) };
+      writeJsonLocalStorage(COFINDER_REMOTE_RECENTS_KEY, next);
+      return next;
+    });
+  }
+
+  function clearLocalRecents(): void {
+    setLocalRecentPaths([]);
+    window.localStorage.removeItem(COFINDER_LOCAL_RECENTS_KEY);
+  }
+
+  function clearRemoteRecents(profileId: string | null | undefined): void {
+    if (!profileId) return;
+    setRemoteRecentPathsByProfile((prev) => {
+      const next = { ...prev };
+      delete next[profileId];
+      writeJsonLocalStorage(COFINDER_REMOTE_RECENTS_KEY, next);
+      return next;
+    });
   }
 
 
@@ -266,6 +455,59 @@ export function App(props: AppProps = {}) {
     void loadTransferTasks();
     return off;
   }, []);
+
+  useEffect(() => {
+    const off = window.cofinder.remote.onDirectorySizeUpdate((payload: RemoteDirectorySizeUpdatePayload) => {
+      setInfoDialog((prev) => {
+        if (!prev || prev.sizeJobId !== payload.jobId) return prev;
+        if (payload.status === "success") {
+          return {
+            ...prev,
+            isSizeLoading: false,
+            sizeCapped: payload.capped,
+            info: { ...prev.info, size: payload.size ?? prev.info.size }
+          };
+        }
+        if (payload.status === "failed") {
+          return { ...prev, isSizeLoading: false };
+        }
+        if (payload.status === "canceled") {
+          return { ...prev, isSizeLoading: false, sizeJobId: undefined };
+        }
+        return prev;
+      });
+      if (payload.status === "failed" && payload.error) setQueueError(payload.error);
+    });
+    return off;
+  }, []);
+
+  useEffect(() => {
+    if (!marquee) return;
+    const onMove = (event: MouseEvent) => {
+      const rect = normalizeDragRect(marquee.startX, marquee.startY, event.clientX, event.clientY);
+      const rows: MarqueeRowRect[] = Array.from(
+        document.querySelectorAll<HTMLElement>(`[data-marquee-pane="${marquee.pane}"][data-full-path]`)
+      ).map((row) => {
+        const bounds = row.getBoundingClientRect();
+        return {
+          fullPath: row.dataset.fullPath ?? "",
+          left: bounds.left,
+          top: bounds.top,
+          right: bounds.right,
+          bottom: bounds.bottom
+        };
+      });
+      updatePaneSelection(activeTab.id, marquee.pane, applyMarqueeSelection(rows, rect, marquee.baseSelection, { additive: marquee.additive }));
+      setMarquee((prev) => (prev ? { ...prev, currentX: event.clientX, currentY: event.clientY } : prev));
+    };
+    const onUp = () => setMarquee(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [activeTab.id, marquee]);
 
   useEffect(() => {
     if (!contextMenu) return;
@@ -456,6 +698,57 @@ export function App(props: AppProps = {}) {
     if (!res.ok) setQueueError(res.error.message);
   }
 
+  function openPreferences(): void {
+    setPreferences({ open: true, draft: appSettings, error: "" });
+  }
+
+  async function savePreferences(): Promise<void> {
+    const res = await window.cofinder.settings.set(preferences.draft);
+    if (!res.ok) {
+      setPreferences((prev) => ({ ...prev, error: res.error.message }));
+      return;
+    }
+    setAppSettings(res.data);
+    setPreferences({ open: false, draft: res.data, error: "" });
+    setV12PaneRatio(res.data.appearance.defaultPaneRatio);
+  }
+
+  async function dismissOnboarding(): Promise<void> {
+    const next = {
+      ...appSettings,
+      general: { ...appSettings.general, firstRunOnboardingDismissed: true }
+    };
+    const res = await window.cofinder.settings.set(next);
+    if (res.ok) {
+      setAppSettings(res.data);
+      setPreferences((prev) => ({ ...prev, draft: res.data }));
+    } else {
+      setQueueError(res.error.message);
+    }
+    setOnboardingOpen(false);
+  }
+
+  async function copyDiagnostics(): Promise<void> {
+    setDiagnosticsStatus("Copying diagnostics...");
+    const res = await window.cofinder.system.copyDiagnostics();
+    setDiagnosticsStatus(res.ok ? "Diagnostics copied to clipboard." : res.error.message);
+  }
+
+  async function openLogFolder(): Promise<void> {
+    const res = await window.cofinder.system.openLogFolder();
+    setDiagnosticsStatus(res.ok ? `Opened ${res.data.path}` : res.error.message);
+  }
+
+  async function openLogFile(): Promise<void> {
+    const res = await window.cofinder.system.openLogFile();
+    setDiagnosticsStatus(res.ok ? `Opened ${res.data.path}` : res.error.message);
+  }
+
+  async function checkForUpdates(): Promise<void> {
+    const res = await window.cofinder.system.checkForUpdates();
+    setDiagnosticsStatus(res.ok ? res.data.message : res.error.message);
+  }
+
   async function navigateLocal(
     tabId: string,
     targetPath: string,
@@ -499,6 +792,7 @@ export function App(props: AppProps = {}) {
         };
       })
     );
+    rememberLocalRecent(response.data.path);
   }
 
   const showV12FavoriteHint = useCallback((message: string) => {
@@ -629,7 +923,7 @@ export function App(props: AppProps = {}) {
       timer = setTimeout(() => {
         setQueuePanelState("hidden");
         void clearCompletedTransfers();
-      }, AUTO_HIDE_DELAY_MS);
+      }, appSettings.transfer.queueAutoHideDelayMs);
       return () => {
         if (timer) clearTimeout(timer);
       };
@@ -643,10 +937,10 @@ export function App(props: AppProps = {}) {
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [transferTasks, queuePinned, queueStats.allDone, queueStats.failedCount]);
+  }, [transferTasks, queuePinned, queueStats.allDone, queueStats.failedCount, appSettings.transfer.queueAutoHideDelayMs]);
 
   const sortedEntries = useMemo(() => {
-    const copied = [...localPane.entries];
+    const copied = localPane.entries.filter((entry) => appSettings.general.showHiddenFiles || !entry.name.startsWith("."));
     copied.sort((a, b) => {
       if (a.type === "directory" && b.type !== "directory") return -1;
       if (a.type !== "directory" && b.type === "directory") return 1;
@@ -657,11 +951,11 @@ export function App(props: AppProps = {}) {
       if (localPane.sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
       return localPane.sortDirection === "asc" ? value : -value;
     });
-    return copied;
-  }, [localPane.entries, localPane.sortDirection, localPane.sortKey]);
+    return filterEntriesByName(copied, localPane.filterText);
+  }, [appSettings.general.showHiddenFiles, localPane.entries, localPane.filterText, localPane.sortDirection, localPane.sortKey]);
 
   const sortedRemoteEntries = useMemo(() => {
-    const copied = [...remotePane.entries];
+    const copied = remotePane.entries.filter((entry) => appSettings.general.showHiddenFiles || !entry.name.startsWith("."));
     copied.sort((a, b) => {
       if (a.type === "directory" && b.type !== "directory") return -1;
       if (a.type !== "directory" && b.type === "directory") return 1;
@@ -671,15 +965,15 @@ export function App(props: AppProps = {}) {
       if (remotePane.sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
       return remotePane.sortDirection === "asc" ? value : -value;
     });
-    return copied;
-  }, [remotePane.entries, remotePane.sortDirection, remotePane.sortKey]);
+    return filterEntriesByName(copied, remotePane.filterText);
+  }, [appSettings.general.showHiddenFiles, remotePane.entries, remotePane.filterText, remotePane.sortDirection, remotePane.sortKey]);
 
-  const selectedEntries = localPane.entries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
+  const selectedEntries = sortedEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const totalSize = localPane.entries.reduce((acc, item) => acc + item.size, 0);
-  const remoteSelectedEntries = remotePane.entries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
+  const totalSize = sortedEntries.reduce((acc, item) => acc + item.size, 0);
+  const remoteSelectedEntries = sortedRemoteEntries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const remoteTotalSize = remotePane.entries.reduce((acc, item) => acc + item.size, 0);
+  const remoteTotalSize = sortedRemoteEntries.reduce((acc, item) => acc + item.size, 0);
 
   useEffect(() => {
     if (uiShell !== "v12") {
@@ -1367,6 +1661,8 @@ export function App(props: AppProps = {}) {
         };
       })
     );
+    const profileId = tabs.find((tab) => tab.id === tabId)?.remotePane.activeProfileId;
+    rememberRemoteRecent(profileId, payload.path);
     return true;
   }
 
@@ -1384,10 +1680,10 @@ export function App(props: AppProps = {}) {
     await previewRemotePath(tabId, entry.fullPath);
   }
 
-  async function enqueueUpload(tabId: string): Promise<void> {
+  async function enqueueUpload(tabId: string, options?: { localSources?: string[]; remoteDestinationDir?: string }): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const selected = tab.localPane.selectedFullPaths;
+    const selected = options?.localSources ?? tab.localPane.selectedFullPaths;
     if (selected.length === 0) {
       setTabs((prev) =>
         prev.map((item) =>
@@ -1424,7 +1720,8 @@ export function App(props: AppProps = {}) {
       username: tab.remotePane.username,
       authType: tab.remotePane.authType,
       localSources: selected,
-      remoteDestinationDir: tab.remotePane.currentPath
+      remoteDestinationDir: options?.remoteDestinationDir ?? tab.remotePane.currentPath,
+      preserveTimestamps: appSettings.transfer.preserveTimestamps
     };
     const checked = await resolveTransferConflicts("upload", payload);
     if (!checked) return;
@@ -1445,10 +1742,10 @@ export function App(props: AppProps = {}) {
     setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
   }
 
-  async function enqueueDownload(tabId: string): Promise<void> {
+  async function enqueueDownload(tabId: string, options?: { remoteSources?: string[]; localDestinationDir?: string }): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const selected = tab.remotePane.selectedFullPaths;
+    const selected = options?.remoteSources ?? tab.remotePane.selectedFullPaths;
     if (selected.length === 0) {
       setTabs((prev) =>
         prev.map((item) =>
@@ -1483,7 +1780,8 @@ export function App(props: AppProps = {}) {
       username: tab.remotePane.username,
       authType: tab.remotePane.authType,
       remoteSources: selected,
-      localDestinationDir: tab.localPane.currentPath
+      localDestinationDir: options?.localDestinationDir ?? tab.localPane.currentPath,
+      preserveTimestamps: appSettings.transfer.preserveTimestamps
     };
     const checked = await resolveTransferConflicts("download", payload);
     if (!checked) return;
@@ -1502,6 +1800,178 @@ export function App(props: AppProps = {}) {
       )
     );
     setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
+  }
+
+  function updatePaneSelection(tabId: string, pane: ActivePane, selection: SelectionState): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id !== tabId
+          ? tab
+          : pane === "local"
+            ? { ...tab, localPane: { ...tab.localPane, ...selection } }
+            : { ...tab, remotePane: { ...tab.remotePane, ...selection } }
+      )
+    );
+  }
+
+  function setPaneError(tabId: string, pane: ActivePane, message: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id !== tabId
+          ? tab
+          : pane === "local"
+            ? { ...tab, localPane: { ...tab.localPane, error: message } }
+            : { ...tab, remotePane: { ...tab.remotePane, error: message } }
+      )
+    );
+  }
+
+  function beginTransferDrag(pane: ActivePane, entry: LocalFileEntry | RemoteFileEntry, event: ReactDragEvent<HTMLElement>): void {
+    const tab = tabs.find((item) => item.id === activeTab.id);
+    if (!tab) return;
+    const paneState = pane === "local" ? tab.localPane : tab.remotePane;
+    const paths = paneState.selectedFullPaths.includes(entry.fullPath) ? paneState.selectedFullPaths : [entry.fullPath];
+    if (!paneState.selectedFullPaths.includes(entry.fullPath)) {
+      updatePaneSelection(activeTab.id, pane, { selectedFullPaths: [entry.fullPath], selectionAnchorFullPath: entry.fullPath });
+    }
+    const payload: TransferDragPayload = { kind: "cofinder-transfer", pane, tabId: activeTab.id, paths };
+    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.setData(COFINDER_TRANSFER_MIME, JSON.stringify(payload));
+    event.dataTransfer.setData("text/plain", paths.join("\n"));
+  }
+
+  function parseTransferDrag(event: ReactDragEvent<HTMLElement>): TransferDragPayload | null {
+    const raw = event.dataTransfer.getData(COFINDER_TRANSFER_MIME);
+    if (!raw) return null;
+    try {
+      const payload = JSON.parse(raw) as Partial<TransferDragPayload>;
+      if (
+        payload.kind === "cofinder-transfer" &&
+        (payload.pane === "local" || payload.pane === "remote") &&
+        typeof payload.tabId === "string" &&
+        Array.isArray(payload.paths) &&
+        payload.paths.every((path) => typeof path === "string")
+      ) {
+        return payload as TransferDragPayload;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  function finderDropPaths(event: ReactDragEvent<HTMLElement>): string[] {
+    return Array.from(event.dataTransfer.files)
+      .map((file) => (file as File & { path?: string }).path ?? "")
+      .filter(Boolean);
+  }
+
+  function hasFinderFiles(event: ReactDragEvent<HTMLElement>): boolean {
+    return Array.from(event.dataTransfer.types).includes("Files");
+  }
+
+  function canDropOnPane(targetPane: ActivePane, event: ReactDragEvent<HTMLElement>): boolean {
+    const payload = parseTransferDrag(event);
+    if (targetPane === "remote") {
+      return !!remotePane.connectionId && ((payload?.pane === "local" && payload.tabId === activeTab.id) || hasFinderFiles(event));
+    }
+    return !!localPane.currentPath && payload?.pane === "remote" && payload.tabId === activeTab.id;
+  }
+
+  function handleTransferDragOver(
+    targetPane: ActivePane,
+    targetPath: string,
+    event: ReactDragEvent<HTMLElement>,
+    options?: { requireDirectory?: boolean; entryType?: string }
+  ): void {
+    const rowValid = !options?.requireDirectory || options.entryType === "directory";
+    const valid = rowValid && canDropOnPane(targetPane, event);
+    event.preventDefault();
+    event.dataTransfer.dropEffect = valid ? "copy" : "none";
+    setDropTarget({ pane: targetPane, path: targetPath, valid });
+  }
+
+  async function handleTransferDrop(targetPane: ActivePane, targetPath: string, event: ReactDragEvent<HTMLElement>): Promise<void> {
+    event.preventDefault();
+    const payload = parseTransferDrag(event);
+    const finderPaths = finderDropPaths(event);
+    setDropTarget(null);
+
+    if (targetPane === "remote") {
+      if (payload?.pane === "local" && payload.tabId === activeTab.id) {
+        await enqueueUpload(activeTab.id, { localSources: payload.paths, remoteDestinationDir: targetPath });
+        return;
+      }
+      if (finderPaths.length > 0) {
+        await enqueueUpload(activeTab.id, { localSources: finderPaths, remoteDestinationDir: targetPath });
+        return;
+      }
+      setPaneError(activeTab.id, "remote", "Drop local files here to upload.");
+      return;
+    }
+
+    if (payload?.pane === "remote" && payload.tabId === activeTab.id) {
+      await enqueueDownload(activeTab.id, { remoteSources: payload.paths, localDestinationDir: targetPath });
+      return;
+    }
+    setPaneError(activeTab.id, "local", "Drop remote files here to download.");
+  }
+
+  function handleDirectoryRowDragOver(
+    targetPane: ActivePane,
+    entry: LocalFileEntry | RemoteFileEntry,
+    event: ReactDragEvent<HTMLElement>
+  ): void {
+    event.stopPropagation();
+    handleTransferDragOver(targetPane, entry.fullPath, event, { requireDirectory: true, entryType: entry.type });
+  }
+
+  async function handleDirectoryRowDrop(
+    targetPane: ActivePane,
+    entry: LocalFileEntry | RemoteFileEntry,
+    event: ReactDragEvent<HTMLElement>
+  ): Promise<void> {
+    event.stopPropagation();
+    if (entry.type !== "directory") {
+      event.preventDefault();
+      setDropTarget(null);
+      setPaneError(activeTab.id, targetPane, "Drop onto a folder or empty pane area.");
+      return;
+    }
+    await handleTransferDrop(targetPane, entry.fullPath, event);
+  }
+
+  function handleTransferDragLeave(event: ReactDragEvent<HTMLElement>): void {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropTarget(null);
+  }
+
+  function rowDropClass(pane: ActivePane, path: string): string {
+    if (!dropTarget || dropTarget.pane !== pane || dropTarget.path !== path) return "";
+    return dropTarget.valid ? "drop-target-valid" : "drop-target-invalid";
+  }
+
+  function beginMarqueeSelection(pane: ActivePane, event: ReactMouseEvent<HTMLElement>): void {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("[data-pane-row],button,input,textarea,select")) return;
+    const tab = tabs.find((item) => item.id === activeTab.id);
+    if (!tab) return;
+    const baseSelection =
+      pane === "local"
+        ? { selectedFullPaths: tab.localPane.selectedFullPaths, selectionAnchorFullPath: tab.localPane.selectionAnchorFullPath }
+        : { selectedFullPaths: tab.remotePane.selectedFullPaths, selectionAnchorFullPath: tab.remotePane.selectionAnchorFullPath };
+    event.preventDefault();
+    setActivePane(pane);
+    setMarquee({
+      pane,
+      startX: event.clientX,
+      startY: event.clientY,
+      currentX: event.clientX,
+      currentY: event.clientY,
+      additive: event.metaKey || event.shiftKey,
+      baseSelection
+    });
+    if (!event.metaKey && !event.shiftKey) updatePaneSelection(activeTab.id, pane, clearSelectionState());
   }
 
   function handleLocalRowClick(
@@ -1808,13 +2278,18 @@ export function App(props: AppProps = {}) {
       if (paths.length === 0) return;
       const entryMap = new Map(tab.localPane.entries.map((entry) => [entry.fullPath, entry.name]));
       const names = paths.map((fullPath) => entryMap.get(fullPath) ?? getEntryNameFromPath(fullPath));
-      setDeleteConfirm({
+      const next = {
         pane,
         tabId,
         connectionId: null,
         paths,
         names
-      });
+      };
+      if (!appSettings.general.confirmBeforeDelete) {
+        void performDelete(next);
+        return;
+      }
+      setDeleteConfirm(next);
       return;
     }
 
@@ -1823,50 +2298,59 @@ export function App(props: AppProps = {}) {
     if (paths.length === 0) return;
     const entryMap = new Map(tab.remotePane.entries.map((entry) => [entry.fullPath, entry.name]));
     const names = paths.map((fullPath) => entryMap.get(fullPath) ?? getEntryNameFromPath(fullPath));
-    setDeleteConfirm({
+    const next = {
       pane,
       tabId,
       connectionId: tab.remotePane.connectionId,
       paths,
       names
-    });
+    };
+    if (!appSettings.general.confirmBeforeDelete) {
+      void performDelete(next);
+      return;
+    }
+    setDeleteConfirm(next);
   }
 
   async function submitDeleteConfirm(): Promise<void> {
     if (!deleteConfirm) return;
-    if (deleteConfirm.pane === "local") {
-      const tab = tabs.find((item) => item.id === deleteConfirm.tabId);
+    await performDelete(deleteConfirm);
+  }
+
+  async function performDelete(target: DeleteConfirmState): Promise<void> {
+    if (target.pane === "local") {
+      const tab = tabs.find((item) => item.id === target.tabId);
       if (!tab) return;
-      const result = await window.cofinder.local.delete({ paths: deleteConfirm.paths });
+      const result = await window.cofinder.local.delete({ paths: target.paths });
       if (!result.ok) {
         setTabs((prev) =>
           prev.map((item) =>
-            item.id === deleteConfirm.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+            item.id === target.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
           )
         );
         return;
       }
-      await navigateLocal(deleteConfirm.tabId, tab.localPane.currentPath, "replace");
+      await navigateLocal(target.tabId, tab.localPane.currentPath, "replace");
       setDeleteConfirm(null);
       return;
     }
 
-    if (!deleteConfirm.connectionId) return;
-    const tab = tabs.find((item) => item.id === deleteConfirm.tabId);
+    if (!target.connectionId) return;
+    const tab = tabs.find((item) => item.id === target.tabId);
     if (!tab) return;
     const result = await window.cofinder.remote.delete({
-      connectionId: deleteConfirm.connectionId,
-      paths: deleteConfirm.paths
+      connectionId: target.connectionId,
+      paths: target.paths
     });
     if (!result.ok) {
       setTabs((prev) =>
         prev.map((item) =>
-          item.id === deleteConfirm.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+          item.id === target.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
         )
       );
       return;
     }
-    await listRemotePath(deleteConfirm.connectionId, tab.remotePane.currentPath, "replace", deleteConfirm.tabId);
+    await listRemotePath(target.connectionId, tab.remotePane.currentPath, "replace", target.tabId);
     setDeleteConfirm(null);
   }
 
@@ -1933,22 +2417,89 @@ export function App(props: AppProps = {}) {
     if (shouldLoadSize) {
       const connectionId = tab.remotePane.connectionId;
       void (async () => {
-        const sizeRes = await window.cofinder.remote.getInfo({
+        const sizeRes = await window.cofinder.remote.directorySizeStart({
           connectionId,
-          path: targetPath,
-          includeDirectorySize: true
+          path: targetPath
         });
         if (!sizeRes.ok) return;
         setInfoDialog((prev) => {
           if (!prev || infoRequestTokenRef.current !== token) return prev;
           return {
             ...prev,
-            info: { ...prev.info, size: sizeRes.data.info.size },
-            isSizeLoading: false
+            sizeJobId: sizeRes.data.jobId
           };
         });
       })();
     }
+  }
+
+  async function createRemoteDirectory(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId) return;
+    const name = window.prompt("New remote folder name");
+    if (!name?.trim()) return;
+    const result = await window.cofinder.remote.mkdir({
+      connectionId: tab.remotePane.connectionId,
+      parentPath: tab.remotePane.currentPath,
+      name
+    });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+  }
+
+  async function chmodRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const entry = tab.remotePane.entries.find((item) => item.fullPath === targetPath);
+    const mode = window.prompt("Remote permissions mode (octal)", entry?.permissions ? rwxToOctal(entry.permissions) : "644");
+    if (!mode) return;
+    const result = await window.cofinder.remote.chmod({ connectionId: tab.remotePane.connectionId, path: targetPath, mode });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+  }
+
+  async function duplicateRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const result = await window.cofinder.remote.duplicate({ connectionId: tab.remotePane.connectionId, path: targetPath });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId
+          ? { ...item, remotePane: { ...item.remotePane, selectedFullPaths: [result.data.newPath], selectionAnchorFullPath: result.data.newPath } }
+          : item
+      )
+    );
+  }
+
+  async function openTerminalHere(tabId: string, pane: "local" | "remote"): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "local") {
+      const result = await window.cofinder.system.openTerminal({ path: tab.localPane.currentPath });
+      if (!result.ok) setQueueError(result.error.message);
+      return;
+    }
+    if (!tab.remotePane.host || !tab.remotePane.username || !tab.remotePane.port) return;
+    const result = await window.cofinder.system.openSshTerminal({
+      host: tab.remotePane.host,
+      username: tab.remotePane.username,
+      port: tab.remotePane.port,
+      remotePath: tab.remotePane.currentPath
+    });
+    if (!result.ok) setQueueError(result.error.message);
   }
 
   async function quickLookSelection(tabId: string, pane: "local" | "remote"): Promise<void> {
@@ -2078,6 +2629,21 @@ export function App(props: AppProps = {}) {
         null
       : null;
   const activeProfileAlias = activeProfile?.alias?.trim() ?? null;
+  const remoteRecentPaths = activeProfile?.id ? (remoteRecentPathsByProfile[activeProfile.id] ?? []) : [];
+  const localPathSuggestions = buildPathSuggestions(localPane.pathInput, [
+    localPane.currentPath,
+    ...localPane.history.backStack.slice().reverse(),
+    ...localPane.history.forwardStack,
+    ...localRecentPaths.map((r) => r.path),
+    ...v12LocalFavorites.map((f) => f.path)
+  ]);
+  const remotePathSuggestions = buildPathSuggestions(remotePane.pathInput, [
+    remotePane.currentPath,
+    ...remotePane.history.backStack.slice().reverse(),
+    ...remotePane.history.forwardStack,
+    ...remoteRecentPaths.map((r) => r.path),
+    ...(activeProfile?.remoteFavorites ?? []).map((f) => f.path)
+  ]);
   const localPaneTitleV12 = localPaneTitleFromPath(localPane.currentPath);
   const remotePaneTitleV12 = activeProfileAlias
     ? activeProfileAlias
@@ -2175,10 +2741,12 @@ export function App(props: AppProps = {}) {
         connectActionAriaLabel={remoteConnected ? "Disconnect" : "Connect"}
         onUpload={() => void enqueueUpload(activeTab.id)}
         onDownload={() => void enqueueDownload(activeTab.id)}
+        onNewFolder={() => void createRemoteDirectory(activeTab.id)}
         uploadDisabled={localPane.selectedFullPaths.length === 0 || !remotePane.connectionId}
         downloadDisabled={
           remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId
         }
+        newFolderDisabled={!remotePane.connectionId}
         onDelete={() => openDeleteConfirm(activeTab.id, activePane)}
         deleteDisabled={
           activePane === "local"
@@ -2202,6 +2770,12 @@ export function App(props: AppProps = {}) {
         }}
         inspectorToggleDisabled={v12InspectorToggleDisabled}
         inspectorTogglePressed={v12InspectorTogglePressed}
+        onPreferences={openPreferences}
+        searchValue={activePane === "local" ? localPane.filterText : remotePane.filterText}
+        searchPlaceholder={`Filter ${activePane}`}
+        onSearchChange={(value) =>
+          activePane === "local" ? updateLocalFilter(activeTab.id, value) : updateRemoteFilter(activeTab.id, value)
+        }
       />
     ) : null;
 
@@ -2358,7 +2932,10 @@ export function App(props: AppProps = {}) {
       return null;
     }
     if (result.data.conflicts.length === 0) return { ...request, conflictPolicy: "prompt" };
-    const policy = promptForConflictPolicy(result.data.conflicts);
+    const policy =
+      appSettings.transfer.defaultConflictPolicy === "prompt"
+        ? promptForConflictPolicy(result.data.conflicts)
+        : appSettings.transfer.defaultConflictPolicy;
     if (policy === "cancel") return null;
     if (policy === "skip") {
       const conflictSources = new Set(result.data.conflicts.map((c) => c.source));
@@ -2450,6 +3027,169 @@ export function App(props: AppProps = {}) {
     await refreshV12EmbeddedRemoteCatalog();
   }
 
+  const localNavTools = (
+    <div className="nav-efficiency-bar">
+      <form
+        className="path-form path-form--inline"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void navigateLocal(activeTab.id, localPane.pathInput);
+        }}
+      >
+        <input
+          value={localPane.pathInput}
+          list="cofinder-local-path-suggestions"
+          onChange={(event) =>
+            setTabs((prev) =>
+              prev.map((tab) =>
+                tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: event.target.value } } : tab
+              )
+            )
+          }
+          aria-label="Local path"
+        />
+        <datalist id="cofinder-local-path-suggestions">
+          {localPathSuggestions.map((path) => (
+            <option key={path} value={path} />
+          ))}
+        </datalist>
+      </form>
+      <input
+        className="pane-filter-input"
+        value={localPane.filterText}
+        onChange={(event) => updateLocalFilter(activeTab.id, event.target.value)}
+        placeholder="Filter names"
+        aria-label="Filter local files by name"
+      />
+      <select
+        className="history-select"
+        value=""
+        aria-label="Local recent locations"
+        onChange={(event) => {
+          const path = event.target.value;
+          if (path) void navigateLocal(activeTab.id, path, "push");
+        }}
+      >
+        <option value="">Recent</option>
+        {localRecentPaths.map((item) => (
+          <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
+            {item.label} - {item.path}
+          </option>
+        ))}
+      </select>
+      <select
+        className="history-select"
+        value=""
+        aria-label="Local back and forward history"
+        onChange={(event) => {
+          const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
+          if (path) void navigateLocal(activeTab.id, path, mode);
+        }}
+      >
+        <option value="">History</option>
+        {localPane.history.backStack.slice().reverse().map((path) => (
+          <option key={`back-${path}`} value={`back:${path}`}>
+            Back: {path}
+          </option>
+        ))}
+        {localPane.history.forwardStack.map((path) => (
+          <option key={`forward-${path}`} value={`forward:${path}`}>
+            Forward: {path}
+          </option>
+        ))}
+      </select>
+      <button type="button" className="toolbar-button" disabled={localRecentPaths.length === 0} onClick={clearLocalRecents}>
+        Clear Recent
+      </button>
+    </div>
+  );
+
+  const remoteNavTools = (
+    <div className="nav-efficiency-bar">
+      <form
+        className="path-form path-form--inline"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.pathInput, "push", activeTab.id);
+        }}
+      >
+        <input
+          value={remotePane.pathInput}
+          list="cofinder-remote-path-suggestions"
+          disabled={!remotePane.connectionId}
+          onChange={(event) =>
+            setTabs((prev) =>
+              prev.map((tab) =>
+                tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: event.target.value } } : tab
+              )
+            )
+          }
+          aria-label="Remote path"
+        />
+        <datalist id="cofinder-remote-path-suggestions">
+          {remotePathSuggestions.map((path) => (
+            <option key={path} value={path} />
+          ))}
+        </datalist>
+      </form>
+      <input
+        className="pane-filter-input"
+        value={remotePane.filterText}
+        disabled={!remotePane.connectionId}
+        onChange={(event) => updateRemoteFilter(activeTab.id, event.target.value)}
+        placeholder="Filter names"
+        aria-label="Filter remote files by name"
+      />
+      <select
+        className="history-select"
+        value=""
+        disabled={!remotePane.connectionId || remoteRecentPaths.length === 0}
+        aria-label="Remote recent locations"
+        onChange={(event) => {
+          const path = event.target.value;
+          if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
+        }}
+      >
+        <option value="">Recent</option>
+        {remoteRecentPaths.map((item) => (
+          <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
+            {item.label} - {item.path}
+          </option>
+        ))}
+      </select>
+      <select
+        className="history-select"
+        value=""
+        disabled={!remotePane.connectionId}
+        aria-label="Remote back and forward history"
+        onChange={(event) => {
+          const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
+          if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, mode, activeTab.id);
+        }}
+      >
+        <option value="">History</option>
+        {remotePane.history.backStack.slice().reverse().map((path) => (
+          <option key={`back-${path}`} value={`back:${path}`}>
+            Back: {path}
+          </option>
+        ))}
+        {remotePane.history.forwardStack.map((path) => (
+          <option key={`forward-${path}`} value={`forward:${path}`}>
+            Forward: {path}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="toolbar-button"
+        disabled={!activeProfile?.id || remoteRecentPaths.length === 0}
+        onClick={() => clearRemoteRecents(activeProfile?.id)}
+      >
+        Clear Recent
+      </button>
+    </div>
+  );
+
   const localPaneEl = (
     <section
       className={localPaneSectionClass}
@@ -2467,12 +3207,14 @@ export function App(props: AppProps = {}) {
               pathRootLabel="Macintosh HD"
               onNavigate={(path) => void navigateLocal(activeTab.id, path)}
             />
+            {localNavTools}
           </div>
           <div className="v12m-pane-body">
             <div className="v12m-pane-split">
               <div className="v12m-pane-main v12m-pane-main--stack">
                 {localPane.error ? <div className="cfv12p-error">{localPane.error}</div> : null}
                 <V12VisualFileList
+                  pane="local"
                   isPaneActive={activePane === "local"}
                   entries={sortedEntries}
                   sortKey={localPane.sortKey}
@@ -2511,12 +3253,16 @@ export function App(props: AppProps = {}) {
                     void handleRowDoubleClick(activeTab.id, entry);
                   }}
                   onBackgroundMouseDown={(event) => {
-                    setActivePane("local");
-                    const target = event.target as HTMLElement | null;
-                    if (!target?.closest(".v12m-lrow")) {
-                      clearLocalSelection(activeTab.id);
-                    }
+                    beginMarqueeSelection("local", event);
                   }}
+                  onBackgroundDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
+                  onBackgroundDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
+                  onDragLeave={handleTransferDragLeave}
+                  onRowDragStart={(entry, event) => beginTransferDrag("local", entry, event)}
+                  onRowDragOver={(entry, event) => handleDirectoryRowDragOver("local", entry, event)}
+                  onRowDrop={(entry, event) => void handleDirectoryRowDrop("local", entry, event)}
+                  onRowDragEnd={() => setDropTarget(null)}
+                  getRowClassName={(entry) => rowDropClass("local", entry.fullPath)}
                   inlineRename={
                     inlineRename && inlineRename.pane === "local" && inlineRename.tabId === activeTab.id
                       ? {
@@ -2543,7 +3289,7 @@ export function App(props: AppProps = {}) {
                 />
                 <V12PaneFootStatus
                   selectedCount={selectedEntries.length}
-                  totalCount={localPane.entries.length}
+                  totalCount={sortedEntries.length}
                   selectedSizeLabel={formatSize(selectedSize)}
                   totalSizeLabel={formatSize(totalSize)}
                 />
@@ -2644,41 +3390,23 @@ export function App(props: AppProps = {}) {
             >
               Upload
             </button>
+            <button type="button" className="toolbar-button" onClick={() => void openTerminalHere(activeTab.id, "local")}>
+              Terminal
+            </button>
           </div>
 
-          <form
-            className="path-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void navigateLocal(activeTab.id, localPane.pathInput);
-            }}
-          >
-            <input
-              value={localPane.pathInput}
-              onChange={(event) =>
-                setTabs((prev) =>
-                  prev.map((tab) =>
-                    tab.id === activeTab.id
-                      ? { ...tab, localPane: { ...tab.localPane, pathInput: event.target.value } }
-                      : tab
-                  )
-                )
-              }
-              aria-label="Local path"
-            />
-          </form>
+          {localNavTools}
 
           {localPane.error ? <div className="error-banner">{localPane.error}</div> : null}
 
           <div
             className={`table-wrap ${activePane === "local" ? "table-wrap-active" : ""}`}
             onMouseDown={(event) => {
-              setActivePane("local");
-              const target = event.target as HTMLElement | null;
-              if (!target?.closest("tbody tr")) {
-                clearLocalSelection(activeTab.id);
-              }
+              beginMarqueeSelection("local", event);
             }}
+            onDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
+            onDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
+            onDragLeave={handleTransferDragLeave}
           >
             <table className="file-table">
               <colgroup>
@@ -2705,7 +3433,15 @@ export function App(props: AppProps = {}) {
                 {sortedEntries.map((entry) => (
                   <tr
                     key={entry.fullPath}
-                    className={localPane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
+                    draggable={!(inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath)}
+                    data-pane-row="true"
+                    data-marquee-pane="local"
+                    data-full-path={entry.fullPath}
+                    className={`${localPane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""} ${rowDropClass("local", entry.fullPath)}`.trim()}
+                    onDragStart={(event) => beginTransferDrag("local", entry, event)}
+                    onDragOver={(event) => handleDirectoryRowDragOver("local", entry, event)}
+                    onDrop={(event) => void handleDirectoryRowDrop("local", entry, event)}
+                    onDragEnd={() => setDropTarget(null)}
                     onClick={(event) => {
                       if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
                       if (
@@ -2783,7 +3519,7 @@ export function App(props: AppProps = {}) {
 
           <div className="pane-status">
             <span>Selected: {selectedEntries.length}</span>
-            <span>Total: {localPane.entries.length}</span>
+            <span>Total: {sortedEntries.length}</span>
             <span>Selected Size: {formatSize(selectedSize)}</span>
             <span>Total Size: {formatSize(totalSize)}</span>
           </div>
@@ -2811,6 +3547,7 @@ export function App(props: AppProps = {}) {
                 badge={remoteBadgeV12}
                 onNavigate={() => {}}
               />
+              {remoteNavTools}
             </div>
             <div className="v12m-pane-body">
               <div className="v12m-pane-split">
@@ -2855,12 +3592,14 @@ export function App(props: AppProps = {}) {
                   </button>
                 }
               />
+              {remoteNavTools}
             </div>
             <div className="v12m-pane-body">
               <div className="v12m-pane-split">
                 <div className="v12m-pane-main v12m-pane-main--stack">
                   {remotePane.error ? <div className="cfv12p-error">{remotePane.error}</div> : null}
                   <V12VisualFileList
+                    pane="remote"
                     isPaneActive={activePane === "remote"}
                     entries={sortedRemoteEntries}
                     sortKey={remotePane.sortKey}
@@ -2899,12 +3638,16 @@ export function App(props: AppProps = {}) {
                       void handleRemoteDoubleClick(activeTab.id, entry);
                     }}
                     onBackgroundMouseDown={(event) => {
-                      setActivePane("remote");
-                      const target = event.target as HTMLElement | null;
-                      if (!target?.closest(".v12m-lrow")) {
-                        clearRemoteSelection(activeTab.id);
-                      }
+                      beginMarqueeSelection("remote", event);
                     }}
+                    onBackgroundDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
+                    onBackgroundDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
+                    onDragLeave={handleTransferDragLeave}
+                    onRowDragStart={(entry, event) => beginTransferDrag("remote", entry, event)}
+                    onRowDragOver={(entry, event) => handleDirectoryRowDragOver("remote", entry, event)}
+                    onRowDrop={(entry, event) => void handleDirectoryRowDrop("remote", entry, event)}
+                    onRowDragEnd={() => setDropTarget(null)}
+                    getRowClassName={(entry) => rowDropClass("remote", entry.fullPath)}
                     inlineRename={
                       inlineRename && inlineRename.pane === "remote" && inlineRename.tabId === activeTab.id
                         ? {
@@ -2931,7 +3674,7 @@ export function App(props: AppProps = {}) {
                   />
                   <V12PaneFootStatus
                     selectedCount={remoteSelectedEntries.length}
-                    totalCount={remotePane.entries.length}
+                    totalCount={sortedRemoteEntries.length}
                     selectedSizeLabel={formatSize(remoteSelectedSize)}
                     totalSizeLabel={formatSize(remoteTotalSize)}
                   />
@@ -3040,44 +3783,29 @@ export function App(props: AppProps = {}) {
                 >
                   Download
                 </button>
+                <button type="button" className="toolbar-button" onClick={() => void createRemoteDirectory(activeTab.id)}>
+                  New Folder
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void openTerminalHere(activeTab.id, "remote")}>
+                  SSH Terminal
+                </button>
                 <button type="button" className="toolbar-button" onClick={() => void disconnectRemote(activeTab.id)}>
                   Disconnect
                 </button>
               </div>
 
-              <form
-                className="path-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void listRemotePath(remotePane.connectionId!, remotePane.pathInput, "push", activeTab.id);
-                }}
-              >
-                <input
-                  value={remotePane.pathInput}
-                  onChange={(event) =>
-                    setTabs((prev) =>
-                      prev.map((tab) =>
-                        tab.id === activeTab.id
-                          ? { ...tab, remotePane: { ...tab.remotePane, pathInput: event.target.value } }
-                          : tab
-                      )
-                    )
-                  }
-                  aria-label="Remote path"
-                />
-              </form>
+              {remoteNavTools}
 
               {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
 
               <div
                 className={`table-wrap ${activePane === "remote" ? "table-wrap-active" : ""}`}
                 onMouseDown={(event) => {
-                  setActivePane("remote");
-                  const target = event.target as HTMLElement | null;
-                  if (!target?.closest("tbody tr")) {
-                    clearRemoteSelection(activeTab.id);
-                  }
+                  beginMarqueeSelection("remote", event);
                 }}
+                onDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
+                onDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
+                onDragLeave={handleTransferDragLeave}
               >
                 <table className="file-table">
                   <colgroup>
@@ -3104,7 +3832,15 @@ export function App(props: AppProps = {}) {
                     {sortedRemoteEntries.map((entry) => (
                       <tr
                         key={entry.fullPath}
-                        className={remotePane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""}
+                        draggable={!(inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath)}
+                        data-pane-row="true"
+                        data-marquee-pane="remote"
+                        data-full-path={entry.fullPath}
+                        className={`${remotePane.selectedFullPaths.includes(entry.fullPath) ? "row-selected" : ""} ${rowDropClass("remote", entry.fullPath)}`.trim()}
+                        onDragStart={(event) => beginTransferDrag("remote", entry, event)}
+                        onDragOver={(event) => handleDirectoryRowDragOver("remote", entry, event)}
+                        onDrop={(event) => void handleDirectoryRowDrop("remote", entry, event)}
+                        onDragEnd={() => setDropTarget(null)}
                         onClick={(event) => {
                           if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
                           if (
@@ -3182,7 +3918,7 @@ export function App(props: AppProps = {}) {
 
               <div className="pane-status">
                 <span>Selected: {remoteSelectedEntries.length}</span>
-                <span>Total: {remotePane.entries.length}</span>
+                <span>Total: {sortedRemoteEntries.length}</span>
                 <span>Selected Size: {formatSize(remoteSelectedSize)}</span>
                 <span>Total Size: {formatSize(remoteTotalSize)}</span>
               </div>
@@ -3193,14 +3929,29 @@ export function App(props: AppProps = {}) {
     </section>
   );
 
+  const marqueeOverlay = marquee ? (
+    <div
+      className="marquee-rect"
+      style={{
+        left: `${normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).left}px`,
+        top: `${normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).top}px`,
+        width: `${normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).right - normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).left}px`,
+        height: `${normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).bottom - normalizeDragRect(marquee.startX, marquee.startY, marquee.currentX, marquee.currentY).top}px`
+      }}
+    />
+  ) : null;
+
   return (
-    <div className={uiShell === "v12" ? "app-shell app-shell--v12" : "app-shell"}>
+    <div className={`${uiShell === "v12" ? "app-shell app-shell--v12" : "app-shell"} density-${appSettings.appearance.rowDensity}`}>
       {uiShell === "v11" ? (
         <>
           <header className="top-bar">
             <div className="title-group">
               <strong>CoFinder</strong>
             </div>
+            <button type="button" className="toolbar-button" onClick={openPreferences}>
+              Preferences
+            </button>
             <div className="top-version" aria-label="App version">
               Version {appVersion}
             </div>
@@ -3234,7 +3985,8 @@ export function App(props: AppProps = {}) {
           }
           remotePane={remotePaneEl}
           sidebar={
-            <V12LocalFavoritesSidebar
+            appSettings.appearance.sidebarVisible ? (
+              <V12LocalFavoritesSidebar
               favorites={v12LocalFavorites}
               currentLocalPath={localPane.currentPath || "/"}
               hint={v12FavoriteHint}
@@ -3254,16 +4006,224 @@ export function App(props: AppProps = {}) {
               onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
               onSelectRemoteFavorite={(path) => {
                 setActivePane("remote");
+                clearRemoteSelection(activeTab.id);
                 if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
               }}
               onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
               onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
               onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
             />
+            ) : null
           }
         />
       )}
       {uiShell === "v11" ? queueV11Section : null}
+      {marqueeOverlay}
+      {preferences.open ? (
+        <div className="preferences-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setPreferences((p) => ({ ...p, open: false }))}>
+          <div className="preferences-dialog" role="dialog" aria-modal="true" aria-label="Preferences">
+            <div className="preferences-head">
+              <strong>Preferences</strong>
+              <button type="button" className="toolbar-button" onClick={() => setPreferences((p) => ({ ...p, open: false }))}>
+                Close
+              </button>
+            </div>
+            {preferences.error ? <div className="error-banner">{preferences.error}</div> : null}
+            <div className="preferences-grid">
+              <label>
+                Default local path
+                <input
+                  value={preferences.draft.general.defaultLocalPath}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: { ...p.draft, general: { ...p.draft.general, defaultLocalPath: e.target.value } }
+                    }))
+                  }
+                  placeholder="Use macOS Home"
+                />
+              </label>
+              <label>
+                Conflict policy
+                <select
+                  value={preferences.draft.transfer.defaultConflictPolicy}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: {
+                        ...p.draft,
+                        transfer: { ...p.draft.transfer, defaultConflictPolicy: e.target.value as AppSettings["transfer"]["defaultConflictPolicy"] }
+                      }
+                    }))
+                  }
+                >
+                  <option value="prompt">Ask every time</option>
+                  <option value="rename">Rename / keep both</option>
+                  <option value="skip">Skip conflicts</option>
+                  <option value="overwrite">Overwrite</option>
+                </select>
+              </label>
+              <label>
+                Queue auto-hide delay
+                <input
+                  type="number"
+                  min={0}
+                  max={60}
+                  value={Math.round(preferences.draft.transfer.queueAutoHideDelayMs / 1000)}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: {
+                        ...p.draft,
+                        transfer: { ...p.draft.transfer, queueAutoHideDelayMs: Math.max(0, Math.min(60, Number(e.target.value))) * 1000 }
+                      }
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Row density
+                <select
+                  value={preferences.draft.appearance.rowDensity}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: { ...p.draft, appearance: { ...p.draft.appearance, rowDensity: e.target.value as "compact" | "comfortable" } }
+                    }))
+                  }
+                >
+                  <option value="comfortable">Comfortable</option>
+                  <option value="compact">Compact</option>
+                </select>
+              </label>
+              <label>
+                Default pane ratio
+                <input
+                  type="number"
+                  min={25}
+                  max={75}
+                  value={Math.round(preferences.draft.appearance.defaultPaneRatio * 100)}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: {
+                        ...p.draft,
+                        appearance: { ...p.draft.appearance, defaultPaneRatio: Math.max(25, Math.min(75, Number(e.target.value))) / 100 }
+                      }
+                    }))
+                  }
+                />
+              </label>
+              {[
+                ["Restore last session", "restoreLastSession"],
+                ["Confirm before delete", "confirmBeforeDelete"],
+                ["Show hidden files", "showHiddenFiles"]
+              ].map(([label, key]) => (
+                <label key={key} className="preferences-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(preferences.draft.general[key as keyof AppSettings["general"]])}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: { ...p.draft, general: { ...p.draft.general, [key]: e.target.checked } }
+                      }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+              {[
+                ["Preserve timestamps", "preserveTimestamps"],
+              ].map(([label, key]) => (
+                <label key={key} className="preferences-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(preferences.draft.transfer[key as keyof AppSettings["transfer"]])}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: { ...p.draft, transfer: { ...p.draft.transfer, [key]: e.target.checked } }
+                      }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+              {[
+                ["Show inspector by default", "defaultInspectorVisible"],
+                ["Show sidebar", "sidebarVisible"]
+              ].map(([label, key]) => (
+                <label key={key} className="preferences-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(preferences.draft.appearance[key as keyof AppSettings["appearance"]])}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: { ...p.draft, appearance: { ...p.draft.appearance, [key]: e.target.checked } }
+                      }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <div className="preferences-shortcuts">
+              <strong>Shortcuts</strong>
+              <p>F2 rename · Delete remove · Cmd+I info · Cmd+Shift+C copy path · Cmd+R refresh · Cmd+U upload · Cmd+D download · Cmd+K Site Manager</p>
+            </div>
+            <div className="preferences-shortcuts">
+              <strong>Diagnostics</strong>
+              <div className="diagnostics-actions">
+                <button type="button" className="toolbar-button" onClick={() => void copyDiagnostics()}>
+                  Copy Diagnostics
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void openLogFolder()}>
+                  Open Log Folder
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void openLogFile()}>
+                  Open Log File
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void checkForUpdates()}>
+                  Check for Updates
+                </button>
+              </div>
+              <p>{diagnosticsStatus || "Diagnostics include app version, platform, userData path, log path, and ssh/rsync availability."}</p>
+            </div>
+            <div className="preferences-actions">
+              <button type="button" className="toolbar-button" onClick={() => setPreferences((p) => ({ ...p, draft: appSettings, error: "" }))}>
+                Reset
+              </button>
+              <button type="button" className="toolbar-button is-active" onClick={() => void savePreferences()}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {onboardingOpen ? (
+        <div className="preferences-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && void dismissOnboarding()}>
+          <div className="onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+            <div className="preferences-head">
+              <strong id="onboarding-title">Before Your First Connection</strong>
+              <button type="button" className="toolbar-button" onClick={() => void dismissOnboarding()}>
+                Close
+              </button>
+            </div>
+            <div className="onboarding-body">
+              <p>SFTP browsing can use a password saved with macOS secure storage when available.</p>
+              <p>Transfers use rsync over SSH BatchMode. Saved SFTP passwords are not passed to rsync, Terminal, commands, logs, or diagnostics.</p>
+              <p>If secure storage is unavailable, password saving is disabled and profiles still save only non-secret connection fields.</p>
+            </div>
+            <div className="preferences-actions">
+              <button type="button" className="toolbar-button is-active" onClick={() => void dismissOnboarding()}>
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {contextMenu ? (
         <div
           className="context-menu"
@@ -3391,6 +4351,16 @@ export function App(props: AppProps = {}) {
                 type="button"
                 className="context-item"
                 onClick={async () => {
+                  await openTerminalHere(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                Open Terminal Here
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
                   const tab = tabs.find((t) => t.id === contextMenu.tabId);
                   if (tab) await navigateLocal(contextMenu.tabId, tab.localPane.currentPath, "replace");
                   setContextMenu(null);
@@ -3432,6 +4402,16 @@ export function App(props: AppProps = {}) {
               <button
                 type="button"
                 className="context-item"
+                onClick={async () => {
+                  await createRemoteDirectory(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                New Folder
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) === 0}
                 onClick={() => {
                   openDeleteConfirm(contextMenu.tabId, "remote");
@@ -3468,6 +4448,28 @@ export function App(props: AppProps = {}) {
               <button
                 type="button"
                 className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await chmodRemoteSelection(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Change Permissions
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await duplicateRemoteSelection(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Duplicate File
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 onClick={async () => {
                   await copySelection(contextMenu.tabId, "remote", "name");
                   setContextMenu(null);
@@ -3485,6 +4487,16 @@ export function App(props: AppProps = {}) {
               >
                 Copy Full Path
                 <span className="context-shortcut">⌘⇧C</span>
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await openTerminalHere(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Open SSH Terminal Here
               </button>
               <button
                 type="button"
@@ -3546,9 +4558,20 @@ export function App(props: AppProps = {}) {
                   <span className="info-size-loading">
                     <span className="info-spinner" aria-hidden="true" />
                     Calculating...
+                    {infoDialog.sizeJobId ? (
+                      <button
+                        type="button"
+                        className="toolbar-button"
+                        onClick={() => {
+                          if (infoDialog.sizeJobId) void window.cofinder.remote.directorySizeCancel({ jobId: infoDialog.sizeJobId });
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
                   </span>
                 ) : (
-                  formatSize(infoDialog.info.size)
+                  `${formatSize(infoDialog.info.size)}${infoDialog.sizeCapped ? " (partial)" : ""}`
                 )}
               </dd>
               <dt>Modified</dt>
@@ -3561,6 +4584,15 @@ export function App(props: AppProps = {}) {
               <dd>{infoDialog.info.group ?? "-"}</dd>
             </dl>
             <div className="info-actions">
+              {infoDialog.pane === "remote" && infoDialog.info.type !== "unknown" ? (
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  onClick={() => void chmodRemoteSelection(activeTab.id)}
+                >
+                  Chmod
+                </button>
+              ) : null}
               <button type="button" className="toolbar-button" onClick={() => setInfoDialog(null)}>
                 Close
               </button>
@@ -3641,6 +4673,7 @@ function createLocalPaneState(): LocalPaneState {
   return {
     currentPath: "",
     pathInput: "",
+    filterText: "",
     entries: [],
     selectedFullPaths: [],
     selectionAnchorFullPath: null,
@@ -3663,6 +4696,7 @@ function createRemotePaneState(): RemotePaneState {
     homePath: "/",
     currentPath: "/",
     pathInput: "/",
+    filterText: "",
     entries: [],
     selectedFullPaths: [],
     selectionAnchorFullPath: null,
@@ -3727,4 +4761,73 @@ function promptForConflictPolicy(conflicts: TransferConflict[]): Exclude<Transfe
   const normalized = answer?.trim().toLowerCase();
   if (normalized === "overwrite" || normalized === "skip" || normalized === "rename") return normalized;
   return "cancel";
+}
+
+function rwxToOctal(input: string): string {
+  if (!/^[r-][w-][x-][r-][w-][x-][r-][w-][x-]$/.test(input)) return "644";
+  const chunks = [input.slice(0, 3), input.slice(3, 6), input.slice(6, 9)];
+  return chunks
+    .map((chunk) => {
+      let value = 0;
+      if (chunk[0] === "r") value += 4;
+      if (chunk[1] === "w") value += 2;
+      if (chunk[2] === "x") value += 1;
+      return String(value);
+    })
+    .join("");
+}
+
+function readLastLocalPath(): string {
+  return window.localStorage.getItem(COFINDER_LAST_LOCAL_PATH_KEY)?.trim() ?? "";
+}
+
+function readRecentPathList(key: string): RecentPath[] {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is RecentPath => {
+        if (typeof item !== "object" || item === null || Array.isArray(item)) return false;
+        const row = item as Record<string, unknown>;
+        return typeof row.path === "string" && typeof row.label === "string" && typeof row.visitedAt === "number";
+      })
+      .slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
+function readRemoteRecentPathsByProfile(): Record<string, RecentPath[]> {
+  try {
+    const raw = window.localStorage.getItem(COFINDER_REMOTE_RECENTS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    const out: Record<string, RecentPath[]> = {};
+    for (const [profileId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!profileId.trim()) continue;
+      if (Array.isArray(value)) {
+        out[profileId] = value
+          .filter((item): item is RecentPath => {
+            if (typeof item !== "object" || item === null || Array.isArray(item)) return false;
+            const row = item as Record<string, unknown>;
+            return typeof row.path === "string" && typeof row.label === "string" && typeof row.visitedAt === "number";
+          })
+          .slice(0, 12);
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeJsonLocalStorage(key: string, value: unknown): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Recent-path persistence is a convenience only; navigation must keep working if storage is unavailable.
+  }
 }

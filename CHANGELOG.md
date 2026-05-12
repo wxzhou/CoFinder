@@ -4,11 +4,50 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v0.4.0.** The repo may temporarily use **`package.json` 0.5.0** during development so local **`npm run build` / `npm run dist`** does not overwrite the **v0.4.0** release identity—do **not** treat that as shipped until **v0.5.0** is tagged and this file gains a **`## v0.5.0`** section.
+- **Latest shipped release: v0.5.0.** The repo may temporarily use a newer **`package.json`** version during development so local **`npm run build` / `npm run dist`** can exercise the next artifact identity. Do **not** treat development-tree versions as shipped until matching git tags and release sections exist.
 
 ## Unreleased
 
-**Target:** v0.5.0 / product milestone **V1.4** (draft notes—not shipped).
+**Target:** v1.0.0 / product milestone **V2.0** (draft notes—not shipped). V1.5-v1.9 development-tree milestones remain unshipped until tagged.
+
+- Stable personal-release candidate: documentation, release checklist, smoke checklist, IPC inventory, and security notes are aligned with the implemented feature set.
+- V2.0 scope cuts are explicit: full auto-update install, remote edit auto-sync, App Store distribution, cross-platform ports, and plugin ecosystem remain out of scope.
+- Release blocker notes now call out unsigned local artifacts, manual GitHub Releases update policy, diagnostics redaction, and full smoke execution before tagging.
+
+**V1.9 / v0.10.0 development-tree notes:**
+
+- Packaging/reliability: release checklist now covers version bump, changelog, git tag, dmg/zip, smoke, and GitHub Release artifact steps.
+- Diagnostics UI: Preferences can open the log folder/file and copy a redacted diagnostics bundle with app version, platform, userData/log paths, and ssh/rsync availability.
+- First-run onboarding explains SFTP password saving, rsync BatchMode SSH transfer requirements, and safeStorage availability.
+- Update policy: in-app Check for Updates reports the current manual GitHub Releases policy; silent install remains deferred until signing/notarization prerequisites are met.
+- Settings schema migrated to v2 with a persisted onboarding-dismissed flag.
+
+**V1.8 / v0.9.0 development-tree notes:**
+
+- Remote operations expansion: mkdir, basic chmod, file duplicate, local Terminal here, and remote SSH Terminal here.
+- Remote directory size now uses an async cancelable job with traversal caps instead of blocking recursive UI work.
+- Remote symlink entries are surfaced as symlink where SFTP exposes that type.
+- Security caveat documented: SSH terminal launch never places saved passwords on command lines.
+- Remote operation tests cover mkdir, chmod, duplicate, and capped directory-size traversal.
+
+- Current-directory quick filter for local and remote panes, including the V12 toolbar search box for the focused pane.
+- Path autocomplete uses known locations only: local favorites/recents/history and remote current-tab/per-profile recents/favorites/history. It does not perform indexed search or background SFTP crawling.
+- Recent locations: local recent paths and per-profile remote recent paths, each with a clear action.
+- History UI: per-pane Back/Forward history dropdowns supplement existing toolbar buttons while preserving tab-local history state.
+- Navigation helper tests cover deterministic filtering, recent-path de-duplication, and prefix suggestions.
+
+- Preferences MVP: versioned `settings.json` managed by main-process `SettingsService` through `settings:get` / `settings:set`.
+- General preferences: default local path, delete confirmation toggle, hidden file visibility, and restore-last-local-path behavior.
+- Transfer preferences: default conflict policy, queue auto-hide delay, and timestamp preservation toggle wired to rsync flags.
+- Appearance preferences: row density, default inspector visibility, default pane ratio, and sidebar visibility.
+- Shortcut reference is visible from Preferences.
+
+- Drag-and-drop transfer: drag selected local items to the remote pane to upload, and selected remote items to the local pane to download.
+- Finder-to-remote upload: drag files/folders from Finder into the remote pane.
+- Drop target feedback: current-pane drops target the current directory, directory-row drops target that directory, invalid row drops show forbidden feedback.
+- Marquee selection: drag from pane background to select rows, with additive selection via `Cmd`/`Shift`.
+
+## v0.5.0 — Product milestone V1.4
 
 - Transfer conflict handling: upload/download checks detect existing local or remote targets before enqueue and support overwrite, skip, rename/keep-both, and cancel choices.
 - Transfer queue recovery: failed tasks can be retried individually or as a group while preserving original transfer metadata.

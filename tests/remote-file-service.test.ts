@@ -220,4 +220,79 @@ describe("RemoteFileService path/list behavior", () => {
     expect(info.size).toBe(4096);
     expect(list).not.toHaveBeenCalled();
   });
+
+  it("creates a remote directory under the current folder", async () => {
+    const mkdir = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { mkdir }
+      })
+    } as any);
+
+    await expect(service.makeDirectory("c1", "/work", "new folder")).resolves.toBe("/work/new folder");
+    expect(mkdir).toHaveBeenCalledWith("/work/new folder");
+  });
+
+  it("changes remote permissions with numeric mode", async () => {
+    const chmod = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { chmod }
+      })
+    } as any);
+
+    await expect(service.chmodPath("c1", "/work/a.txt", 0o640)).resolves.toBeUndefined();
+    expect(chmod).toHaveBeenCalledWith("/work/a.txt", 0o640);
+  });
+
+  it("duplicates a remote file with copy suffix", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/work/a.txt") return { type: "-", size: 3, modifyTime: Date.now() };
+      throw new Error("No such file");
+    });
+    const get = vi.fn().mockResolvedValue(Buffer.from("abc"));
+    const put = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, get, put }
+      })
+    } as any);
+
+    await expect(service.duplicateFile("c1", "/work/a.txt")).resolves.toBe("/work/a copy.txt");
+    expect(get).toHaveBeenCalledWith("/work/a.txt");
+    expect(put).toHaveBeenCalledWith(Buffer.from("abc"), "/work/a copy.txt");
+  });
+
+  it("calculates directory size with a traversal cap", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/dir") return { type: "d", mode: 0o040755, size: 0, modifyTime: Date.now() };
+      throw new Error("No such file");
+    });
+    const list = vi.fn(async (target: string) => {
+      if (target === "/dir") {
+        return [
+          { name: "a.txt", type: "-", size: 3, modifyTime: Date.now() },
+          { name: "b.txt", type: "-", size: 5, modifyTime: Date.now() }
+        ];
+      }
+      return [];
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, list }
+      })
+    } as any);
+
+    const result = await service.calculateDirectorySize("c1", "/dir", { maxEntries: 1 });
+    expect(result.size).toBe(3);
+    expect(result.capped).toBe(true);
+  });
 });

@@ -46,6 +46,9 @@ export type RemoteErrorCode =
   | "SYSTEM_INVALID_INPUT"
   | "SYSTEM_PREVIEW_FAILED"
   | "SYSTEM_VERSION_FAILED"
+  | "SYSTEM_DIAGNOSTICS_FAILED"
+  | "SYSTEM_LOG_OPEN_FAILED"
+  | "SYSTEM_UPDATE_CHECK_UNAVAILABLE"
   | "REMOTE_AUTH_FAILED"
   | "REMOTE_CONNECTION_FAILED"
   | "REMOTE_PERMISSION_DENIED"
@@ -55,6 +58,10 @@ export type RemoteErrorCode =
   | "REMOTE_RENAME_FAILED"
   | "REMOTE_DELETE_FAILED"
   | "REMOTE_INFO_FAILED"
+  | "REMOTE_MKDIR_FAILED"
+  | "REMOTE_CHMOD_FAILED"
+  | "REMOTE_DUPLICATE_FAILED"
+  | "REMOTE_DIRECTORY_SIZE_FAILED"
   | "REMOTE_PREVIEW_UNSUPPORTED"
   | "REMOTE_PREVIEW_FAILED"
   | "REMOTE_DISCONNECTED"
@@ -76,7 +83,10 @@ export type RemoteErrorCode =
   | "TRANSFER_QUEUE_ERROR"
   | "LOCAL_FAVORITES_DUPLICATE"
   | "LOCAL_FAVORITES_NOT_FOUND"
-  | "LOCAL_FAVORITES_PERSIST_FAILED";
+  | "LOCAL_FAVORITES_PERSIST_FAILED"
+  | "SETTINGS_LOAD_FAILED"
+  | "SETTINGS_SAVE_FAILED"
+  | "SETTINGS_INVALID";
 
 export interface RemoteErrorPayload {
   code: RemoteErrorCode;
@@ -127,6 +137,7 @@ export type EnqueueUploadRequest = {
   localSources: string[];
   remoteDestinationDir: string;
   conflictPolicy?: TransferConflictPolicy;
+  preserveTimestamps?: boolean;
   remoteTargetOverrides?: Record<string, string>;
 };
 
@@ -141,10 +152,56 @@ export type EnqueueDownloadRequest = {
   remoteSources: string[];
   localDestinationDir: string;
   conflictPolicy?: TransferConflictPolicy;
+  preserveTimestamps?: boolean;
   localTargetOverrides?: Record<string, string>;
 };
 
 export type TransferConflictPolicy = "prompt" | "overwrite" | "skip" | "rename" | "cancel";
+
+export type AppSettings = {
+  schemaVersion: 2;
+  general: {
+    defaultLocalPath: string;
+    restoreLastSession: boolean;
+    confirmBeforeDelete: boolean;
+    showHiddenFiles: boolean;
+    firstRunOnboardingDismissed: boolean;
+  };
+  transfer: {
+    defaultConflictPolicy: Exclude<TransferConflictPolicy, "cancel">;
+    queueAutoHideDelayMs: number;
+    preserveTimestamps: boolean;
+  };
+  appearance: {
+    rowDensity: "compact" | "comfortable";
+    defaultInspectorVisible: boolean;
+    defaultPaneRatio: number;
+    sidebarVisible: boolean;
+  };
+};
+
+export type ToolAvailability = {
+  available: boolean;
+  detail?: string;
+};
+
+export type DiagnosticsBundle = {
+  generatedAt: string;
+  appVersion: string;
+  platform: string;
+  arch: string;
+  userDataPath: string;
+  logFilePath: string;
+  logFileExists: boolean;
+  tools: {
+    ssh: ToolAvailability;
+    rsync: ToolAvailability;
+  };
+  updatePolicy: {
+    mode: "manual-github-release";
+    status: string;
+  };
+};
 
 export type TransferConflict = {
   source: string;
@@ -158,6 +215,17 @@ export type TransferConflictCheckResponse = {
 
 export type TransferUpdatePayload = {
   tasks: TransferTask[];
+};
+
+export type RemoteDirectorySizeUpdatePayload = {
+  jobId: string;
+  connectionId: string;
+  path: string;
+  status: "running" | "success" | "failed" | "canceled";
+  size?: number;
+  visitedEntries?: number;
+  capped?: boolean;
+  error?: string;
 };
 
 /** Sent from Site Manager to create/update a profile; password is never persisted in profiles.json. */
@@ -200,6 +268,12 @@ export interface IpcApi {
       path: string;
       includeDirectorySize?: boolean;
     }) => Promise<IpcResponse<{ info: PathInfo }>>;
+    mkdir: (request: { connectionId: string; parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
+    chmod: (request: { connectionId: string; path: string; mode: string }) => Promise<IpcResponse<{ changed: true }>>;
+    duplicate: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ duplicated: true; newPath: string }>>;
+    directorySizeStart: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ jobId: string }>>;
+    directorySizeCancel: (request: { jobId: string }) => Promise<IpcResponse<{ canceled: true }>>;
+    onDirectorySizeUpdate: (handler: (payload: RemoteDirectorySizeUpdatePayload) => void) => () => void;
     previewOpen: (request: {
       tabId: string;
       connectionId: string;
@@ -222,8 +296,8 @@ export interface IpcApi {
     onUpdate: (handler: (payload: TransferUpdatePayload) => void) => () => void;
   };
   settings: {
-    get: () => Promise<unknown>;
-    set: (request: unknown) => Promise<void>;
+    get: () => Promise<IpcResponse<AppSettings>>;
+    set: (request: unknown) => Promise<IpcResponse<AppSettings>>;
   };
   localFavorites: {
     list: () => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;
@@ -253,6 +327,12 @@ export interface IpcApi {
   system: {
     copyText: (request: { text: string }) => Promise<IpcResponse<{ copied: true }>>;
     quickLook: (request: { path: string }) => Promise<IpcResponse<{ opened: true }>>;
+    openTerminal: (request: { path: string }) => Promise<IpcResponse<{ opened: true }>>;
+    openSshTerminal: (request: { host: string; port: number; username: string; remotePath?: string }) => Promise<IpcResponse<{ opened: true }>>;
     getAppVersion: () => Promise<IpcResponse<{ version: string }>>;
+    openLogFolder: () => Promise<IpcResponse<{ opened: true; path: string }>>;
+    openLogFile: () => Promise<IpcResponse<{ opened: true; path: string }>>;
+    copyDiagnostics: () => Promise<IpcResponse<{ copied: true; diagnostics: DiagnosticsBundle }>>;
+    checkForUpdates: () => Promise<IpcResponse<{ available: false; message: string }>>;
   };
 }

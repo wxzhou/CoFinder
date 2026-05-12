@@ -19,6 +19,17 @@ const api: IpcApi = {
     rename: (request) => ipcRenderer.invoke("remote:rename", request),
     delete: (request) => ipcRenderer.invoke("remote:delete", request),
     getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request),
+    mkdir: (request) => ipcRenderer.invoke("remote:mkdir", request),
+    chmod: (request) => ipcRenderer.invoke("remote:chmod", request),
+    duplicate: (request) => ipcRenderer.invoke("remote:duplicate", request),
+    directorySizeStart: (request) => ipcRenderer.invoke("remote:directorySizeStart", request),
+    directorySizeCancel: (request) => ipcRenderer.invoke("remote:directorySizeCancel", request),
+    onDirectorySizeUpdate: (handler) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) =>
+        handler(payload as Parameters<typeof handler>[0]);
+      ipcRenderer.on("remote:directorySizeUpdate", wrapped);
+      return () => ipcRenderer.off("remote:directorySizeUpdate", wrapped);
+    },
     previewOpen: (request) => ipcRenderer.invoke("remote:previewOpen", request),
     previewClearForTab: (request) => ipcRenderer.invoke("remote:previewClearForTab", request),
     previewClearForConnection: (request) => ipcRenderer.invoke("remote:previewClearForConnection", request)
@@ -69,7 +80,13 @@ const api: IpcApi = {
   system: {
     copyText: (request) => ipcRenderer.invoke("system:copyText", request),
     quickLook: (request) => ipcRenderer.invoke("system:quickLook", request),
-    getAppVersion: () => ipcRenderer.invoke("system:getAppVersion")
+    openTerminal: (request) => ipcRenderer.invoke("system:openTerminal", request),
+    openSshTerminal: (request) => ipcRenderer.invoke("system:openSshTerminal", request),
+    getAppVersion: () => ipcRenderer.invoke("system:getAppVersion"),
+    openLogFolder: () => ipcRenderer.invoke("system:openLogFolder"),
+    openLogFile: () => ipcRenderer.invoke("system:openLogFile"),
+    copyDiagnostics: () => ipcRenderer.invoke("system:copyDiagnostics"),
+    checkForUpdates: () => ipcRenderer.invoke("system:checkForUpdates")
   }
 };
 

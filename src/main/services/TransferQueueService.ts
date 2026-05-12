@@ -77,7 +77,8 @@ export class TransferQueueService {
         sourceDisplay: source,
         destinationDisplay: `${request.username}@${request.host}:${remotePath}`,
         localPath: source,
-        remotePath
+        remotePath,
+        preserveTimestamps: request.preserveTimestamps ?? true
       });
       this.tasks.push(task);
       taskIds.push(task.id);
@@ -114,7 +115,8 @@ export class TransferQueueService {
         sourceDisplay: `${request.username}@${request.host}:${remotePath}`,
         destinationDisplay: localPath,
         localPath,
-        remotePath
+        remotePath,
+        preserveTimestamps: request.preserveTimestamps ?? true
       });
       this.tasks.push(task);
       taskIds.push(task.id);
@@ -257,8 +259,8 @@ export class TransferQueueService {
 
     const args =
       task.direction === "upload"
-        ? buildRsyncUploadArgs(task.port, task.username, task.host, task.localPath, task.remotePath)
-        : buildRsyncDownloadArgs(task.port, task.username, task.host, task.remotePath, task.localPath);
+        ? buildRsyncUploadArgs(task.port, task.username, task.host, task.localPath, task.remotePath, task.preserveTimestamps)
+        : buildRsyncDownloadArgs(task.port, task.username, task.host, task.remotePath, task.localPath, task.preserveTimestamps);
 
     // Directory transfer rule: source path does not get trailing slash, so rsync keeps the directory itself.
     const child = this.deps.spawnProcess("rsync", args);
@@ -446,11 +448,12 @@ export function buildRsyncUploadArgs(
   username: string,
   host: string,
   localSourcePath: string,
-  remoteDestinationPath: string
+  remoteDestinationPath: string,
+  preserveTimestamps = true
 ): string[] {
   validateLocalPath(localSourcePath);
   const remotePath = validateRsyncPath(remoteDestinationPath);
-  return ["-avh", "--progress", "-e", buildSshSpec(port), localSourcePath, buildRsyncRemoteSpec(username, host, remotePath)];
+  return [preserveTimestamps ? "-avh" : "-rvh", "--progress", "-e", buildSshSpec(port), localSourcePath, buildRsyncRemoteSpec(username, host, remotePath)];
 }
 
 export function buildRsyncDownloadArgs(
@@ -458,11 +461,12 @@ export function buildRsyncDownloadArgs(
   username: string,
   host: string,
   remoteSourcePath: string,
-  localDestinationDir: string
+  localDestinationDir: string,
+  preserveTimestamps = true
 ): string[] {
   validateLocalPath(localDestinationDir);
   const remotePath = validateRsyncPath(remoteSourcePath);
-  return ["-avh", "--progress", "-e", buildSshSpec(port), buildRsyncRemoteSpec(username, host, remotePath), localDestinationDir];
+  return [preserveTimestamps ? "-avh" : "-rvh", "--progress", "-e", buildSshSpec(port), buildRsyncRemoteSpec(username, host, remotePath), localDestinationDir];
 }
 
 function transferError(code: TransferServiceErrorCode, message: string, detail?: string): TransferServiceError {

@@ -5,6 +5,15 @@ export type SelectionState = {
   selectionAnchorFullPath: string | null;
 };
 
+export type RectLike = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
+export type MarqueeRowRect = RowLike & RectLike;
+
 export function selectAllRows<T extends RowLike>(
   rows: T[],
   anchor: "first" | "last" = "first"
@@ -76,3 +85,29 @@ export function stringifySelection(
   return values.join("\n");
 }
 
+export function rectsIntersect(a: RectLike, b: RectLike): boolean {
+  return a.left <= b.right && a.right >= b.left && a.top <= b.bottom && a.bottom >= b.top;
+}
+
+export function normalizeDragRect(startX: number, startY: number, currentX: number, currentY: number): RectLike {
+  return {
+    left: Math.min(startX, currentX),
+    top: Math.min(startY, currentY),
+    right: Math.max(startX, currentX),
+    bottom: Math.max(startY, currentY)
+  };
+}
+
+export function applyMarqueeSelection(
+  rows: MarqueeRowRect[],
+  marquee: RectLike,
+  current: SelectionState,
+  options: { additive: boolean }
+): SelectionState {
+  const hits = rows.filter((row) => rectsIntersect(row, marquee)).map((row) => row.fullPath);
+  const selectedFullPaths = options.additive ? Array.from(new Set([...current.selectedFullPaths, ...hits])) : hits;
+  return {
+    selectedFullPaths,
+    selectionAnchorFullPath: hits[hits.length - 1] ?? current.selectionAnchorFullPath
+  };
+}

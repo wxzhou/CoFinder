@@ -24,11 +24,16 @@
   - `local:openPath`
   - `local:revealPath`
   - `local:getHomePath`
+  - `local:rename`, `local:delete`, `local:getInfo`
 - Remote:
   - `remote:connect`
   - `remote:listDirectory`
   - `remote:disconnect`
   - `remote:getHomeDirectory`
+  - `remote:rename`, `remote:delete`, `remote:getInfo`
+  - `remote:mkdir`, `remote:chmod`, `remote:duplicate`
+  - `remote:directorySizeStart`, `remote:directorySizeCancel`, push `remote:directorySizeUpdate`
+  - `remote:previewOpen`, `remote:previewClearForTab`, `remote:previewClearForConnection`
 - Transfer:
   - `transfer:enqueueUpload`
   - `transfer:enqueueDownload`
@@ -43,9 +48,17 @@
   - push: `transfer:onUpdate`
 - Profiles/Credentials:
   - `profiles:list`, `profiles:save`, `profiles:update`, `profiles:delete`
+  - `profiles:addRemoteFavorite`, `profiles:removeRemoteFavorite`, `profiles:renameRemoteFavorite`, `profiles:reorderRemoteFavorite`
   - `credentials:isAvailable`
+- Local favorites:
+  - `localFavorites:list`, `localFavorites:add`, `localFavorites:remove`, `localFavorites:rename`, `localFavorites:reorder`, `localFavorites:resetDefaults`
+- Settings:
+  - `settings:get`
+  - `settings:set`
 - System:
   - `system:copyText`
+  - `system:openTerminal`, `system:openSshTerminal`
+  - `system:openLogFolder`, `system:openLogFile`, `system:copyDiagnostics`, `system:checkForUpdates`
 
 ## Service Responsibilities
 
@@ -55,6 +68,7 @@
 - `RemoteFileService`
   - SFTP connect/list/disconnect/home.
   - Remote path normalization and remote error mapping.
+  - Remote mkdir, chmod, file duplicate, symlink type mapping, and capped directory-size traversal.
 - `ConnectionManager`
   - Holds active SFTP client connections keyed by `connectionId`.
 - `TransferQueueService`
@@ -68,12 +82,24 @@
   - Non-sensitive profile persistence.
 - `SafeStorageCredentialProvider` + `CredentialService`
   - Encrypted credential persistence with availability check.
+- `SettingsService`
+  - Versioned non-secret app settings (`schemaVersion: 2`) stored as `settings.json` under app userData.
+  - Normalizes partial patches into safe defaults before persistence.
+  - Owns future migration boundaries; renderer uses IPC only.
+- `DiagnosticsService`
+  - Builds a redacted diagnostics clipboard bundle with app/platform paths and `ssh`/`rsync` availability.
+  - Does not read profiles, credentials, private keys, or transfer task payloads.
 
 ## State Model
 
 - Renderer tab state:
   - each tab has independent local pane and remote pane.
   - each pane tracks path/history/sort/selection/error/loading.
+  - V1.7 filter text is per pane; changing it clears selection to avoid hidden active selections.
+- Navigation efficiency:
+  - Current-directory filters run entirely in renderer over already-loaded entries.
+  - Local/remote recent paths are renderer localStorage only (`cofinder.recent.*`).
+  - Remote recents are keyed by profile id; no additional SFTP traffic or main-process IPC is used for autocomplete.
 - Transfer queue:
   - global in main process, not per tab.
   - each task binds to `tabId` for UI context.
@@ -91,9 +117,12 @@
 
 - Credentials never embedded in `ServerProfile`.
 - Password should not be logged, serialized in transfer tasks, or passed via rsync args.
+- Terminal launch never reads or injects saved passwords.
 - Clipboard write goes through explicit `system:copyText`.
+- Diagnostics clipboard writes go through `system:copyDiagnostics` and use redaction before writing.
 - Path safety and rsync safety checks centralized in main utilities/services.
 - Transfer conflict checks and rename target generation run in main; renderer does not own overwrite policy.
+- Settings files must not contain passwords, tokens, private keys, or free-form command arguments.
 
 ## Lifecycle and Cleanup
 

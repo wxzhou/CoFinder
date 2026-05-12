@@ -31,6 +31,71 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Retry all failed:** create two failed tasks, fix the cause, use `Retry failed`, and confirm tasks restart serially, one running at a time.
 - **Copy error detail:** on a failed task, use `Copy error` and confirm the clipboard contains the stable error code/message plus recent rsync detail without credentials.
 
+## V1.5 drag-and-drop transfer and marquee selection
+
+- **Local → remote drag upload:** select one local file, drag it to empty space in the connected remote pane, release, resolve any conflict prompt, and confirm a queued upload appears.
+- **Local multi-select / directory drag:** select multiple local items including a folder, drag them to the remote pane, and confirm one queued upload task per selected source.
+- **Remote → local drag download:** select one remote file, drag it to empty space in the local pane, release, resolve any conflict prompt, and confirm a queued download appears.
+- **Directory row drop target:** drag a local file onto a remote folder row and confirm the upload target is that folder; repeat remote file onto a local folder row for download.
+- **Invalid row drop:** drag onto a file row and confirm forbidden/invalid feedback appears and no task is queued.
+- **Finder → remote upload:** drag a file or folder from Finder into the connected remote pane and confirm upload uses the same conflict dialog and queue path.
+- **Finder non-goal:** drag from Finder into the local pane and confirm it does not enqueue a transfer.
+- **Marquee replace:** drag from empty pane background across several rows and confirm the selection becomes exactly the intersected rows.
+- **Marquee additive:** hold `Cmd` or `Shift`, drag a marquee over additional rows, and confirm existing selection is preserved while hit rows are added.
+- **Gesture priority:** confirm splitter drag still resizes panes, row drag starts transfer, background drag starts marquee, single click selects, and double click opens/enters directories.
+
+## V1.6 preferences MVP
+
+- **Open Preferences:** in default V12 UI, click the toolbar Preferences button; in legacy classic UI, use the top-bar Preferences button. Confirm the modal opens and closes cleanly.
+- **Settings round-trip:** change row density, queue auto-hide delay, default pane ratio, and default local path. Save, quit, relaunch, and confirm values persist.
+- **Default local path:** set a temporary local test directory as default, relaunch, and confirm the first local pane opens there. Reset to blank when done.
+- **Restore last local path:** enable restore last session, navigate the active local pane to another isolated test directory, quit, relaunch, and confirm the first local pane opens at that last local path. Remote connections must not auto-reconnect.
+- **Delete confirmation:** toggle confirmation off in an isolated test folder, delete a disposable local file, and confirm it deletes without the modal. Turn the setting back on.
+- **Hidden files:** toggle show hidden files and confirm dotfiles appear/disappear in local and remote listings after refresh.
+- **Conflict policy:** set default conflict policy to `rename`, trigger an upload/download conflict, and confirm CoFinder keeps both without prompting. Repeat with `skip` on a two-file transfer, then reset to `prompt`.
+- **Queue auto-hide:** set delay to 1 second, run a successful small transfer, and confirm the queue hides after success when not pinned.
+- **Timestamp preservation:** with preserve timestamps enabled, run a small transfer and confirm modification time is preserved where the filesystem/server supports it. Disable it, repeat with a new file, and confirm rsync no longer preserves the original mtime.
+- **Appearance:** toggle compact/comfortable density, default inspector visibility, pane ratio, and sidebar visibility; relaunch and confirm settings apply.
+- **Shortcut display:** confirm Preferences shows the implemented shortcut list and that the bindings still match the V1.3 shortcut smoke section.
+
+## V1.7 search, filter, and navigation
+
+- **Local quick filter:** open a local folder with several files/folders, type a substring in the local filter box, and confirm only matching names remain. Clear the filter and confirm the full current listing returns.
+- **Remote quick filter:** connect to the remote test root, type a substring in the remote filter box or focus the remote pane and use the V12 toolbar filter, and confirm filtering is local to the already-loaded listing with no navigation.
+- **Selection safety:** select several rows, change the filter, and confirm the selection is cleared instead of leaving hidden selected rows active.
+- **Local autocomplete:** navigate to two or more local folders, type the beginning of a known recent/favorite path in the local path field, and confirm suggestions appear. Pick one and press Enter to navigate.
+- **Remote autocomplete:** navigate to two or more remote folders under the current profile, type the beginning of a visited path, and confirm suggestions appear without extra remote listing until you submit the path.
+- **Recent locations:** navigate local and remote paths, use the Recent dropdowns to jump back, then use Clear Recent and confirm the dropdown empties. Remote recents should be scoped to the active saved profile.
+- **History dropdown:** navigate A -> B -> C in local and remote panes, use Back/Forward buttons and the History dropdown to jump among entries, and confirm tab-local history remains isolated.
+- **Boundary check:** confirm favorites remain pinned sidebar shortcuts, recents are transient history, and Site Manager profiles are only connection records.
+
+## V1.8 remote operations expansion
+
+- **Remote mkdir:** connect to the isolated remote test root, use New Folder, create a disposable folder, refresh, and confirm it appears. Try an invalid name containing `/` and confirm a clear validation error.
+- **Remote chmod:** create/select a disposable remote file, use Change Permissions, enter `640`, refresh/Get Info, and confirm permissions update where the server supports chmod. Restore permissions before cleanup if needed.
+- **Remote duplicate:** select a small remote file, use Duplicate File, and confirm a `copy`-suffixed file appears with the same content. Try a directory and confirm duplicate is rejected.
+- **Copy path polish:** select a remote file and use Copy Full Path; confirm the clipboard contains the normalized remote path only, not credentials.
+- **Terminal here:** use local Open Terminal Here and confirm Terminal opens in the local folder. Use remote Open SSH Terminal Here and confirm the command opens an SSH session targeting host/user/path without prompting CoFinder to expose saved passwords.
+- **Symlink display:** in a remote fixture containing a symlink, confirm the listing/Get Info identifies it as `symlink` and directory size does not follow it as a directory.
+- **Remote directory size:** Get Info on a remote directory, confirm size starts calculating asynchronously, then test Cancel. Repeat on a small directory and confirm size completes without freezing the UI.
+
+## V1.9 packaging, diagnostics, and onboarding
+
+- **First-run onboarding:** launch with a fresh Electron userData directory, review the onboarding text, and confirm it explains SFTP password saving, rsync BatchMode SSH, and safeStorage unavailability. Dismiss it, relaunch, and confirm it stays dismissed.
+- **Copy diagnostics:** open Preferences → Diagnostics, click Copy Diagnostics, paste into a scratch text file, and confirm it includes app version, platform, arch, userData path, log path, and ssh/rsync availability.
+- **Diagnostics redaction:** before copying diagnostics, create a failed transfer or error path containing a fake `password=hunter2` / `token=abc123` string if practical; confirm copied diagnostics redact those patterns and never include saved profile passwords or private key contents.
+- **Open logs:** click Open Log Folder and Open Log File; confirm Finder/default editor opens safe local paths under app userData.
+- **Check for updates:** click Check for Updates and confirm it reports the manual GitHub Releases policy rather than attempting a silent install.
+- **Packaged smoke:** after `npm run dist`, launch the packaged app and repeat Copy Diagnostics plus one local browse check.
+
+## V2.0 stable personal-release candidate
+
+- **Full pass:** run all applicable sections in this file against a clean test workspace before tagging `v1.0.0`.
+- **Packaged file load:** launch `release/mac-arm64/CoFinder.app` or the dmg-installed app and confirm the V12 shell renders from `file://` without a blank page.
+- **Release identity:** confirm About/version surfaces `1.0.0`, artifact filenames use `CoFinder-1.0.0-arm64`, and docs/changelog refer to V2.0/v1.0.0 consistently.
+- **Scope cuts:** confirm there is no UI implying remote edit auto-sync, full auto-update install, App Store distribution, or cross-platform support.
+- **Security closeout:** repeat profile/credential/settings/log/diagnostics checks and confirm no plaintext secrets are exposed.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.
@@ -63,6 +128,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - Browse remote directories and test remote path input navigation.
 - Try a non-existent remote path and verify current directory state remains usable.
 - Disconnect and reconnect from Site Manager.
+- For V1.8 remote operation tests, use only `/mnt/gpfs1/Users/zhouwenxiong/CoFinder_test` on `sge` or another isolated disposable test root.
 
 ## Tabs Smoke (M3)
 
@@ -136,6 +202,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - `profiles.json` contains no `password`, `passphrase`, or private key content.
 - `credentials.enc.json` exists (if password saving enabled) and does not expose plaintext password.
 - Transfer task list / logs do not include password values.
+- Diagnostics copied from Preferences do not include passwords, private keys, or tokens.
 
 ## Suggested Commands
 

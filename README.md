@@ -2,16 +2,16 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-**`package.json` version:** `0.5.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.4.0** (tags, GitHub Release, user-facing “what’s out”).
+**`package.json` version:** `1.0.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.5.0** (tags, GitHub Release, user-facing “what’s out”).
 
 ## Versioning
 
 CoFinder uses two parallel naming schemes:
 
 - **Product milestone** (V1, V1.1, V1.2, …): labels for development phases and plan documents (`docs/dev/V1.*_PLAN.md`, `docs/roadmap.md`). They do **not** equal the numeric field in `package.json`.
-- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.5.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
+- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **1.0.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
 
-Past releases are **not** retroactively re-tagged. Product milestone **V1.3** shipped as **`v0.4.0`**; **V1.4** is planned to ship as **`v0.5.0`** when ready.
+Past releases are **not** retroactively re-tagged. Product milestone **V1.4** shipped as **`v0.5.0`**; **V1.5** through **V2.0** are implemented in the development tree and are not shipped until their tags/releases are created.
 
 | Product milestone | Release version / tag | Status |
 | --- | --- | --- |
@@ -19,13 +19,13 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.3** sh
 | V1.1 | v0.2.0 | Shipped |
 | V1.2 | v0.3.0 | Shipped |
 | V1.3 | v0.4.0 | Shipped |
-| V1.4 | v0.5.0 | Implemented in dev tree; not shipped until tagged |
-| V1.5 | v0.6.0 | Planned |
-| V1.6 | v0.7.0 | Planned |
-| V1.7 | v0.8.0 | Planned |
-| V1.8 | v0.9.0 | Planned |
-| V1.9 | v0.10.0 | Planned |
-| V2.0 | v1.0.0 | Planned stable release |
+| V1.4 | v0.5.0 | Shipped |
+| V1.5 | v0.6.0 | Implemented in dev tree; not shipped until tagged |
+| V1.6 | v0.7.0 | Implemented in dev tree; not shipped until tagged |
+| V1.7 | v0.8.0 | Implemented in dev tree; not shipped until tagged |
+| V1.8 | v0.9.0 | Implemented in dev tree; not shipped until tagged |
+| V1.9 | v0.10.0 | Implemented in dev tree; not shipped until tagged |
+| V2.0 | v1.0.0 | Implemented in dev tree; stable candidate until tagged |
 
 ## V1 Status
 
@@ -63,16 +63,73 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 - **M5 — packaging:** `electron-builder` (macOS dmg + zip), `npm run package` / `npm run dist`, artifacts under `release/`
 - **M5 — documentation:** `docs/smoke-test.md`, `docs/release-checklist.md`, `docs/security.md`, `docs/roadmap.md`; `npm run check:secrets`
 
-### Not Supported in V1-1.4
+### Not Supported in V1-1.9
 
 - Remote edit auto-sync workflow
 - Full Quick Look for remote files
-- Drag selection
-- Drag-and-drop upload/download
-- Full Preferences UI
+- Full-disk or content search; V1.7 filtering only narrows the current visible listing by file/folder name.
+- Full remote ACL editor; V1.8 only supports basic octal chmod.
+- Remote duplicate for directories or files larger than 50 MB.
 - Full i18n
 
-### Implemented in V1.4 / v0.5.0 development tree
+### Implemented in V1.9 / v0.10.0 development tree
+
+- Release reliability work: expanded release checklist for version bump, changelog, smoke, git tag, dmg/zip, and GitHub Release artifacts.
+- Preferences includes Diagnostics controls to copy a redacted diagnostics bundle, open the log folder/file, and check the current update policy.
+- First-run onboarding clarifies SFTP password saving, rsync BatchMode SSH requirements, and `safeStorage` behavior.
+- Auto-update is documented as a manual GitHub Releases policy for now; silent install is deferred until Developer ID signing and notarization are configured.
+
+### Implemented in V2.0 / v1.0.0 development tree
+
+- Stable personal-release candidate: V12 remains default, core UX/transfer/preferences/security/release documentation are aligned with implemented behavior.
+- V2.0 explicitly cuts full auto-update install, App Store distribution, remote edit auto-sync, and cross-platform support.
+- Release docs now treat signing/notarization honesty, diagnostics redaction, and manual smoke as release blockers for a public tag.
+
+### Implemented in V1.8 / v0.9.0 development tree
+
+- Remote mkdir with main-process validation and refresh.
+- Basic remote chmod via three-digit octal mode.
+- Remote file duplicate for files up to 50 MB, using SFTP get/put in main process.
+- Local "Open Terminal Here" and remote "Open SSH Terminal Here"; SSH terminal commands never include saved passwords.
+- Remote symlink display from SFTP listing/stat where available.
+- Remote directory size is calculated asynchronously with cancel support and traversal caps.
+
+### Remote Capabilities Matrix
+
+| Capability | Local | Remote |
+| --- | --- | --- |
+| Browse / sort / filter | Yes | Yes |
+| Rename / delete / Get Info | Yes | Yes |
+| New folder | Deferred | Yes |
+| Permissions | Read/display | Basic octal chmod |
+| Duplicate | Deferred | Files up to 50 MB |
+| Terminal here | Terminal.app | SSH Terminal.app, password not injected |
+| Directory size | Async | Async, capped, cancelable |
+
+### Implemented in V1.7 / v0.8.0 development tree
+
+- Quick filter for the current local or remote directory listing by deterministic name substring.
+- Path autocomplete from local recents/favorites and remote current-tab/per-profile visited paths; it does not crawl the filesystem or make extra SFTP list calls.
+- Local recent locations and per-profile remote recent locations with clear-history controls.
+- Per-pane history dropdowns in addition to Back/Forward buttons, preserving tab isolation.
+- Navigation model boundary: favorites are intentional pinned shortcuts, recents are transient renderer history, and Site Manager profiles remain connection records.
+
+### Implemented in V1.6 / v0.7.0 development tree
+
+- Preferences MVP with versioned `settings.json` under the app userData directory.
+- General preferences: default local starting path, delete confirmation, hidden file visibility, and restore-last-local-path behavior.
+- Transfer preferences: default conflict policy, queue auto-hide delay, and rsync timestamp preservation.
+- Appearance preferences: compact/comfortable rows, default inspector visibility, default pane ratio, and sidebar visibility.
+- In-app shortcut reference for the active keyboard bindings.
+
+### Implemented in V1.5 / v0.6.0 development tree
+
+- Drag selected files/folders between panes to upload or download through the existing V1.4 conflict-safe transfer path.
+- Drag files/folders from Finder into the remote pane to upload.
+- Drop feedback for valid directory/current-folder targets and invalid targets.
+- Marquee selection from pane background, with additive selection when using `Cmd` or `Shift`.
+
+### Implemented in V1.4 / v0.5.0
 
 - Transfer safety: upload/download conflict detection before enqueue, with user-selected overwrite, skip, rename/keep-both, or cancel behavior.
 - Queue recovery: retry individual failed transfers or retry all failed transfers while preserving source, destination, tab, direction, and connection metadata.
@@ -93,6 +150,7 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 ## Security Notes
 
 - `profiles.json` stores non-sensitive profile fields only.
+- `settings.json` stores non-secret UI/behavior preferences only.
 - Saved password is kept separately in `credentials.enc.json` using `safeStorage` encryption.
 - Password is not stored in transfer task payloads, renderer persisted state, or rsync args.
 
@@ -128,6 +186,13 @@ npm run dist      # dmg + zip
 
 Build artifacts are generated under `release/`.
 
+## Release and Updates
+
+- Development milestones are committed on `dev`; a version becomes shipped only after the matching git tag and release artifacts are published.
+- Current update policy is manual: users install dmg/zip artifacts from GitHub Releases or local release output. In-app auto-install is not enabled yet.
+- Public distribution needs an Apple Developer ID certificate and notarization. Local personal builds may be unsigned, but unsigned artifacts should be described honestly in release notes.
+- V2.0 is ready as a development-tree stable candidate after the full test/build/package/dist gates pass; it is not a shipped release until `v1.0.0` is tagged and artifacts are published.
+
 **App icons:** `assets/icon/icon.icns` is used for the packaged `.app` / `.dmg` / `.zip` (see `electron-builder.yml`). `assets/icon/icon.png` is copied into `Resources` for `BrowserWindow` (`src/main/main.ts`). To regenerate both from the archived source PNG on macOS: `./scripts/gen-mac-app-icons.sh` (uses `sips` + `iconutil`, no extra npm deps).
 
 Production renderer uses **relative asset URLs** (`vite` `base: './'`) so `loadFile()` from inside `app.asar` resolves JS/CSS correctly (avoids packaged white screen from `/assets/...` on `file://`).
@@ -152,6 +217,8 @@ Production renderer uses **relative asset URLs** (`vite` `base: './'`) so `loadF
   - Rebuild with current `vite.config.ts` (`base: './'`) and repackage; assets must be referenced as `./assets/...` under `file://`.
 - **Main process log path**
   - `less "$HOME/Library/Application Support/CoFinder/main.log"` (quotes required because of the space in `Application Support`).
+- **Diagnostics**
+  - Preferences → Diagnostics can copy app version, platform, userData/log paths, and `ssh`/`rsync` availability. The bundle is redacted and does not include saved passwords, profile secrets, or private key contents.
 
 ## Project Structure
 
