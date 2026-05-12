@@ -20,7 +20,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.7 | v0.8.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.8 | v0.9.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.9 | v0.10.0 | Implemented in dev tree (not shipped until tagged) |
-| V2.0 | v1.0.0 | Planned stable release |
+| V2.0 | v1.0.0 | Implemented in dev tree (stable candidate; not shipped until tagged) |
 
 ## Shipped phases (summary)
 
@@ -49,7 +49,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V1.7 | v0.8.0 | Search, Filter, and Navigation — implemented in dev tree |
 | V1.8 | v0.9.0 | Remote Operations Expansion — implemented in dev tree |
 | V1.9 | v0.10.0 | Packaging, Updates, and Reliability — implemented in dev tree |
-| V2.0 | v1.0.0 | Stable Personal Release |
+| V2.0 | v1.0.0 | Stable Personal Release — implemented in dev tree |
 
 ## Explicitly out of scope or not on the main line (today)
 
@@ -65,3 +65,5 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 - **IDE-like** features (project model, SCM integration, etc.)
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work are implemented in the development tree. They remain unshipped until their matching release tags are created.
+
+V2.0 is now a stable personal-release candidate in the development tree. It still requires the normal release act of tagging `v1.0.0`, publishing dmg/zip artifacts, and recording unsigned/signing status honestly in release notes.

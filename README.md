@@ -2,16 +2,16 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-**`package.json` version:** `0.10.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.5.0** (tags, GitHub Release, user-facing “what’s out”).
+**`package.json` version:** `1.0.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.5.0** (tags, GitHub Release, user-facing “what’s out”).
 
 ## Versioning
 
 CoFinder uses two parallel naming schemes:
 
 - **Product milestone** (V1, V1.1, V1.2, …): labels for development phases and plan documents (`docs/dev/V1.*_PLAN.md`, `docs/roadmap.md`). They do **not** equal the numeric field in `package.json`.
-- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.10.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
+- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **1.0.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
 
-Past releases are **not** retroactively re-tagged. Product milestone **V1.4** shipped as **`v0.5.0`**; **V1.5** through **V1.9** are implemented in the development tree and are not shipped until their tags/releases are created.
+Past releases are **not** retroactively re-tagged. Product milestone **V1.4** shipped as **`v0.5.0`**; **V1.5** through **V2.0** are implemented in the development tree and are not shipped until their tags/releases are created.
 
 | Product milestone | Release version / tag | Status |
 | --- | --- | --- |
@@ -25,7 +25,7 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.4** sh
 | V1.7 | v0.8.0 | Implemented in dev tree; not shipped until tagged |
 | V1.8 | v0.9.0 | Implemented in dev tree; not shipped until tagged |
 | V1.9 | v0.10.0 | Implemented in dev tree; not shipped until tagged |
-| V2.0 | v1.0.0 | Planned stable release |
+| V2.0 | v1.0.0 | Implemented in dev tree; stable candidate until tagged |
 
 ## V1 Status
 
@@ -79,6 +79,12 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 - First-run onboarding clarifies SFTP password saving, rsync BatchMode SSH requirements, and `safeStorage` behavior.
 - Auto-update is documented as a manual GitHub Releases policy for now; silent install is deferred until Developer ID signing and notarization are configured.
 
+### Implemented in V2.0 / v1.0.0 development tree
+
+- Stable personal-release candidate: V12 remains default, core UX/transfer/preferences/security/release documentation are aligned with implemented behavior.
+- V2.0 explicitly cuts full auto-update install, App Store distribution, remote edit auto-sync, and cross-platform support.
+- Release docs now treat signing/notarization honesty, diagnostics redaction, and manual smoke as release blockers for a public tag.
+
 ### Implemented in V1.8 / v0.9.0 development tree
 
 - Remote mkdir with main-process validation and refresh.
@@ -94,7 +100,7 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 | --- | --- | --- |
 | Browse / sort / filter | Yes | Yes |
 | Rename / delete / Get Info | Yes | Yes |
-| New folder | Planned | Yes |
+| New folder | Deferred | Yes |
 | Permissions | Read/display | Basic octal chmod |
 | Duplicate | Deferred | Files up to 50 MB |
 | Terminal here | Terminal.app | SSH Terminal.app, password not injected |
@@ -185,6 +191,7 @@ Build artifacts are generated under `release/`.
 - Development milestones are committed on `dev`; a version becomes shipped only after the matching git tag and release artifacts are published.
 - Current update policy is manual: users install dmg/zip artifacts from GitHub Releases or local release output. In-app auto-install is not enabled yet.
 - Public distribution needs an Apple Developer ID certificate and notarization. Local personal builds may be unsigned, but unsigned artifacts should be described honestly in release notes.
+- V2.0 is ready as a development-tree stable candidate after the full test/build/package/dist gates pass; it is not a shipped release until `v1.0.0` is tagged and artifacts are published.
 
 **App icons:** `assets/icon/icon.icns` is used for the packaged `.app` / `.dmg` / `.zip` (see `electron-builder.yml`). `assets/icon/icon.png` is copied into `Resources` for `BrowserWindow` (`src/main/main.ts`). To regenerate both from the archived source PNG on macOS: `./scripts/gen-mac-app-icons.sh` (uses `sips` + `iconutil`, no extra npm deps).
 

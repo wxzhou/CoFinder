@@ -24,13 +24,16 @@
   - `local:openPath`
   - `local:revealPath`
   - `local:getHomePath`
+  - `local:rename`, `local:delete`, `local:getInfo`
 - Remote:
   - `remote:connect`
   - `remote:listDirectory`
   - `remote:disconnect`
   - `remote:getHomeDirectory`
+  - `remote:rename`, `remote:delete`, `remote:getInfo`
   - `remote:mkdir`, `remote:chmod`, `remote:duplicate`
   - `remote:directorySizeStart`, `remote:directorySizeCancel`, push `remote:directorySizeUpdate`
+  - `remote:previewOpen`, `remote:previewClearForTab`, `remote:previewClearForConnection`
 - Transfer:
   - `transfer:enqueueUpload`
   - `transfer:enqueueDownload`
@@ -45,7 +48,10 @@
   - push: `transfer:onUpdate`
 - Profiles/Credentials:
   - `profiles:list`, `profiles:save`, `profiles:update`, `profiles:delete`
+  - `profiles:addRemoteFavorite`, `profiles:removeRemoteFavorite`, `profiles:renameRemoteFavorite`, `profiles:reorderRemoteFavorite`
   - `credentials:isAvailable`
+- Local favorites:
+  - `localFavorites:list`, `localFavorites:add`, `localFavorites:remove`, `localFavorites:rename`, `localFavorites:reorder`, `localFavorites:resetDefaults`
 - Settings:
   - `settings:get`
   - `settings:set`

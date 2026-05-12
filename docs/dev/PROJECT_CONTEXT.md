@@ -4,7 +4,7 @@
 
 CoFinder is a macOS-only Electron desktop app for dual-pane local/remote file browsing, with a WinSCP-like workflow and a global rsync transfer queue.
 
-This document is the short-onboarding baseline for future V1.1 development. It is intentionally concrete and tied to the current codebase.
+This document is the short-onboarding baseline for future post-V2.0 development. It is intentionally concrete and tied to the current codebase.
 
 ## Stack and Runtime
 
@@ -77,7 +77,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 ## Quick Start for New Session
 
 1. Read this file and `docs/dev/DEVELOPMENT_RULES.md`.
-2. Read `docs/dev/V1.1_PLAN.md` and pick one milestone only.
+2. Read the active `docs/dev/V*_PLAN.md` for the requested milestone and pick one milestone only.
 3. Confirm affected boundaries in:
    - `src/main/ipc/registerIpcHandlers.ts`
    - service file(s) in `src/main/services/`
@@ -91,5 +91,4 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 
 ## Out of Scope for This Document
 
-- No V1.1 implementation details.
 - No speculative architecture rewrite.

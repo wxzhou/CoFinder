@@ -125,3 +125,13 @@
 - Review first-run onboarding copy in a fresh userData profile; dismiss it and confirm it does not reappear.
 - Check for Updates from Preferences and confirm it reports manual GitHub Releases policy, not silent auto-install.
 - Confirm signing/notarization status in release notes matches the actual artifact status.
+
+## V2.0 v1.0.0 gates
+
+- Run every preflight command and confirm `release/CoFinder-1.0.0-arm64.dmg` plus `.zip` are present.
+- Run the full smoke checklist, with the remote subset limited to an isolated test root.
+- Confirm README, CHANGELOG, roadmap, security, architecture, project context, and both V1.9/V2.0 plan files match the implemented app.
+- Confirm package version, planned git tag `v1.0.0`, dmg/zip filenames, and release notes agree.
+- Confirm the stable-release scope cuts are explicit: no remote edit auto-sync, no full auto-update install, no App Store, no cross-platform port.
+- Confirm diagnostics, logs, profiles, credentials, and settings contain no plaintext secrets.
+- Launch the packaged app and verify the renderer loads from `file://` without a blank window.

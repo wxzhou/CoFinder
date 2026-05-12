@@ -8,7 +8,13 @@
 
 ## Unreleased
 
-**Target:** v0.10.0 / product milestone **V1.9** (draft notes—not shipped). V1.5-v1.8 development-tree milestones remain unshipped until tagged.
+**Target:** v1.0.0 / product milestone **V2.0** (draft notes—not shipped). V1.5-v1.9 development-tree milestones remain unshipped until tagged.
+
+- Stable personal-release candidate: documentation, release checklist, smoke checklist, IPC inventory, and security notes are aligned with the implemented feature set.
+- V2.0 scope cuts are explicit: full auto-update install, remote edit auto-sync, App Store distribution, cross-platform ports, and plugin ecosystem remain out of scope.
+- Release blocker notes now call out unsigned local artifacts, manual GitHub Releases update policy, diagnostics redaction, and full smoke execution before tagging.
+
+**V1.9 / v0.10.0 development-tree notes:**
 
 - Packaging/reliability: release checklist now covers version bump, changelog, git tag, dmg/zip, smoke, and GitHub Release artifact steps.
 - Diagnostics UI: Preferences can open the log folder/file and copy a redacted diagnostics bundle with app version, platform, userData/log paths, and ssh/rsync availability.
