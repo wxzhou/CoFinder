@@ -73,7 +73,7 @@
 - Retry one failed task and retry all failed tasks; confirm the queue remains serial.
 - Failed task copy-error action; confirm copied detail includes stable code/message and no credentials.
 
-## V1.5 v0.6.0 gates
+## V1.5 gates (included in v1.0.0)
 
 - `npm run typecheck`
 - Drag local selected file(s)/folder(s) to remote pane and confirm upload queues through the conflict dialog when needed.
@@ -82,7 +82,7 @@
 - Verify valid directory/current-folder drop feedback and invalid file-row drop feedback.
 - Verify marquee replace and `Cmd`/`Shift` additive marquee selection.
 
-## V1.6 v0.7.0 gates
+## V1.6 gates (included in v1.0.0)
 
 - `npm run typecheck`
 - Preferences open from classic top bar and V12 toolbar.
@@ -95,7 +95,7 @@
 - Toggle compact row density, default inspector visibility, default pane ratio, and sidebar visibility; restart and confirm persisted settings apply.
 - Inspect `settings.json` and confirm it contains no passwords, tokens, private keys, or rsync secrets.
 
-## V1.7 v0.8.0 gates
+## V1.7 gates (included in v1.0.0)
 
 - `npm run typecheck`
 - Filter local and remote panes by name; confirm clearing the filter restores the current listing.
@@ -105,7 +105,7 @@
 - Confirm local recents and per-profile remote recents can be cleared.
 - Confirm Back/Forward buttons and History dropdowns remain per-pane and per-tab.
 
-## V1.8 v0.9.0 gates
+## V1.8 gates (included in v1.0.0)
 
 - `npm run typecheck`
 - Remote mkdir succeeds in an isolated remote test directory and invalid names are rejected.
@@ -116,7 +116,7 @@
 - Remote directory size runs asynchronously, can be canceled, and shows a partial/capped result for huge trees.
 - Inspect logs/clipboard/terminal command text for absence of saved passwords or private keys.
 
-## V1.9 v0.10.0 gates
+## V1.9 gates (included in v1.0.0)
 
 - `npm run typecheck`
 - Copy diagnostics from Preferences and confirm clipboard text includes version, platform, userData path, log path, and ssh/rsync availability.
@@ -131,7 +131,7 @@
 - Run every preflight command and confirm `release/CoFinder-1.0.0-arm64.dmg` plus `.zip` are present.
 - Run the full smoke checklist, with the remote subset limited to an isolated test root.
 - Confirm README, CHANGELOG, roadmap, security, architecture, project context, and both V1.9/V2.0 plan files match the implemented app.
-- Confirm package version, planned git tag `v1.0.0`, dmg/zip filenames, and release notes agree.
+- Confirm package version, git tag `v1.0.0`, dmg/zip filenames, and release notes agree.
 - Confirm the stable-release scope cuts are explicit: no remote edit auto-sync, no full auto-update install, no App Store, no cross-platform port.
 - Confirm diagnostics, logs, profiles, credentials, and settings contain no plaintext secrets.
 - Launch the packaged app and verify the renderer loads from `file://` without a blank window.

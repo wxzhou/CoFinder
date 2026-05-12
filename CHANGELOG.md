@@ -4,17 +4,21 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v0.5.0.** The repo may temporarily use a newer **`package.json`** version during development so local **`npm run build` / `npm run dist`** can exercise the next artifact identity. Do **not** treat development-tree versions as shipped until matching git tags and release sections exist.
+- **Latest shipped release: v1.0.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-**Target:** v1.0.0 / product milestone **V2.0** (draft notes—not shipped). V1.5-v1.9 development-tree milestones remain unshipped until tagged.
+No user-facing changes since **v1.0.0**.
 
-- Stable personal-release candidate: documentation, release checklist, smoke checklist, IPC inventory, and security notes are aligned with the implemented feature set.
+## v1.0.0 — Product milestone V2.0
+
+Includes development milestones **V1.5-V1.9**. There are no standalone `v0.6.0`, `v0.7.0`, `v0.8.0`, `v0.9.0`, or `v0.10.0` release tags.
+
+- Stable personal release: documentation, release checklist, smoke checklist, IPC inventory, and security notes are aligned with the implemented feature set.
 - V2.0 scope cuts are explicit: full auto-update install, remote edit auto-sync, App Store distribution, cross-platform ports, and plugin ecosystem remain out of scope.
-- Release blocker notes now call out unsigned local artifacts, manual GitHub Releases update policy, diagnostics redaction, and full smoke execution before tagging.
+- Release notes call out unsigned local artifacts, manual GitHub Releases update policy, diagnostics redaction, and full smoke execution expectations.
 
-**V1.9 / v0.10.0 development-tree notes:**
+**V1.9 reliability work included in v1.0.0:**
 
 - Packaging/reliability: release checklist now covers version bump, changelog, git tag, dmg/zip, smoke, and GitHub Release artifact steps.
 - Diagnostics UI: Preferences can open the log folder/file and copy a redacted diagnostics bundle with app version, platform, userData/log paths, and ssh/rsync availability.
@@ -22,7 +26,7 @@
 - Update policy: in-app Check for Updates reports the current manual GitHub Releases policy; silent install remains deferred until signing/notarization prerequisites are met.
 - Settings schema migrated to v2 with a persisted onboarding-dismissed flag.
 
-**V1.8 / v0.9.0 development-tree notes:**
+**V1.8 remote operations included in v1.0.0:**
 
 - Remote operations expansion: mkdir, basic chmod, file duplicate, local Terminal here, and remote SSH Terminal here.
 - Remote directory size now uses an async cancelable job with traversal caps instead of blocking recursive UI work.
