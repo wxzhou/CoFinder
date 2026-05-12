@@ -52,6 +52,7 @@
 - System:
   - `system:copyText`
   - `system:openTerminal`, `system:openSshTerminal`
+  - `system:openLogFolder`, `system:openLogFile`, `system:copyDiagnostics`, `system:checkForUpdates`
 
 ## Service Responsibilities
 
@@ -76,9 +77,12 @@
 - `SafeStorageCredentialProvider` + `CredentialService`
   - Encrypted credential persistence with availability check.
 - `SettingsService`
-  - Versioned non-secret app settings (`schemaVersion: 1`) stored as `settings.json` under app userData.
+  - Versioned non-secret app settings (`schemaVersion: 2`) stored as `settings.json` under app userData.
   - Normalizes partial patches into safe defaults before persistence.
   - Owns future migration boundaries; renderer uses IPC only.
+- `DiagnosticsService`
+  - Builds a redacted diagnostics clipboard bundle with app/platform paths and `ssh`/`rsync` availability.
+  - Does not read profiles, credentials, private keys, or transfer task payloads.
 
 ## State Model
 
@@ -109,6 +113,7 @@
 - Password should not be logged, serialized in transfer tasks, or passed via rsync args.
 - Terminal launch never reads or injects saved passwords.
 - Clipboard write goes through explicit `system:copyText`.
+- Diagnostics clipboard writes go through `system:copyDiagnostics` and use redaction before writing.
 - Path safety and rsync safety checks centralized in main utilities/services.
 - Transfer conflict checks and rename target generation run in main; renderer does not own overwrite policy.
 - Settings files must not contain passwords, tokens, private keys, or free-form command arguments.

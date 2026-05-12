@@ -69,6 +69,10 @@ export const IPC_CHANNELS = {
     quickLook: "system:quickLook",
     openTerminal: "system:openTerminal",
     openSshTerminal: "system:openSshTerminal",
-    getAppVersion: "system:getAppVersion"
+    getAppVersion: "system:getAppVersion",
+    openLogFolder: "system:openLogFolder",
+    openLogFile: "system:openLogFile",
+    copyDiagnostics: "system:copyDiagnostics",
+    checkForUpdates: "system:checkForUpdates"
   }
 } as const;

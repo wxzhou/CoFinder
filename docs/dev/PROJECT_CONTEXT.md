@@ -21,11 +21,12 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 - Site Manager modal (profiles CRUD + login entry).
 - Profile persistence in `profiles.json`; credentials in `credentials.enc.json`.
 - v12 local sidebar favorites in `local-sidebar-favorites.json` under userData (`custom`, optional `hiddenDefaultIds`; `localFavorites:*` IPC).
-- Preferences MVP in `settings.json` under userData (`schemaVersion: 1`; non-secret general, transfer, and appearance preferences; `settings:get` / `settings:set` IPC).
+- Preferences MVP in `settings.json` under userData (`schemaVersion: 2`; non-secret general, transfer, appearance, and onboarding-dismissed preferences; `settings:get` / `settings:set` IPC).
 - V1.7 navigation efficiency stores transient local and per-profile remote recents in renderer localStorage (`cofinder.recent.*`); these are non-secret paths and do not add IPC or main-process files.
 - Multi-tab isolation for local/remote pane state.
 - Global serial transfer queue (upload/download via `rsync`) with conflict detection, rename/skip/overwrite/cancel policy, retry, and stable failure categories.
 - V1.8 remote operations: mkdir, basic chmod, file duplicate up to 50 MB, SSH Terminal here without password injection, and cancelable capped directory-size jobs.
+- V1.9 reliability work: Diagnostics actions in Preferences, first-run onboarding, release checklist hardening, and manual GitHub Releases update policy.
 - Multi-select (`Cmd`/`Shift` click + `Cmd/Ctrl+A`), marquee selection, drag-and-drop transfer, and context menus.
 - IPC unified response shape: `{ ok: true, data }` or `{ ok: false, error }`.
 
@@ -40,6 +41,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 - Transfer queue service: `src/main/services/TransferQueueService.ts`
 - Profile repository: `src/main/services/ProfileRepository.ts`
 - Secure credential provider: `src/main/services/SafeStorageCredentialProvider.ts`
+- Diagnostics service: `src/main/services/DiagnosticsService.ts`
 - Renderer app container: `src/renderer/App.tsx`
 - Selection utilities: `src/renderer/selection.ts`
 - Shared contracts: `src/shared/types/models.ts`, `src/shared/types/ipc.ts`
@@ -69,6 +71,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 - Remote browsing currently supports password auth for SFTP; private key auth is not enabled in V1 connect flow.
 - rsync transfer requires non-interactive SSH (`BatchMode=yes`), not password prompt piping.
 - Settings are intentionally curated. `SettingsService` owns schema normalization/migration boundaries; renderer never reads or writes `settings.json` directly.
+- Diagnostics are intentionally narrow and redacted. They must not read saved profiles, credentials, private keys, raw transfer logs, or server-side files.
 - Search/filter is not indexed search. It only narrows currently loaded entries by name; autocomplete uses known paths only and must not crawl remote servers.
 
 ## Quick Start for New Session

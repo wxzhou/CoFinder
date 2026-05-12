@@ -4,12 +4,13 @@ import type { AppSettings } from "../../shared/types/ipc";
 import { writePrivateUtf8File } from "../security/privateAtomicWrite";
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   general: {
     defaultLocalPath: "",
     restoreLastSession: false,
     confirmBeforeDelete: true,
-    showHiddenFiles: false
+    showHiddenFiles: false,
+    firstRunOnboardingDismissed: false
   },
   transfer: {
     defaultConflictPolicy: "prompt",
@@ -54,12 +55,13 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
   const conflict = transfer.defaultConflictPolicy;
   const rowDensity = appearance.rowDensity;
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     general: {
       defaultLocalPath: string(general.defaultLocalPath, base.general.defaultLocalPath),
       restoreLastSession: bool(general.restoreLastSession, base.general.restoreLastSession),
       confirmBeforeDelete: bool(general.confirmBeforeDelete, base.general.confirmBeforeDelete),
-      showHiddenFiles: bool(general.showHiddenFiles, base.general.showHiddenFiles)
+      showHiddenFiles: bool(general.showHiddenFiles, base.general.showHiddenFiles),
+      firstRunOnboardingDismissed: bool(general.firstRunOnboardingDismissed, base.general.firstRunOnboardingDismissed)
     },
     transfer: {
       defaultConflictPolicy:
@@ -82,7 +84,7 @@ function mergeSettings(base: AppSettings, patch: unknown): AppSettings {
   const p = isRecord(patch) ? patch : {};
   return normalizeSettingsPatch(
     {
-      schemaVersion: 1,
+      schemaVersion: 2,
       general: { ...base.general, ...(isRecord(p.general) ? p.general : {}) },
       transfer: { ...base.transfer, ...(isRecord(p.transfer) ? p.transfer : {}) },
       appearance: { ...base.appearance, ...(isRecord(p.appearance) ? p.appearance : {}) }

@@ -3,9 +3,22 @@
 ## Preflight
 
 - `npm test`
+- `npm run typecheck`
+- `npm run check:secrets`
 - `npm run build`
 - `npm run package`
 - `npm run dist`
+
+## Release Process
+
+1. Confirm `README.md`, `CHANGELOG.md`, `docs/roadmap.md`, and the active `docs/dev/V*_PLAN.md` match the target release.
+2. Bump `package.json` / `package-lock.json` to the target semver before building release artifacts.
+3. Run the full preflight commands above and the relevant smoke sections in `docs/smoke-test.md`.
+4. Confirm `release/` contains the target `.dmg` and `.zip`.
+5. Commit the release-prep change set.
+6. Tag only after acceptance: `git tag vX.Y.Z`.
+7. Push branch and tag, then create a GitHub Release with the dmg/zip artifacts and notes matching `CHANGELOG.md`.
+8. If artifacts are unsigned, state that clearly in release notes.
 
 ## V1.2 v12 shell (required)
 
@@ -102,3 +115,13 @@
 - Remote symlink entries display as symlink where SFTP exposes them.
 - Remote directory size runs asynchronously, can be canceled, and shows a partial/capped result for huge trees.
 - Inspect logs/clipboard/terminal command text for absence of saved passwords or private keys.
+
+## V1.9 v0.10.0 gates
+
+- `npm run typecheck`
+- Copy diagnostics from Preferences and confirm clipboard text includes version, platform, userData path, log path, and ssh/rsync availability.
+- Confirm diagnostics text does not include profile passwords, private key contents, tokens, or transfer raw secrets.
+- Open Log Folder and Open Log File from Preferences.
+- Review first-run onboarding copy in a fresh userData profile; dismiss it and confirm it does not reappear.
+- Check for Updates from Preferences and confirm it reports manual GitHub Releases policy, not silent auto-install.
+- Confirm signing/notarization status in release notes matches the actual artifact status.

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, ipcMain } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
@@ -23,6 +23,7 @@ import { LocalFileService } from "../services/LocalFileService";
 import { RemoteFileService } from "../services/RemoteFileService";
 import { TransferQueueService } from "../services/TransferQueueService";
 import { SettingsService, defaultSettingsPath } from "../services/SettingsService";
+import { DiagnosticsService } from "../services/DiagnosticsService";
 import { ConnectionManager } from "../services/ConnectionManager";
 import { CredentialService } from "../services/CredentialService";
 import {
@@ -55,7 +56,13 @@ const connectionManager = new ConnectionManager();
 const remoteFileService = new RemoteFileService(connectionManager);
 const transferQueueService = new TransferQueueService();
 const userData = app.getPath("userData");
+const mainLogFilePath = path.join(userData, "main.log");
 const settingsService = new SettingsService(defaultSettingsPath(userData));
+const diagnosticsService = new DiagnosticsService({
+  version: app.getVersion(),
+  userDataPath: userData,
+  logFilePath: mainLogFilePath
+});
 const quickLookService = new QuickLookService();
 const remotePreviewService = new RemotePreviewService(connectionManager, app.getPath("temp"));
 
@@ -756,6 +763,47 @@ export function registerIpcHandlers(): void {
     } catch (error) {
       return toIpcError(error, "SYSTEM_VERSION_FAILED", "Failed to resolve app version.");
     }
+  });
+
+  registerChannel(IPC_CHANNELS.system.openLogFolder, async () => {
+    try {
+      await fs.mkdir(userData, { recursive: true });
+      const error = await shell.openPath(userData);
+      if (error) throw new AppError("SYSTEM_LOG_OPEN_FAILED", error);
+      return ok({ opened: true as const, path: userData });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_LOG_OPEN_FAILED", "Failed to open log folder.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.system.openLogFile, async () => {
+    try {
+      await fs.mkdir(userData, { recursive: true });
+      await fs.appendFile(mainLogFilePath, "");
+      const error = await shell.openPath(mainLogFilePath);
+      if (error) throw new AppError("SYSTEM_LOG_OPEN_FAILED", error);
+      return ok({ opened: true as const, path: mainLogFilePath });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_LOG_OPEN_FAILED", "Failed to open log file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.system.copyDiagnostics, async () => {
+    try {
+      const text = await diagnosticsService.buildClipboardText();
+      const diagnostics = await diagnosticsService.buildBundle();
+      clipboard.writeText(text);
+      return ok({ copied: true as const, diagnostics });
+    } catch (error) {
+      return toIpcError(error, "SYSTEM_DIAGNOSTICS_FAILED", "Failed to copy diagnostics.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.system.checkForUpdates, () => {
+    return ok({
+      available: false as const,
+      message: "Auto-update install is not enabled in this build. Use the documented release checklist and GitHub Releases artifacts."
+    });
   });
 }
 

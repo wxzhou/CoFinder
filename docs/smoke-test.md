@@ -79,6 +79,15 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Symlink display:** in a remote fixture containing a symlink, confirm the listing/Get Info identifies it as `symlink` and directory size does not follow it as a directory.
 - **Remote directory size:** Get Info on a remote directory, confirm size starts calculating asynchronously, then test Cancel. Repeat on a small directory and confirm size completes without freezing the UI.
 
+## V1.9 packaging, diagnostics, and onboarding
+
+- **First-run onboarding:** launch with a fresh Electron userData directory, review the onboarding text, and confirm it explains SFTP password saving, rsync BatchMode SSH, and safeStorage unavailability. Dismiss it, relaunch, and confirm it stays dismissed.
+- **Copy diagnostics:** open Preferences → Diagnostics, click Copy Diagnostics, paste into a scratch text file, and confirm it includes app version, platform, arch, userData path, log path, and ssh/rsync availability.
+- **Diagnostics redaction:** before copying diagnostics, create a failed transfer or error path containing a fake `password=hunter2` / `token=abc123` string if practical; confirm copied diagnostics redact those patterns and never include saved profile passwords or private key contents.
+- **Open logs:** click Open Log Folder and Open Log File; confirm Finder/default editor opens safe local paths under app userData.
+- **Check for updates:** click Check for Updates and confirm it reports the manual GitHub Releases policy rather than attempting a silent install.
+- **Packaged smoke:** after `npm run dist`, launch the packaged app and repeat Copy Diagnostics plus one local browse check.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.
@@ -185,6 +194,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - `profiles.json` contains no `password`, `passphrase`, or private key content.
 - `credentials.enc.json` exists (if password saving enabled) and does not expose plaintext password.
 - Transfer task list / logs do not include password values.
+- Diagnostics copied from Preferences do not include passwords, private keys, or tokens.
 
 ## Suggested Commands
 

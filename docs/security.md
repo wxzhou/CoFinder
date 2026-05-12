@@ -16,7 +16,7 @@
 ## Settings Storage
 
 - Preferences are stored in `settings.json` under Electron app userData.
-- Settings are non-secret UI/behavior fields only: default local path, confirmation/display toggles, transfer conflict defaults, queue auto-hide delay, timestamp preservation, row density, inspector visibility, pane ratio, and sidebar visibility.
+- Settings are non-secret UI/behavior fields only: default local path, confirmation/display toggles, transfer conflict defaults, queue auto-hide delay, timestamp preservation, row density, inspector visibility, pane ratio, sidebar visibility, and first-run onboarding dismissal.
 - Settings must not store passwords, tokens, private keys, saved remote credentials, or free-form `rsync`/`ssh` arguments.
 
 ## Navigation History Storage
@@ -36,6 +36,8 @@
 
 - IPC failure payloads still use `{ ok, error }`; **`error.detail`** is length-limited and passed through a minimal scrubber for patterns such as `password`, `passphrase`, `privateKey`, and `token`.
 - Main-process diagnostic logs that attach structured payloads run those objects through the same **key-based redaction** before `JSON.stringify` (console + `main.log`).
+- The diagnostics clipboard bundle includes app version, platform, architecture, userData/log paths, `ssh`/`rsync` availability, and update policy only. It must not include saved profiles, saved credentials, private key contents, transfer task payloads, or raw logs.
+- Diagnostics text is passed through the plaintext redactor before it reaches the clipboard.
 
 ## rsync Password Policy
 

@@ -82,7 +82,11 @@ const api: IpcApi = {
     quickLook: (request) => ipcRenderer.invoke("system:quickLook", request),
     openTerminal: (request) => ipcRenderer.invoke("system:openTerminal", request),
     openSshTerminal: (request) => ipcRenderer.invoke("system:openSshTerminal", request),
-    getAppVersion: () => ipcRenderer.invoke("system:getAppVersion")
+    getAppVersion: () => ipcRenderer.invoke("system:getAppVersion"),
+    openLogFolder: () => ipcRenderer.invoke("system:openLogFolder"),
+    openLogFile: () => ipcRenderer.invoke("system:openLogFile"),
+    copyDiagnostics: () => ipcRenderer.invoke("system:copyDiagnostics"),
+    checkForUpdates: () => ipcRenderer.invoke("system:checkForUpdates")
   }
 };
 

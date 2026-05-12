@@ -46,6 +46,9 @@ export type RemoteErrorCode =
   | "SYSTEM_INVALID_INPUT"
   | "SYSTEM_PREVIEW_FAILED"
   | "SYSTEM_VERSION_FAILED"
+  | "SYSTEM_DIAGNOSTICS_FAILED"
+  | "SYSTEM_LOG_OPEN_FAILED"
+  | "SYSTEM_UPDATE_CHECK_UNAVAILABLE"
   | "REMOTE_AUTH_FAILED"
   | "REMOTE_CONNECTION_FAILED"
   | "REMOTE_PERMISSION_DENIED"
@@ -156,12 +159,13 @@ export type EnqueueDownloadRequest = {
 export type TransferConflictPolicy = "prompt" | "overwrite" | "skip" | "rename" | "cancel";
 
 export type AppSettings = {
-  schemaVersion: 1;
+  schemaVersion: 2;
   general: {
     defaultLocalPath: string;
     restoreLastSession: boolean;
     confirmBeforeDelete: boolean;
     showHiddenFiles: boolean;
+    firstRunOnboardingDismissed: boolean;
   };
   transfer: {
     defaultConflictPolicy: Exclude<TransferConflictPolicy, "cancel">;
@@ -173,6 +177,29 @@ export type AppSettings = {
     defaultInspectorVisible: boolean;
     defaultPaneRatio: number;
     sidebarVisible: boolean;
+  };
+};
+
+export type ToolAvailability = {
+  available: boolean;
+  detail?: string;
+};
+
+export type DiagnosticsBundle = {
+  generatedAt: string;
+  appVersion: string;
+  platform: string;
+  arch: string;
+  userDataPath: string;
+  logFilePath: string;
+  logFileExists: boolean;
+  tools: {
+    ssh: ToolAvailability;
+    rsync: ToolAvailability;
+  };
+  updatePolicy: {
+    mode: "manual-github-release";
+    status: string;
   };
 };
 
@@ -303,5 +330,9 @@ export interface IpcApi {
     openTerminal: (request: { path: string }) => Promise<IpcResponse<{ opened: true }>>;
     openSshTerminal: (request: { host: string; port: number; username: string; remotePath?: string }) => Promise<IpcResponse<{ opened: true }>>;
     getAppVersion: () => Promise<IpcResponse<{ version: string }>>;
+    openLogFolder: () => Promise<IpcResponse<{ opened: true; path: string }>>;
+    openLogFile: () => Promise<IpcResponse<{ opened: true; path: string }>>;
+    copyDiagnostics: () => Promise<IpcResponse<{ copied: true; diagnostics: DiagnosticsBundle }>>;
+    checkForUpdates: () => Promise<IpcResponse<{ available: false; message: string }>>;
   };
 }

@@ -19,7 +19,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.6 | v0.7.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.7 | v0.8.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.8 | v0.9.0 | Implemented in dev tree (not shipped until tagged) |
-| V1.9 | v0.10.0 | Planned |
+| V1.9 | v0.10.0 | Implemented in dev tree (not shipped until tagged) |
 | V2.0 | v1.0.0 | Planned stable release |
 
 ## Shipped phases (summary)
@@ -48,7 +48,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V1.6 | v0.7.0 | Preferences MVP — implemented in dev tree |
 | V1.7 | v0.8.0 | Search, Filter, and Navigation — implemented in dev tree |
 | V1.8 | v0.9.0 | Remote Operations Expansion — implemented in dev tree |
-| V1.9 | v0.10.0 | Packaging, Updates, and Reliability |
+| V1.9 | v0.10.0 | Packaging, Updates, and Reliability — implemented in dev tree |
 | V2.0 | v1.0.0 | Stable Personal Release |
 
 ## Explicitly out of scope or not on the main line (today)
@@ -64,4 +64,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 - **Cross-platform** support (macOS-only product)
 - **IDE-like** features (project model, SCM integration, etc.)
 
-Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, and remote operations expansion are implemented in the development tree. They remain unshipped until their matching release tags are created.
+Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work are implemented in the development tree. They remain unshipped until their matching release tags are created.

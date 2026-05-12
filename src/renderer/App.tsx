@@ -178,12 +178,13 @@ const INLINE_RENAME_CLICK_MAX_MS = 1500;
 const V12_INSPECTOR_CLICK_GAP_MS = 350;
 
 const DEFAULT_RENDERER_SETTINGS: AppSettings = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   general: {
     defaultLocalPath: "",
     restoreLastSession: false,
     confirmBeforeDelete: true,
-    showHiddenFiles: false
+    showHiddenFiles: false,
+    firstRunOnboardingDismissed: false
   },
   transfer: {
     defaultConflictPolicy: "prompt",
@@ -252,6 +253,8 @@ export function App(props: AppProps = {}) {
     draft: DEFAULT_RENDERER_SETTINGS,
     error: ""
   });
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
   const [localRecentPaths, setLocalRecentPaths] = useState<RecentPath[]>(() => readRecentPathList(COFINDER_LOCAL_RECENTS_KEY));
   const [remoteRecentPathsByProfile, setRemoteRecentPathsByProfile] = useState<Record<string, RecentPath[]>>(() =>
     readRemoteRecentPathsByProfile()
@@ -334,6 +337,7 @@ export function App(props: AppProps = {}) {
       if (!res.ok) setQueueError(res.error.message);
       setAppSettings(settings);
       setPreferences((prev) => ({ ...prev, draft: settings }));
+      setOnboardingOpen(!settings.general.firstRunOnboardingDismissed);
       setV12PaneRatio(settings.appearance.defaultPaneRatio);
       setV12LocalInspectorReveal(settings.appearance.defaultInspectorVisible);
       setV12RemoteInspectorReveal(settings.appearance.defaultInspectorVisible);
@@ -707,6 +711,42 @@ export function App(props: AppProps = {}) {
     setAppSettings(res.data);
     setPreferences({ open: false, draft: res.data, error: "" });
     setV12PaneRatio(res.data.appearance.defaultPaneRatio);
+  }
+
+  async function dismissOnboarding(): Promise<void> {
+    const next = {
+      ...appSettings,
+      general: { ...appSettings.general, firstRunOnboardingDismissed: true }
+    };
+    const res = await window.cofinder.settings.set(next);
+    if (res.ok) {
+      setAppSettings(res.data);
+      setPreferences((prev) => ({ ...prev, draft: res.data }));
+    } else {
+      setQueueError(res.error.message);
+    }
+    setOnboardingOpen(false);
+  }
+
+  async function copyDiagnostics(): Promise<void> {
+    setDiagnosticsStatus("Copying diagnostics...");
+    const res = await window.cofinder.system.copyDiagnostics();
+    setDiagnosticsStatus(res.ok ? "Diagnostics copied to clipboard." : res.error.message);
+  }
+
+  async function openLogFolder(): Promise<void> {
+    const res = await window.cofinder.system.openLogFolder();
+    setDiagnosticsStatus(res.ok ? `Opened ${res.data.path}` : res.error.message);
+  }
+
+  async function openLogFile(): Promise<void> {
+    const res = await window.cofinder.system.openLogFile();
+    setDiagnosticsStatus(res.ok ? `Opened ${res.data.path}` : res.error.message);
+  }
+
+  async function checkForUpdates(): Promise<void> {
+    const res = await window.cofinder.system.checkForUpdates();
+    setDiagnosticsStatus(res.ok ? res.data.message : res.error.message);
   }
 
   async function navigateLocal(
@@ -4133,12 +4173,52 @@ export function App(props: AppProps = {}) {
               <strong>Shortcuts</strong>
               <p>F2 rename · Delete remove · Cmd+I info · Cmd+Shift+C copy path · Cmd+R refresh · Cmd+U upload · Cmd+D download · Cmd+K Site Manager</p>
             </div>
+            <div className="preferences-shortcuts">
+              <strong>Diagnostics</strong>
+              <div className="diagnostics-actions">
+                <button type="button" className="toolbar-button" onClick={() => void copyDiagnostics()}>
+                  Copy Diagnostics
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void openLogFolder()}>
+                  Open Log Folder
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void openLogFile()}>
+                  Open Log File
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void checkForUpdates()}>
+                  Check for Updates
+                </button>
+              </div>
+              <p>{diagnosticsStatus || "Diagnostics include app version, platform, userData path, log path, and ssh/rsync availability."}</p>
+            </div>
             <div className="preferences-actions">
               <button type="button" className="toolbar-button" onClick={() => setPreferences((p) => ({ ...p, draft: appSettings, error: "" }))}>
                 Reset
               </button>
               <button type="button" className="toolbar-button is-active" onClick={() => void savePreferences()}>
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {onboardingOpen ? (
+        <div className="preferences-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && void dismissOnboarding()}>
+          <div className="onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
+            <div className="preferences-head">
+              <strong id="onboarding-title">Before Your First Connection</strong>
+              <button type="button" className="toolbar-button" onClick={() => void dismissOnboarding()}>
+                Close
+              </button>
+            </div>
+            <div className="onboarding-body">
+              <p>SFTP browsing can use a password saved with macOS secure storage when available.</p>
+              <p>Transfers use rsync over SSH BatchMode. Saved SFTP passwords are not passed to rsync, Terminal, commands, logs, or diagnostics.</p>
+              <p>If secure storage is unavailable, password saving is disabled and profiles still save only non-secret connection fields.</p>
+            </div>
+            <div className="preferences-actions">
+              <button type="button" className="toolbar-button is-active" onClick={() => void dismissOnboarding()}>
+                Got it
               </button>
             </div>
           </div>

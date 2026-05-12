@@ -8,7 +8,15 @@
 
 ## Unreleased
 
-**Target:** v0.9.0 / product milestone **V1.8** (draft notes—not shipped). V1.5-v1.7 development-tree milestones remain unshipped until tagged.
+**Target:** v0.10.0 / product milestone **V1.9** (draft notes—not shipped). V1.5-v1.8 development-tree milestones remain unshipped until tagged.
+
+- Packaging/reliability: release checklist now covers version bump, changelog, git tag, dmg/zip, smoke, and GitHub Release artifact steps.
+- Diagnostics UI: Preferences can open the log folder/file and copy a redacted diagnostics bundle with app version, platform, userData/log paths, and ssh/rsync availability.
+- First-run onboarding explains SFTP password saving, rsync BatchMode SSH transfer requirements, and safeStorage availability.
+- Update policy: in-app Check for Updates reports the current manual GitHub Releases policy; silent install remains deferred until signing/notarization prerequisites are met.
+- Settings schema migrated to v2 with a persisted onboarding-dismissed flag.
+
+**V1.8 / v0.9.0 development-tree notes:**
 
 - Remote operations expansion: mkdir, basic chmod, file duplicate, local Terminal here, and remote SSH Terminal here.
 - Remote directory size now uses an async cancelable job with traversal caps instead of blocking recursive UI work.

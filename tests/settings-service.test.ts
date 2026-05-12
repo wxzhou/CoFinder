@@ -37,11 +37,23 @@ describe("SettingsService", () => {
       appearance: { rowDensity: "huge", defaultPaneRatio: 1 }
     });
 
-    expect(settings.schemaVersion).toBe(1);
+    expect(settings.schemaVersion).toBe(2);
     expect(settings.general.confirmBeforeDelete).toBe(true);
+    expect(settings.general.firstRunOnboardingDismissed).toBe(false);
     expect(settings.transfer.defaultConflictPolicy).toBe("prompt");
     expect(settings.transfer.queueAutoHideDelayMs).toBe(0);
     expect(settings.appearance.rowDensity).toBe("comfortable");
     expect(settings.appearance.defaultPaneRatio).toBe(0.75);
+  });
+
+  it("migrates v1 settings into the v2 onboarding field", () => {
+    const settings = normalizeSettingsPatch({
+      schemaVersion: 1,
+      general: { showHiddenFiles: true }
+    });
+
+    expect(settings.schemaVersion).toBe(2);
+    expect(settings.general.showHiddenFiles).toBe(true);
+    expect(settings.general.firstRunOnboardingDismissed).toBe(false);
   });
 });
