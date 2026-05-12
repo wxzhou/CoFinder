@@ -21,6 +21,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 - Site Manager modal (profiles CRUD + login entry).
 - Profile persistence in `profiles.json`; credentials in `credentials.enc.json`.
 - v12 local sidebar favorites in `local-sidebar-favorites.json` under userData (`custom`, optional `hiddenDefaultIds`; `localFavorites:*` IPC).
+- Preferences MVP in `settings.json` under userData (`schemaVersion: 1`; non-secret general, transfer, and appearance preferences; `settings:get` / `settings:set` IPC).
 - Multi-tab isolation for local/remote pane state.
 - Global serial transfer queue (upload/download via `rsync`) with conflict detection, rename/skip/overwrite/cancel policy, retry, and stable failure categories.
 - Multi-select (`Cmd`/`Shift` click + `Cmd/Ctrl+A`), marquee selection, drag-and-drop transfer, and context menus.
@@ -64,7 +65,7 @@ This document is the short-onboarding baseline for future V1.1 development. It i
 
 - Remote browsing currently supports password auth for SFTP; private key auth is not enabled in V1 connect flow.
 - rsync transfer requires non-interactive SSH (`BatchMode=yes`), not password prompt piping.
-- `SettingsService` is minimal and not a full preferences subsystem yet.
+- Settings are intentionally curated. `SettingsService` owns schema normalization/migration boundaries; renderer never reads or writes `settings.json` directly.
 
 ## Quick Start for New Session
 

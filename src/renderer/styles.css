@@ -264,6 +264,18 @@ body,
   height: 30px;
 }
 
+.density-compact .file-table th,
+.density-compact .file-table td {
+  height: 24px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+
+.density-compact .v12m-lrow {
+  min-height: 22px;
+  font-size: 11px;
+}
+
 .file-table th {
   position: sticky;
   top: 0;
@@ -382,6 +394,84 @@ body,
   border: 1px solid color-mix(in srgb, var(--accent) 78%, transparent);
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   border-radius: 3px;
+}
+
+.preferences-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, #000 28%, transparent);
+}
+
+.preferences-dialog {
+  width: min(720px, calc(100vw - 40px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-pane);
+  box-shadow: 0 18px 48px color-mix(in srgb, #000 22%, transparent);
+  padding: var(--space-4);
+}
+
+.preferences-head,
+.preferences-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.preferences-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.preferences-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.preferences-grid input,
+.preferences-grid select {
+  height: 28px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  color: var(--text-primary);
+  background: #fff;
+}
+
+.preferences-grid .preferences-check {
+  flex-direction: row;
+  align-items: center;
+  color: var(--text-primary);
+}
+
+.preferences-grid .preferences-check input {
+  width: 16px;
+  height: 16px;
+}
+
+.preferences-shortcuts {
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--separator);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.preferences-actions {
+  justify-content: flex-end;
+  margin-top: var(--space-3);
 }
 
 .pane-status {

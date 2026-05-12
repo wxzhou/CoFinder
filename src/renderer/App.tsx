@@ -34,6 +34,7 @@ import type { LocalFavoriteListItem } from "../shared/localFavorites";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
+  AppSettings,
   PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
@@ -157,10 +158,38 @@ type UiTabState = {
 
 const AUTO_HIDE_DELAY_MS = 10_000;
 const COFINDER_TRANSFER_MIME = "application/x-cofinder-transfer";
+const COFINDER_LAST_LOCAL_PATH_KEY = "cofinder.lastLocalPath";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
 /** After a row `click` with `detail === 1`, wait this long before showing inspector so a double-click rarely mounts the column. Cmd+A bypasses. If already revealed, no delay and no hide. */
 const V12_INSPECTOR_CLICK_GAP_MS = 350;
+
+const DEFAULT_RENDERER_SETTINGS: AppSettings = {
+  schemaVersion: 1,
+  general: {
+    defaultLocalPath: "",
+    restoreLastSession: false,
+    confirmBeforeDelete: true,
+    showHiddenFiles: false
+  },
+  transfer: {
+    defaultConflictPolicy: "prompt",
+    queueAutoHideDelayMs: AUTO_HIDE_DELAY_MS,
+    preserveTimestamps: true
+  },
+  appearance: {
+    rowDensity: "comfortable",
+    defaultInspectorVisible: false,
+    defaultPaneRatio: 0.5,
+    sidebarVisible: true
+  }
+};
+
+type PreferencesState = {
+  open: boolean;
+  draft: AppSettings;
+  error: string;
+};
 
 type QueuePanelState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
 type PlainClickRecord = {
@@ -204,6 +233,12 @@ export function App(props: AppProps = {}) {
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
   const [queueError, setQueueError] = useState<string>("");
+  const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_RENDERER_SETTINGS);
+  const [preferences, setPreferences] = useState<PreferencesState>({
+    open: false,
+    draft: DEFAULT_RENDERER_SETTINGS,
+    error: ""
+  });
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
@@ -276,9 +311,30 @@ export function App(props: AppProps = {}) {
   );
 
   useEffect(() => {
-    void initializeLocalHome(tabState.firstTabId);
+    void (async () => {
+      const res = await window.cofinder.settings.get();
+      const settings = res.ok ? res.data : DEFAULT_RENDERER_SETTINGS;
+      if (!res.ok) setQueueError(res.error.message);
+      setAppSettings(settings);
+      setPreferences((prev) => ({ ...prev, draft: settings }));
+      setV12PaneRatio(settings.appearance.defaultPaneRatio);
+      setV12LocalInspectorReveal(settings.appearance.defaultInspectorVisible);
+      setV12RemoteInspectorReveal(settings.appearance.defaultInspectorVisible);
+      const restoredLocalPath = settings.general.restoreLastSession ? readLastLocalPath() : "";
+      await initializeLocalHome(tabState.firstTabId, restoredLocalPath || settings.general.defaultLocalPath);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!appSettings.general.restoreLastSession) {
+      window.localStorage.removeItem(COFINDER_LAST_LOCAL_PATH_KEY);
+      return;
+    }
+    if (localPane.currentPath) {
+      window.localStorage.setItem(COFINDER_LAST_LOCAL_PATH_KEY, localPane.currentPath);
+    }
+  }, [appSettings.general.restoreLastSession, localPane.currentPath]);
   useEffect(() => {
     void (async () => {
       const result = await window.cofinder.system.getAppVersion();
@@ -287,7 +343,7 @@ export function App(props: AppProps = {}) {
       }
     })();
   }, []);
-  async function initializeLocalHome(tabId: string): Promise<void> {
+  async function initializeLocalHome(tabId: string, preferredPath?: string): Promise<void> {
     const homeRes = await window.cofinder.local.getHomePath();
     if (!homeRes.ok) {
       setTabs((prev) =>
@@ -299,7 +355,7 @@ export function App(props: AppProps = {}) {
     }
     const homePath = homeRes.data.homePath;
     setLocalHomePath(homePath);
-    await navigateLocal(tabId, homePath, "replace");
+    await navigateLocal(tabId, preferredPath?.trim() || homePath, "replace");
   }
 
 
@@ -528,6 +584,21 @@ export function App(props: AppProps = {}) {
     if (!res.ok) setQueueError(res.error.message);
   }
 
+  function openPreferences(): void {
+    setPreferences({ open: true, draft: appSettings, error: "" });
+  }
+
+  async function savePreferences(): Promise<void> {
+    const res = await window.cofinder.settings.set(preferences.draft);
+    if (!res.ok) {
+      setPreferences((prev) => ({ ...prev, error: res.error.message }));
+      return;
+    }
+    setAppSettings(res.data);
+    setPreferences({ open: false, draft: res.data, error: "" });
+    setV12PaneRatio(res.data.appearance.defaultPaneRatio);
+  }
+
   async function navigateLocal(
     tabId: string,
     targetPath: string,
@@ -701,7 +772,7 @@ export function App(props: AppProps = {}) {
       timer = setTimeout(() => {
         setQueuePanelState("hidden");
         void clearCompletedTransfers();
-      }, AUTO_HIDE_DELAY_MS);
+      }, appSettings.transfer.queueAutoHideDelayMs);
       return () => {
         if (timer) clearTimeout(timer);
       };
@@ -715,10 +786,10 @@ export function App(props: AppProps = {}) {
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [transferTasks, queuePinned, queueStats.allDone, queueStats.failedCount]);
+  }, [transferTasks, queuePinned, queueStats.allDone, queueStats.failedCount, appSettings.transfer.queueAutoHideDelayMs]);
 
   const sortedEntries = useMemo(() => {
-    const copied = [...localPane.entries];
+    const copied = localPane.entries.filter((entry) => appSettings.general.showHiddenFiles || !entry.name.startsWith("."));
     copied.sort((a, b) => {
       if (a.type === "directory" && b.type !== "directory") return -1;
       if (a.type !== "directory" && b.type === "directory") return 1;
@@ -730,10 +801,10 @@ export function App(props: AppProps = {}) {
       return localPane.sortDirection === "asc" ? value : -value;
     });
     return copied;
-  }, [localPane.entries, localPane.sortDirection, localPane.sortKey]);
+  }, [appSettings.general.showHiddenFiles, localPane.entries, localPane.sortDirection, localPane.sortKey]);
 
   const sortedRemoteEntries = useMemo(() => {
-    const copied = [...remotePane.entries];
+    const copied = remotePane.entries.filter((entry) => appSettings.general.showHiddenFiles || !entry.name.startsWith("."));
     copied.sort((a, b) => {
       if (a.type === "directory" && b.type !== "directory") return -1;
       if (a.type !== "directory" && b.type === "directory") return 1;
@@ -744,14 +815,14 @@ export function App(props: AppProps = {}) {
       return remotePane.sortDirection === "asc" ? value : -value;
     });
     return copied;
-  }, [remotePane.entries, remotePane.sortDirection, remotePane.sortKey]);
+  }, [appSettings.general.showHiddenFiles, remotePane.entries, remotePane.sortDirection, remotePane.sortKey]);
 
-  const selectedEntries = localPane.entries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
+  const selectedEntries = sortedEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const totalSize = localPane.entries.reduce((acc, item) => acc + item.size, 0);
-  const remoteSelectedEntries = remotePane.entries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
+  const totalSize = sortedEntries.reduce((acc, item) => acc + item.size, 0);
+  const remoteSelectedEntries = sortedRemoteEntries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const remoteTotalSize = remotePane.entries.reduce((acc, item) => acc + item.size, 0);
+  const remoteTotalSize = sortedRemoteEntries.reduce((acc, item) => acc + item.size, 0);
 
   useEffect(() => {
     if (uiShell !== "v12") {
@@ -1496,7 +1567,8 @@ export function App(props: AppProps = {}) {
       username: tab.remotePane.username,
       authType: tab.remotePane.authType,
       localSources: selected,
-      remoteDestinationDir: options?.remoteDestinationDir ?? tab.remotePane.currentPath
+      remoteDestinationDir: options?.remoteDestinationDir ?? tab.remotePane.currentPath,
+      preserveTimestamps: appSettings.transfer.preserveTimestamps
     };
     const checked = await resolveTransferConflicts("upload", payload);
     if (!checked) return;
@@ -1555,7 +1627,8 @@ export function App(props: AppProps = {}) {
       username: tab.remotePane.username,
       authType: tab.remotePane.authType,
       remoteSources: selected,
-      localDestinationDir: options?.localDestinationDir ?? tab.localPane.currentPath
+      localDestinationDir: options?.localDestinationDir ?? tab.localPane.currentPath,
+      preserveTimestamps: appSettings.transfer.preserveTimestamps
     };
     const checked = await resolveTransferConflicts("download", payload);
     if (!checked) return;
@@ -2052,13 +2125,18 @@ export function App(props: AppProps = {}) {
       if (paths.length === 0) return;
       const entryMap = new Map(tab.localPane.entries.map((entry) => [entry.fullPath, entry.name]));
       const names = paths.map((fullPath) => entryMap.get(fullPath) ?? getEntryNameFromPath(fullPath));
-      setDeleteConfirm({
+      const next = {
         pane,
         tabId,
         connectionId: null,
         paths,
         names
-      });
+      };
+      if (!appSettings.general.confirmBeforeDelete) {
+        void performDelete(next);
+        return;
+      }
+      setDeleteConfirm(next);
       return;
     }
 
@@ -2067,50 +2145,59 @@ export function App(props: AppProps = {}) {
     if (paths.length === 0) return;
     const entryMap = new Map(tab.remotePane.entries.map((entry) => [entry.fullPath, entry.name]));
     const names = paths.map((fullPath) => entryMap.get(fullPath) ?? getEntryNameFromPath(fullPath));
-    setDeleteConfirm({
+    const next = {
       pane,
       tabId,
       connectionId: tab.remotePane.connectionId,
       paths,
       names
-    });
+    };
+    if (!appSettings.general.confirmBeforeDelete) {
+      void performDelete(next);
+      return;
+    }
+    setDeleteConfirm(next);
   }
 
   async function submitDeleteConfirm(): Promise<void> {
     if (!deleteConfirm) return;
-    if (deleteConfirm.pane === "local") {
-      const tab = tabs.find((item) => item.id === deleteConfirm.tabId);
+    await performDelete(deleteConfirm);
+  }
+
+  async function performDelete(target: DeleteConfirmState): Promise<void> {
+    if (target.pane === "local") {
+      const tab = tabs.find((item) => item.id === target.tabId);
       if (!tab) return;
-      const result = await window.cofinder.local.delete({ paths: deleteConfirm.paths });
+      const result = await window.cofinder.local.delete({ paths: target.paths });
       if (!result.ok) {
         setTabs((prev) =>
           prev.map((item) =>
-            item.id === deleteConfirm.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+            item.id === target.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
           )
         );
         return;
       }
-      await navigateLocal(deleteConfirm.tabId, tab.localPane.currentPath, "replace");
+      await navigateLocal(target.tabId, tab.localPane.currentPath, "replace");
       setDeleteConfirm(null);
       return;
     }
 
-    if (!deleteConfirm.connectionId) return;
-    const tab = tabs.find((item) => item.id === deleteConfirm.tabId);
+    if (!target.connectionId) return;
+    const tab = tabs.find((item) => item.id === target.tabId);
     if (!tab) return;
     const result = await window.cofinder.remote.delete({
-      connectionId: deleteConfirm.connectionId,
-      paths: deleteConfirm.paths
+      connectionId: target.connectionId,
+      paths: target.paths
     });
     if (!result.ok) {
       setTabs((prev) =>
         prev.map((item) =>
-          item.id === deleteConfirm.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+          item.id === target.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
         )
       );
       return;
     }
-    await listRemotePath(deleteConfirm.connectionId, tab.remotePane.currentPath, "replace", deleteConfirm.tabId);
+    await listRemotePath(target.connectionId, tab.remotePane.currentPath, "replace", target.tabId);
     setDeleteConfirm(null);
   }
 
@@ -2446,6 +2533,7 @@ export function App(props: AppProps = {}) {
         }}
         inspectorToggleDisabled={v12InspectorToggleDisabled}
         inspectorTogglePressed={v12InspectorTogglePressed}
+        onPreferences={openPreferences}
       />
     ) : null;
 
@@ -2602,7 +2690,10 @@ export function App(props: AppProps = {}) {
       return null;
     }
     if (result.data.conflicts.length === 0) return { ...request, conflictPolicy: "prompt" };
-    const policy = promptForConflictPolicy(result.data.conflicts);
+    const policy =
+      appSettings.transfer.defaultConflictPolicy === "prompt"
+        ? promptForConflictPolicy(result.data.conflicts)
+        : appSettings.transfer.defaultConflictPolicy;
     if (policy === "cancel") return null;
     if (policy === "skip") {
       const conflictSources = new Set(result.data.conflicts.map((c) => c.source));
@@ -2792,7 +2883,7 @@ export function App(props: AppProps = {}) {
                 />
                 <V12PaneFootStatus
                   selectedCount={selectedEntries.length}
-                  totalCount={localPane.entries.length}
+                  totalCount={sortedEntries.length}
                   selectedSizeLabel={formatSize(selectedSize)}
                   totalSizeLabel={formatSize(totalSize)}
                 />
@@ -3039,7 +3130,7 @@ export function App(props: AppProps = {}) {
 
           <div className="pane-status">
             <span>Selected: {selectedEntries.length}</span>
-            <span>Total: {localPane.entries.length}</span>
+            <span>Total: {sortedEntries.length}</span>
             <span>Selected Size: {formatSize(selectedSize)}</span>
             <span>Total Size: {formatSize(totalSize)}</span>
           </div>
@@ -3192,7 +3283,7 @@ export function App(props: AppProps = {}) {
                   />
                   <V12PaneFootStatus
                     selectedCount={remoteSelectedEntries.length}
-                    totalCount={remotePane.entries.length}
+                    totalCount={sortedRemoteEntries.length}
                     selectedSizeLabel={formatSize(remoteSelectedSize)}
                     totalSizeLabel={formatSize(remoteTotalSize)}
                   />
@@ -3450,7 +3541,7 @@ export function App(props: AppProps = {}) {
 
               <div className="pane-status">
                 <span>Selected: {remoteSelectedEntries.length}</span>
-                <span>Total: {remotePane.entries.length}</span>
+                <span>Total: {sortedRemoteEntries.length}</span>
                 <span>Selected Size: {formatSize(remoteSelectedSize)}</span>
                 <span>Total Size: {formatSize(remoteTotalSize)}</span>
               </div>
@@ -3474,13 +3565,16 @@ export function App(props: AppProps = {}) {
   ) : null;
 
   return (
-    <div className={uiShell === "v12" ? "app-shell app-shell--v12" : "app-shell"}>
+    <div className={`${uiShell === "v12" ? "app-shell app-shell--v12" : "app-shell"} density-${appSettings.appearance.rowDensity}`}>
       {uiShell === "v11" ? (
         <>
           <header className="top-bar">
             <div className="title-group">
               <strong>CoFinder</strong>
             </div>
+            <button type="button" className="toolbar-button" onClick={openPreferences}>
+              Preferences
+            </button>
             <div className="top-version" aria-label="App version">
               Version {appVersion}
             </div>
@@ -3514,7 +3608,8 @@ export function App(props: AppProps = {}) {
           }
           remotePane={remotePaneEl}
           sidebar={
-            <V12LocalFavoritesSidebar
+            appSettings.appearance.sidebarVisible ? (
+              <V12LocalFavoritesSidebar
               favorites={v12LocalFavorites}
               currentLocalPath={localPane.currentPath || "/"}
               hint={v12FavoriteHint}
@@ -3541,11 +3636,177 @@ export function App(props: AppProps = {}) {
               onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
               onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
             />
+            ) : null
           }
         />
       )}
       {uiShell === "v11" ? queueV11Section : null}
       {marqueeOverlay}
+      {preferences.open ? (
+        <div className="preferences-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setPreferences((p) => ({ ...p, open: false }))}>
+          <div className="preferences-dialog" role="dialog" aria-modal="true" aria-label="Preferences">
+            <div className="preferences-head">
+              <strong>Preferences</strong>
+              <button type="button" className="toolbar-button" onClick={() => setPreferences((p) => ({ ...p, open: false }))}>
+                Close
+              </button>
+            </div>
+            {preferences.error ? <div className="error-banner">{preferences.error}</div> : null}
+            <div className="preferences-grid">
+              <label>
+                Default local path
+                <input
+                  value={preferences.draft.general.defaultLocalPath}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: { ...p.draft, general: { ...p.draft.general, defaultLocalPath: e.target.value } }
+                    }))
+                  }
+                  placeholder="Use macOS Home"
+                />
+              </label>
+              <label>
+                Conflict policy
+                <select
+                  value={preferences.draft.transfer.defaultConflictPolicy}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: {
+                        ...p.draft,
+                        transfer: { ...p.draft.transfer, defaultConflictPolicy: e.target.value as AppSettings["transfer"]["defaultConflictPolicy"] }
+                      }
+                    }))
+                  }
+                >
+                  <option value="prompt">Ask every time</option>
+                  <option value="rename">Rename / keep both</option>
+                  <option value="skip">Skip conflicts</option>
+                  <option value="overwrite">Overwrite</option>
+                </select>
+              </label>
+              <label>
+                Queue auto-hide delay
+                <input
+                  type="number"
+                  min={0}
+                  max={60}
+                  value={Math.round(preferences.draft.transfer.queueAutoHideDelayMs / 1000)}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: {
+                        ...p.draft,
+                        transfer: { ...p.draft.transfer, queueAutoHideDelayMs: Math.max(0, Math.min(60, Number(e.target.value))) * 1000 }
+                      }
+                    }))
+                  }
+                />
+              </label>
+              <label>
+                Row density
+                <select
+                  value={preferences.draft.appearance.rowDensity}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: { ...p.draft, appearance: { ...p.draft.appearance, rowDensity: e.target.value as "compact" | "comfortable" } }
+                    }))
+                  }
+                >
+                  <option value="comfortable">Comfortable</option>
+                  <option value="compact">Compact</option>
+                </select>
+              </label>
+              <label>
+                Default pane ratio
+                <input
+                  type="number"
+                  min={25}
+                  max={75}
+                  value={Math.round(preferences.draft.appearance.defaultPaneRatio * 100)}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: {
+                        ...p.draft,
+                        appearance: { ...p.draft.appearance, defaultPaneRatio: Math.max(25, Math.min(75, Number(e.target.value))) / 100 }
+                      }
+                    }))
+                  }
+                />
+              </label>
+              {[
+                ["Restore last session", "restoreLastSession"],
+                ["Confirm before delete", "confirmBeforeDelete"],
+                ["Show hidden files", "showHiddenFiles"]
+              ].map(([label, key]) => (
+                <label key={key} className="preferences-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(preferences.draft.general[key as keyof AppSettings["general"]])}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: { ...p.draft, general: { ...p.draft.general, [key]: e.target.checked } }
+                      }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+              {[
+                ["Preserve timestamps", "preserveTimestamps"],
+              ].map(([label, key]) => (
+                <label key={key} className="preferences-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(preferences.draft.transfer[key as keyof AppSettings["transfer"]])}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: { ...p.draft, transfer: { ...p.draft.transfer, [key]: e.target.checked } }
+                      }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+              {[
+                ["Show inspector by default", "defaultInspectorVisible"],
+                ["Show sidebar", "sidebarVisible"]
+              ].map(([label, key]) => (
+                <label key={key} className="preferences-check">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(preferences.draft.appearance[key as keyof AppSettings["appearance"]])}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: { ...p.draft, appearance: { ...p.draft.appearance, [key]: e.target.checked } }
+                      }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            <div className="preferences-shortcuts">
+              <strong>Shortcuts</strong>
+              <p>F2 rename · Delete remove · Cmd+I info · Cmd+Shift+C copy path · Cmd+R refresh · Cmd+U upload · Cmd+D download · Cmd+K Site Manager</p>
+            </div>
+            <div className="preferences-actions">
+              <button type="button" className="toolbar-button" onClick={() => setPreferences((p) => ({ ...p, draft: appSettings, error: "" }))}>
+                Reset
+              </button>
+              <button type="button" className="toolbar-button is-active" onClick={() => void savePreferences()}>
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {contextMenu ? (
         <div
           className="context-menu"
@@ -4009,4 +4270,8 @@ function promptForConflictPolicy(conflicts: TransferConflict[]): Exclude<Transfe
   const normalized = answer?.trim().toLowerCase();
   if (normalized === "overwrite" || normalized === "skip" || normalized === "rename") return normalized;
   return "cancel";
+}
+
+function readLastLocalPath(): string {
+  return window.localStorage.getItem(COFINDER_LAST_LOCAL_PATH_KEY)?.trim() ?? "";
 }

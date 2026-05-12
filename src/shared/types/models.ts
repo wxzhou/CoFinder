@@ -136,6 +136,7 @@ export interface TransferTask {
   username: string;
   remotePath: string;
   localPath: string;
+  preserveTimestamps?: boolean;
   status: TransferStatus;
   progressText?: string;
   percent?: number;

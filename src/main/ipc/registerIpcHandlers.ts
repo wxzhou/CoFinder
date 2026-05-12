@@ -21,7 +21,7 @@ import {
 import { LocalFileService } from "../services/LocalFileService";
 import { RemoteFileService } from "../services/RemoteFileService";
 import { TransferQueueService } from "../services/TransferQueueService";
-import { SettingsService } from "../services/SettingsService";
+import { SettingsService, defaultSettingsPath } from "../services/SettingsService";
 import { ConnectionManager } from "../services/ConnectionManager";
 import { CredentialService } from "../services/CredentialService";
 import {
@@ -52,11 +52,11 @@ const localFileService = new LocalFileService();
 const connectionManager = new ConnectionManager();
 const remoteFileService = new RemoteFileService(connectionManager);
 const transferQueueService = new TransferQueueService();
-const settingsService = new SettingsService();
+const userData = app.getPath("userData");
+const settingsService = new SettingsService(defaultSettingsPath(userData));
 const quickLookService = new QuickLookService();
 const remotePreviewService = new RemotePreviewService(connectionManager, app.getPath("temp"));
 
-const userData = app.getPath("userData");
 const localSidebarFavoritesRepository = new LocalSidebarFavoritesRepository(defaultLocalSidebarFavoritesPath(userData), () => ({
   home: app.getPath("home"),
   desktop: app.getPath("desktop"),
@@ -416,8 +416,20 @@ export function registerIpcHandlers(): void {
     (): IpcResponse<{ cleared: number }> => ok(transferQueueService.clearCompleted())
   );
 
-  registerChannel(IPC_CHANNELS.settings.get, () => settingsService.get());
-  registerChannel(IPC_CHANNELS.settings.set, (_event, request: Record<string, unknown>) => settingsService.set(request));
+  registerChannel(IPC_CHANNELS.settings.get, async () => {
+    try {
+      return ok(await settingsService.get());
+    } catch (error) {
+      return toIpcError(error, "SETTINGS_LOAD_FAILED", "Failed to load settings.");
+    }
+  });
+  registerChannel(IPC_CHANNELS.settings.set, async (_event, request: unknown) => {
+    try {
+      return ok(await settingsService.set(request));
+    } catch (error) {
+      return toIpcError(error, "SETTINGS_SAVE_FAILED", "Failed to save settings.");
+    }
+  });
 
   registerChannel(IPC_CHANNELS.localFavorites.list, async (): Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>> => {
     try {
@@ -789,6 +801,7 @@ function parseUploadRequest(body: Record<string, unknown>): EnqueueUploadRequest
     localSources: Array.isArray(body.localSources) ? body.localSources.map((v) => validateLocalPathInput(v, "TRANSFER_INVALID_REQUEST")) : [],
     remoteDestinationDir: normalizeRemotePathInput(body.remoteDestinationDir, "TRANSFER_INVALID_REQUEST"),
     conflictPolicy: parseConflictPolicy(body.conflictPolicy),
+    preserveTimestamps: optionalBoolean(body.preserveTimestamps),
     remoteTargetOverrides: parseStringMap(body.remoteTargetOverrides, "remoteTargetOverrides")
   };
 }
@@ -807,8 +820,13 @@ function parseDownloadRequest(body: Record<string, unknown>): EnqueueDownloadReq
       : [],
     localDestinationDir: validateLocalPathInput(body.localDestinationDir, "TRANSFER_INVALID_REQUEST"),
     conflictPolicy: parseConflictPolicy(body.conflictPolicy),
+    preserveTimestamps: optionalBoolean(body.preserveTimestamps),
     localTargetOverrides: parseStringMap(body.localTargetOverrides, "localTargetOverrides")
   };
+}
+
+function optionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function parseConflictPolicy(value: unknown): EnqueueUploadRequest["conflictPolicy"] {

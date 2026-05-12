@@ -76,7 +76,10 @@ export type RemoteErrorCode =
   | "TRANSFER_QUEUE_ERROR"
   | "LOCAL_FAVORITES_DUPLICATE"
   | "LOCAL_FAVORITES_NOT_FOUND"
-  | "LOCAL_FAVORITES_PERSIST_FAILED";
+  | "LOCAL_FAVORITES_PERSIST_FAILED"
+  | "SETTINGS_LOAD_FAILED"
+  | "SETTINGS_SAVE_FAILED"
+  | "SETTINGS_INVALID";
 
 export interface RemoteErrorPayload {
   code: RemoteErrorCode;
@@ -127,6 +130,7 @@ export type EnqueueUploadRequest = {
   localSources: string[];
   remoteDestinationDir: string;
   conflictPolicy?: TransferConflictPolicy;
+  preserveTimestamps?: boolean;
   remoteTargetOverrides?: Record<string, string>;
 };
 
@@ -141,10 +145,32 @@ export type EnqueueDownloadRequest = {
   remoteSources: string[];
   localDestinationDir: string;
   conflictPolicy?: TransferConflictPolicy;
+  preserveTimestamps?: boolean;
   localTargetOverrides?: Record<string, string>;
 };
 
 export type TransferConflictPolicy = "prompt" | "overwrite" | "skip" | "rename" | "cancel";
+
+export type AppSettings = {
+  schemaVersion: 1;
+  general: {
+    defaultLocalPath: string;
+    restoreLastSession: boolean;
+    confirmBeforeDelete: boolean;
+    showHiddenFiles: boolean;
+  };
+  transfer: {
+    defaultConflictPolicy: Exclude<TransferConflictPolicy, "cancel">;
+    queueAutoHideDelayMs: number;
+    preserveTimestamps: boolean;
+  };
+  appearance: {
+    rowDensity: "compact" | "comfortable";
+    defaultInspectorVisible: boolean;
+    defaultPaneRatio: number;
+    sidebarVisible: boolean;
+  };
+};
 
 export type TransferConflict = {
   source: string;
@@ -222,8 +248,8 @@ export interface IpcApi {
     onUpdate: (handler: (payload: TransferUpdatePayload) => void) => () => void;
   };
   settings: {
-    get: () => Promise<unknown>;
-    set: (request: unknown) => Promise<void>;
+    get: () => Promise<IpcResponse<AppSettings>>;
+    set: (request: unknown) => Promise<IpcResponse<AppSettings>>;
   };
   localFavorites: {
     list: () => Promise<IpcResponse<{ favorites: LocalFavoriteListItem[] }>>;

@@ -13,6 +13,12 @@
 - If `safeStorage` is unavailable, password saving is disabled.
 - On POSIX, `profiles.json` and `credentials.enc.json` are written via an atomic temp file with **mode 0o600**, then renamed and chmod’d to **0o600** (format unchanged—no migration).
 
+## Settings Storage
+
+- Preferences are stored in `settings.json` under Electron app userData.
+- Settings are non-secret UI/behavior fields only: default local path, confirmation/display toggles, transfer conflict defaults, queue auto-hide delay, timestamp preservation, row density, inspector visibility, pane ratio, and sidebar visibility.
+- Settings must not store passwords, tokens, private keys, saved remote credentials, or free-form `rsync`/`ssh` arguments.
+
 ## IPC details and main logs
 
 - IPC failure payloads still use `{ ok, error }`; **`error.detail`** is length-limited and passed through a minimal scrubber for patterns such as `password`, `passphrase`, `privateKey`, and `token`.

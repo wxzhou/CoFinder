@@ -44,6 +44,9 @@
 - Profiles/Credentials:
   - `profiles:list`, `profiles:save`, `profiles:update`, `profiles:delete`
   - `credentials:isAvailable`
+- Settings:
+  - `settings:get`
+  - `settings:set`
 - System:
   - `system:copyText`
 
@@ -68,6 +71,10 @@
   - Non-sensitive profile persistence.
 - `SafeStorageCredentialProvider` + `CredentialService`
   - Encrypted credential persistence with availability check.
+- `SettingsService`
+  - Versioned non-secret app settings (`schemaVersion: 1`) stored as `settings.json` under app userData.
+  - Normalizes partial patches into safe defaults before persistence.
+  - Owns future migration boundaries; renderer uses IPC only.
 
 ## State Model
 
@@ -94,6 +101,7 @@
 - Clipboard write goes through explicit `system:copyText`.
 - Path safety and rsync safety checks centralized in main utilities/services.
 - Transfer conflict checks and rename target generation run in main; renderer does not own overwrite policy.
+- Settings files must not contain passwords, tokens, private keys, or free-form command arguments.
 
 ## Lifecycle and Cleanup
 

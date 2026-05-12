@@ -32,6 +32,11 @@ describe("rsync arg helpers", () => {
     ]);
   });
 
+  it("can disable timestamp preservation while keeping recursive transfer", () => {
+    const args = buildRsyncUploadArgs(22, "alice", "example.com", "/tmp/folder", "/remote/folder", false);
+    expect(args[0]).toBe("-rvh");
+  });
+
   it("normalizes remote path with POSIX rules", () => {
     expect(validateRsyncPath("foo/../bar")).toBe("/bar");
   });

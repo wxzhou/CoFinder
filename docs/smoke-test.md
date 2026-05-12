@@ -44,6 +44,20 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Marquee additive:** hold `Cmd` or `Shift`, drag a marquee over additional rows, and confirm existing selection is preserved while hit rows are added.
 - **Gesture priority:** confirm splitter drag still resizes panes, row drag starts transfer, background drag starts marquee, single click selects, and double click opens/enters directories.
 
+## V1.6 preferences MVP
+
+- **Open Preferences:** in default V12 UI, click the toolbar Preferences button; in legacy classic UI, use the top-bar Preferences button. Confirm the modal opens and closes cleanly.
+- **Settings round-trip:** change row density, queue auto-hide delay, default pane ratio, and default local path. Save, quit, relaunch, and confirm values persist.
+- **Default local path:** set a temporary local test directory as default, relaunch, and confirm the first local pane opens there. Reset to blank when done.
+- **Restore last local path:** enable restore last session, navigate the active local pane to another isolated test directory, quit, relaunch, and confirm the first local pane opens at that last local path. Remote connections must not auto-reconnect.
+- **Delete confirmation:** toggle confirmation off in an isolated test folder, delete a disposable local file, and confirm it deletes without the modal. Turn the setting back on.
+- **Hidden files:** toggle show hidden files and confirm dotfiles appear/disappear in local and remote listings after refresh.
+- **Conflict policy:** set default conflict policy to `rename`, trigger an upload/download conflict, and confirm CoFinder keeps both without prompting. Repeat with `skip` on a two-file transfer, then reset to `prompt`.
+- **Queue auto-hide:** set delay to 1 second, run a successful small transfer, and confirm the queue hides after success when not pinned.
+- **Timestamp preservation:** with preserve timestamps enabled, run a small transfer and confirm modification time is preserved where the filesystem/server supports it. Disable it, repeat with a new file, and confirm rsync no longer preserves the original mtime.
+- **Appearance:** toggle compact/comfortable density, default inspector visibility, pane ratio, and sidebar visibility; relaunch and confirm settings apply.
+- **Shortcut display:** confirm Preferences shows the implemented shortcut list and that the bindings still match the V1.3 shortcut smoke section.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.

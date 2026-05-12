@@ -16,7 +16,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.3 | v0.4.0 | Shipped |
 | V1.4 | v0.5.0 | Shipped |
 | V1.5 | v0.6.0 | Implemented in dev tree (not shipped until tagged) |
-| V1.6 | v0.7.0 | Planned |
+| V1.6 | v0.7.0 | Implemented in dev tree (not shipped until tagged) |
 | V1.7 | v0.8.0 | Planned |
 | V1.8 | v0.9.0 | Planned |
 | V1.9 | v0.10.0 | Planned |
@@ -45,7 +45,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V1.3 | v0.4.0 | Interaction Efficiency & Layout Control + limited read-only remote preview — shipped |
 | V1.4 | v0.5.0 | Transfer Safety & Conflict Handling — shipped |
 | V1.5 | v0.6.0 | Drag-and-Drop Transfer & Selection — implemented in dev tree |
-| V1.6 | v0.7.0 | Preferences MVP |
+| V1.6 | v0.7.0 | Preferences MVP — implemented in dev tree |
 | V1.7 | v0.8.0 | Search, Filter, and Navigation |
 | V1.8 | v0.9.0 | Remote Operations Expansion |
 | V1.9 | v0.10.0 | Packaging, Updates, and Reliability |
@@ -56,10 +56,10 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 These remain **unsupported**, **deferred**, or **non-goals** across current plans unless a future milestone explicitly adopts them:
 
 - **Remote edit auto-sync**
-- **Full Remote Quick Look**. A limited read-only remote preview cache for text/images is planned for **V1.3**; it is not a full macOS Quick Look equivalent and does not support editing/sync.
+- **Full Remote Quick Look**. A limited read-only remote preview cache for text/images exists from **V1.3**; it is not a full macOS Quick Look equivalent and does not support editing/sync.
 - **Full i18n** (no localized product shell in near phases)
-- **Full Preferences UI** before **V1.6** (earlier milestones stay minimal or use defaults only)
+- **Plugin-sized Preferences UI** (V1.6 keeps preferences curated and small)
 - **Cross-platform** support (macOS-only product)
 - **IDE-like** features (project model, SCM integration, etc.)
 
-Drag-and-drop transfer and marquee selection are implemented in the **V1.5 / v0.6.0 development tree** and remain unshipped until v0.6.0 is tagged.
+Drag-and-drop transfer, marquee selection, and Preferences MVP are implemented in the development tree. They remain unshipped until their matching release tags are created.

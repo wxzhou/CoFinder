@@ -2,16 +2,16 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-**`package.json` version:** `0.6.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.5.0** (tags, GitHub Release, user-facing “what’s out”).
+**`package.json` version:** `0.7.0` (development tree—for local **install/build/dist** testing). **Latest shipped release:** **v0.5.0** (tags, GitHub Release, user-facing “what’s out”).
 
 ## Versioning
 
 CoFinder uses two parallel naming schemes:
 
 - **Product milestone** (V1, V1.1, V1.2, …): labels for development phases and plan documents (`docs/dev/V1.*_PLAN.md`, `docs/roadmap.md`). They do **not** equal the numeric field in `package.json`.
-- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.6.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
+- **Release version** (semver): what ships in **git tags**, **GitHub Releases**, and distributed macOS artifacts. During development, **`package.json` may be bumped ahead** (e.g. **0.7.0**) before that version is tagged—see **CHANGELOG.md** for what is actually **shipped**. Released versions are listed below.
 
-Past releases are **not** retroactively re-tagged. Product milestone **V1.4** shipped as **`v0.5.0`**; **V1.5** is planned to ship as **`v0.6.0`** when ready.
+Past releases are **not** retroactively re-tagged. Product milestone **V1.4** shipped as **`v0.5.0`**; **V1.5** and **V1.6** are implemented in the development tree and are not shipped until their tags/releases are created.
 
 | Product milestone | Release version / tag | Status |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.4** sh
 | V1.3 | v0.4.0 | Shipped |
 | V1.4 | v0.5.0 | Shipped |
 | V1.5 | v0.6.0 | Implemented in dev tree; not shipped until tagged |
-| V1.6 | v0.7.0 | Planned |
+| V1.6 | v0.7.0 | Implemented in dev tree; not shipped until tagged |
 | V1.7 | v0.8.0 | Planned |
 | V1.8 | v0.9.0 | Planned |
 | V1.9 | v0.10.0 | Planned |
@@ -63,12 +63,19 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 - **M5 — packaging:** `electron-builder` (macOS dmg + zip), `npm run package` / `npm run dist`, artifacts under `release/`
 - **M5 — documentation:** `docs/smoke-test.md`, `docs/release-checklist.md`, `docs/security.md`, `docs/roadmap.md`; `npm run check:secrets`
 
-### Not Supported in V1-1.5
+### Not Supported in V1-1.6
 
 - Remote edit auto-sync workflow
 - Full Quick Look for remote files
-- Full Preferences UI
 - Full i18n
+
+### Implemented in V1.6 / v0.7.0 development tree
+
+- Preferences MVP with versioned `settings.json` under the app userData directory.
+- General preferences: default local starting path, delete confirmation, hidden file visibility, and restore-last-local-path behavior.
+- Transfer preferences: default conflict policy, queue auto-hide delay, and rsync timestamp preservation.
+- Appearance preferences: compact/comfortable rows, default inspector visibility, default pane ratio, and sidebar visibility.
+- In-app shortcut reference for the active keyboard bindings.
 
 ### Implemented in V1.5 / v0.6.0 development tree
 
@@ -98,6 +105,7 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 ## Security Notes
 
 - `profiles.json` stores non-sensitive profile fields only.
+- `settings.json` stores non-secret UI/behavior preferences only.
 - Saved password is kept separately in `credentials.enc.json` using `safeStorage` encryption.
 - Password is not stored in transfer task payloads, renderer persisted state, or rsync args.
 

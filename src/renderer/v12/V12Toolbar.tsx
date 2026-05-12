@@ -31,6 +31,8 @@ export type V12ToolbarProps = {
   onInspectorToggle: () => void;
   inspectorToggleDisabled: boolean;
   inspectorTogglePressed: boolean;
+
+  onPreferences: () => void;
 };
 
 /**
@@ -176,6 +178,15 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
           onClick={() => props.onInspectorToggle()}
         >
           <V12TbIcon name="sidebar-right" />
+        </button>
+        <button
+          type="button"
+          className="v12m-tb"
+          title="Preferences"
+          aria-label="Preferences"
+          onClick={() => props.onPreferences()}
+        >
+          <V12TbIcon name="gear" />
         </button>
       </div>
       <input

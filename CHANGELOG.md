@@ -4,11 +4,17 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v0.5.0.** The repo may temporarily use **`package.json` 0.6.0** during development so local **`npm run build` / `npm run dist`** does not overwrite the **v0.5.0** release identity—do **not** treat that as shipped until **v0.6.0** is tagged and this file gains a **`## v0.6.0`** section.
+- **Latest shipped release: v0.5.0.** The repo may temporarily use a newer **`package.json`** version during development so local **`npm run build` / `npm run dist`** can exercise the next artifact identity. Do **not** treat development-tree versions as shipped until matching git tags and release sections exist.
 
 ## Unreleased
 
-**Target:** v0.6.0 / product milestone **V1.5** (draft notes—not shipped).
+**Target:** v0.7.0 / product milestone **V1.6** (draft notes—not shipped). V1.5/v0.6.0 is also present in the development tree but remains unshipped until tagged.
+
+- Preferences MVP: versioned `settings.json` managed by main-process `SettingsService` through `settings:get` / `settings:set`.
+- General preferences: default local path, delete confirmation toggle, hidden file visibility, and restore-last-local-path behavior.
+- Transfer preferences: default conflict policy, queue auto-hide delay, and timestamp preservation toggle wired to rsync flags.
+- Appearance preferences: row density, default inspector visibility, default pane ratio, and sidebar visibility.
+- Shortcut reference is visible from Preferences.
 
 - Drag-and-drop transfer: drag selected local items to the remote pane to upload, and selected remote items to the local pane to download.
 - Finder-to-remote upload: drag files/folders from Finder into the remote pane.

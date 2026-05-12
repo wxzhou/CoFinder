@@ -68,3 +68,16 @@
 - Drag Finder file/folder to remote pane and confirm upload; drag Finder item to local pane and confirm no transfer.
 - Verify valid directory/current-folder drop feedback and invalid file-row drop feedback.
 - Verify marquee replace and `Cmd`/`Shift` additive marquee selection.
+
+## V1.6 v0.7.0 gates
+
+- `npm run typecheck`
+- Preferences open from classic top bar and V12 toolbar.
+- Change default local path, restart dev session, and confirm the first tab opens there.
+- Enable restore last session, navigate the active local pane, restart, and confirm only the local path is restored; remote connections are not auto-restored.
+- Toggle show hidden files and confirm dotfiles appear/disappear without changing the underlying directory.
+- Set default conflict policy to rename/skip/overwrite and confirm transfers use it without prompting; reset to prompt afterwards.
+- Set queue auto-hide delay to a short value and confirm successful transfers hide after that delay.
+- Toggle preserve timestamps and confirm rsync args use archive mode when enabled and recursive mode without timestamp preservation when disabled.
+- Toggle compact row density, default inspector visibility, default pane ratio, and sidebar visibility; restart and confirm persisted settings apply.
+- Inspect `settings.json` and confirm it contains no passwords, tokens, private keys, or rsync secrets.

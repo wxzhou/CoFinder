@@ -164,6 +164,13 @@ export function V12TbIcon(props: { name: string }): ReactElement {
           <path d="M13 4.5v11" />
         </svg>
       );
+    case "gear":
+      return (
+        <svg {...s}>
+          <circle cx="10" cy="10" r="2.4" />
+          <path d="M10 3.8v2M10 14.2v2M4.6 6.9l1.7 1M13.7 12.1l1.7 1M4.6 13.1l1.7-1M13.7 7.9l1.7-1" />
+        </svg>
+      );
     default:
       return <svg {...s} />;
   }
