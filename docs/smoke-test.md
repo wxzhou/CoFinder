@@ -88,9 +88,9 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Check for updates:** click Check for Updates and confirm it reports the manual GitHub Releases policy rather than attempting a silent install.
 - **Packaged smoke:** after `npm run dist`, launch the packaged app and repeat Copy Diagnostics plus one local browse check.
 
-## V2.0 stable personal-release candidate
+## V2.0 stable personal release
 
-- **Full pass:** run all applicable sections in this file against a clean test workspace before tagging `v1.0.0`.
+- **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.
 - **Packaged file load:** launch `release/mac-arm64/CoFinder.app` or the dmg-installed app and confirm the V12 shell renders from `file://` without a blank page.
 - **Release identity:** confirm About/version surfaces `1.0.0`, artifact filenames use `CoFinder-1.0.0-arm64`, and docs/changelog refer to V2.0/v1.0.0 consistently.
 - **Scope cuts:** confirm there is no UI implying remote edit auto-sync, full auto-update install, App Store distribution, or cross-platform support.

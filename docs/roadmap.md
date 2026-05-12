@@ -15,12 +15,12 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.2 | v0.3.0 | Shipped |
 | V1.3 | v0.4.0 | Shipped |
 | V1.4 | v0.5.0 | Shipped |
-| V1.5 | v0.6.0 | Implemented in dev tree (not shipped until tagged) |
-| V1.6 | v0.7.0 | Implemented in dev tree (not shipped until tagged) |
-| V1.7 | v0.8.0 | Implemented in dev tree (not shipped until tagged) |
-| V1.8 | v0.9.0 | Implemented in dev tree (not shipped until tagged) |
-| V1.9 | v0.10.0 | Implemented in dev tree (not shipped until tagged) |
-| V2.0 | v1.0.0 | Implemented in dev tree (stable candidate; not shipped until tagged) |
+| V1.5 | no standalone tag | Included in v1.0.0 |
+| V1.6 | no standalone tag | Included in v1.0.0 |
+| V1.7 | no standalone tag | Included in v1.0.0 |
+| V1.8 | no standalone tag | Included in v1.0.0 |
+| V1.9 | no standalone tag | Included in v1.0.0 |
+| V2.0 | v1.0.0 | Shipped |
 
 ## Shipped phases (summary)
 
@@ -36,7 +36,7 @@ Core dual-pane **local** browsing and **SFTP** remote browsing, **multi-tab** is
 
 **V12 production shell** as the **default** UI (legacy classic opt-in), **local sidebar favorites**, **per-pane inspector**, **embedded remote connect**, toolbar and **compact transfer drawer** wired to existing handlers; scoped v12 CSS and updated checklists.
 
-## Planned phases (overview)
+## Phase Overview
 
 Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. Scope may narrow per milestone during implementation.
 
@@ -44,12 +44,12 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | --- | --- | --- |
 | V1.3 | v0.4.0 | Interaction Efficiency & Layout Control + limited read-only remote preview — shipped |
 | V1.4 | v0.5.0 | Transfer Safety & Conflict Handling — shipped |
-| V1.5 | v0.6.0 | Drag-and-Drop Transfer & Selection — implemented in dev tree |
-| V1.6 | v0.7.0 | Preferences MVP — implemented in dev tree |
-| V1.7 | v0.8.0 | Search, Filter, and Navigation — implemented in dev tree |
-| V1.8 | v0.9.0 | Remote Operations Expansion — implemented in dev tree |
-| V1.9 | v0.10.0 | Packaging, Updates, and Reliability — implemented in dev tree |
-| V2.0 | v1.0.0 | Stable Personal Release — implemented in dev tree |
+| V1.5 | no standalone tag | Drag-and-Drop Transfer & Selection — included in v1.0.0 |
+| V1.6 | no standalone tag | Preferences MVP — included in v1.0.0 |
+| V1.7 | no standalone tag | Search, Filter, and Navigation — included in v1.0.0 |
+| V1.8 | no standalone tag | Remote Operations Expansion — included in v1.0.0 |
+| V1.9 | no standalone tag | Packaging, Updates, and Reliability — included in v1.0.0 |
+| V2.0 | v1.0.0 | Stable Personal Release — shipped |
 
 ## Explicitly out of scope or not on the main line (today)
 
@@ -64,6 +64,6 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 - **Cross-platform** support (macOS-only product)
 - **IDE-like** features (project model, SCM integration, etc.)
 
-Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work are implemented in the development tree. They remain unshipped until their matching release tags are created.
+Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.0 is now a stable personal-release candidate in the development tree. It still requires the normal release act of tagging `v1.0.0`, publishing dmg/zip artifacts, and recording unsigned/signing status honestly in release notes.
+V2.0 is the current stable personal release. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
