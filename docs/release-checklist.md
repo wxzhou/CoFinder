@@ -81,3 +81,13 @@
 - Toggle preserve timestamps and confirm rsync args use archive mode when enabled and recursive mode without timestamp preservation when disabled.
 - Toggle compact row density, default inspector visibility, default pane ratio, and sidebar visibility; restart and confirm persisted settings apply.
 - Inspect `settings.json` and confirm it contains no passwords, tokens, private keys, or rsync secrets.
+
+## V1.7 v0.8.0 gates
+
+- `npm run typecheck`
+- Filter local and remote panes by name; confirm clearing the filter restores the current listing.
+- Confirm changing a filter clears selection and does not enqueue hidden selected rows.
+- Confirm local path autocomplete uses only known local paths (recents, favorites, current history).
+- Confirm remote path autocomplete uses only current connection/profile known paths and does not crawl the server.
+- Confirm local recents and per-profile remote recents can be cleared.
+- Confirm Back/Forward buttons and History dropdowns remain per-pane and per-tab.

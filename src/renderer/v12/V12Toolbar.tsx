@@ -33,6 +33,10 @@ export type V12ToolbarProps = {
   inspectorTogglePressed: boolean;
 
   onPreferences: () => void;
+
+  searchValue: string;
+  searchPlaceholder: string;
+  onSearchChange: (value: string) => void;
 };
 
 /**
@@ -191,12 +195,11 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
       </div>
       <input
         className="v12m-search"
-        placeholder="Search"
-        readOnly
-        aria-label="Search"
-        aria-disabled="true"
-        tabIndex={-1}
-        title="Search (not available)"
+        placeholder={props.searchPlaceholder}
+        value={props.searchValue}
+        onChange={(event) => props.onSearchChange(event.target.value)}
+        aria-label="Filter current pane"
+        title="Filter current pane by name"
       />
     </div>
   );

@@ -8,7 +8,13 @@
 
 ## Unreleased
 
-**Target:** v0.7.0 / product milestone **V1.6** (draft notes—not shipped). V1.5/v0.6.0 is also present in the development tree but remains unshipped until tagged.
+**Target:** v0.8.0 / product milestone **V1.7** (draft notes—not shipped). V1.5/v0.6.0 and V1.6/v0.7.0 are also present in the development tree but remain unshipped until tagged.
+
+- Current-directory quick filter for local and remote panes, including the V12 toolbar search box for the focused pane.
+- Path autocomplete uses known locations only: local favorites/recents/history and remote current-tab/per-profile recents/favorites/history. It does not perform indexed search or background SFTP crawling.
+- Recent locations: local recent paths and per-profile remote recent paths, each with a clear action.
+- History UI: per-pane Back/Forward history dropdowns supplement existing toolbar buttons while preserving tab-local history state.
+- Navigation helper tests cover deterministic filtering, recent-path de-duplication, and prefix suggestions.
 
 - Preferences MVP: versioned `settings.json` managed by main-process `SettingsService` through `settings:get` / `settings:set`.
 - General preferences: default local path, delete confirmation toggle, hidden file visibility, and restore-last-local-path behavior.

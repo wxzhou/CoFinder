@@ -20,6 +20,12 @@ import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
 import {
+  addRecentPath,
+  buildPathSuggestions,
+  filterEntriesByName,
+  type RecentPath
+} from "./navigationEfficiency";
+import {
   applyMarqueeSelection,
   applyRowSelection,
   clearSelectionState,
@@ -53,6 +59,7 @@ type RemoteConnectionStatus = "disconnected" | "connecting" | "connected" | "fai
 type LocalPaneState = {
   currentPath: string;
   pathInput: string;
+  filterText: string;
   entries: LocalFileEntry[];
   selectedFullPaths: string[];
   selectionAnchorFullPath: string | null;
@@ -73,6 +80,7 @@ type RemotePaneState = {
   homePath: string;
   currentPath: string;
   pathInput: string;
+  filterText: string;
   entries: RemoteFileEntry[];
   selectedFullPaths: string[];
   selectionAnchorFullPath: string | null;
@@ -159,6 +167,8 @@ type UiTabState = {
 const AUTO_HIDE_DELAY_MS = 10_000;
 const COFINDER_TRANSFER_MIME = "application/x-cofinder-transfer";
 const COFINDER_LAST_LOCAL_PATH_KEY = "cofinder.lastLocalPath";
+const COFINDER_LOCAL_RECENTS_KEY = "cofinder.recent.localPaths.v1";
+const COFINDER_REMOTE_RECENTS_KEY = "cofinder.recent.remotePathsByProfile.v1";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
 /** After a row `click` with `detail === 1`, wait this long before showing inspector so a double-click rarely mounts the column. Cmd+A bypasses. If already revealed, no delay and no hide. */
@@ -239,6 +249,10 @@ export function App(props: AppProps = {}) {
     draft: DEFAULT_RENDERER_SETTINGS,
     error: ""
   });
+  const [localRecentPaths, setLocalRecentPaths] = useState<RecentPath[]>(() => readRecentPathList(COFINDER_LOCAL_RECENTS_KEY));
+  const [remoteRecentPathsByProfile, setRemoteRecentPathsByProfile] = useState<Record<string, RecentPath[]>>(() =>
+    readRemoteRecentPathsByProfile()
+  );
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
@@ -356,6 +370,74 @@ export function App(props: AppProps = {}) {
     const homePath = homeRes.data.homePath;
     setLocalHomePath(homePath);
     await navigateLocal(tabId, preferredPath?.trim() || homePath, "replace");
+  }
+
+  function updateLocalFilter(tabId: string, value: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              localPane: {
+                ...tab.localPane,
+                filterText: value,
+                selectedFullPaths: [],
+                selectionAnchorFullPath: null
+              }
+            }
+          : tab
+      )
+    );
+  }
+
+  function updateRemoteFilter(tabId: string, value: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id === tabId
+          ? {
+              ...tab,
+              remotePane: {
+                ...tab.remotePane,
+                filterText: value,
+                selectedFullPaths: [],
+                selectionAnchorFullPath: null
+              }
+            }
+          : tab
+      )
+    );
+  }
+
+  function rememberLocalRecent(targetPath: string): void {
+    setLocalRecentPaths((prev) => {
+      const next = addRecentPath(prev, targetPath);
+      writeJsonLocalStorage(COFINDER_LOCAL_RECENTS_KEY, next);
+      return next;
+    });
+  }
+
+  function rememberRemoteRecent(profileId: string | null | undefined, targetPath: string): void {
+    if (!profileId) return;
+    setRemoteRecentPathsByProfile((prev) => {
+      const next = { ...prev, [profileId]: addRecentPath(prev[profileId] ?? [], targetPath) };
+      writeJsonLocalStorage(COFINDER_REMOTE_RECENTS_KEY, next);
+      return next;
+    });
+  }
+
+  function clearLocalRecents(): void {
+    setLocalRecentPaths([]);
+    window.localStorage.removeItem(COFINDER_LOCAL_RECENTS_KEY);
+  }
+
+  function clearRemoteRecents(profileId: string | null | undefined): void {
+    if (!profileId) return;
+    setRemoteRecentPathsByProfile((prev) => {
+      const next = { ...prev };
+      delete next[profileId];
+      writeJsonLocalStorage(COFINDER_REMOTE_RECENTS_KEY, next);
+      return next;
+    });
   }
 
 
@@ -642,6 +724,7 @@ export function App(props: AppProps = {}) {
         };
       })
     );
+    rememberLocalRecent(response.data.path);
   }
 
   const showV12FavoriteHint = useCallback((message: string) => {
@@ -800,8 +883,8 @@ export function App(props: AppProps = {}) {
       if (localPane.sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
       return localPane.sortDirection === "asc" ? value : -value;
     });
-    return copied;
-  }, [appSettings.general.showHiddenFiles, localPane.entries, localPane.sortDirection, localPane.sortKey]);
+    return filterEntriesByName(copied, localPane.filterText);
+  }, [appSettings.general.showHiddenFiles, localPane.entries, localPane.filterText, localPane.sortDirection, localPane.sortKey]);
 
   const sortedRemoteEntries = useMemo(() => {
     const copied = remotePane.entries.filter((entry) => appSettings.general.showHiddenFiles || !entry.name.startsWith("."));
@@ -814,8 +897,8 @@ export function App(props: AppProps = {}) {
       if (remotePane.sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
       return remotePane.sortDirection === "asc" ? value : -value;
     });
-    return copied;
-  }, [appSettings.general.showHiddenFiles, remotePane.entries, remotePane.sortDirection, remotePane.sortKey]);
+    return filterEntriesByName(copied, remotePane.filterText);
+  }, [appSettings.general.showHiddenFiles, remotePane.entries, remotePane.filterText, remotePane.sortDirection, remotePane.sortKey]);
 
   const selectedEntries = sortedEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
@@ -1510,6 +1593,8 @@ export function App(props: AppProps = {}) {
         };
       })
     );
+    const profileId = tabs.find((tab) => tab.id === tabId)?.remotePane.activeProfileId;
+    rememberRemoteRecent(profileId, payload.path);
     return true;
   }
 
@@ -2409,6 +2494,21 @@ export function App(props: AppProps = {}) {
         null
       : null;
   const activeProfileAlias = activeProfile?.alias?.trim() ?? null;
+  const remoteRecentPaths = activeProfile?.id ? (remoteRecentPathsByProfile[activeProfile.id] ?? []) : [];
+  const localPathSuggestions = buildPathSuggestions(localPane.pathInput, [
+    localPane.currentPath,
+    ...localPane.history.backStack.slice().reverse(),
+    ...localPane.history.forwardStack,
+    ...localRecentPaths.map((r) => r.path),
+    ...v12LocalFavorites.map((f) => f.path)
+  ]);
+  const remotePathSuggestions = buildPathSuggestions(remotePane.pathInput, [
+    remotePane.currentPath,
+    ...remotePane.history.backStack.slice().reverse(),
+    ...remotePane.history.forwardStack,
+    ...remoteRecentPaths.map((r) => r.path),
+    ...(activeProfile?.remoteFavorites ?? []).map((f) => f.path)
+  ]);
   const localPaneTitleV12 = localPaneTitleFromPath(localPane.currentPath);
   const remotePaneTitleV12 = activeProfileAlias
     ? activeProfileAlias
@@ -2534,6 +2634,11 @@ export function App(props: AppProps = {}) {
         inspectorToggleDisabled={v12InspectorToggleDisabled}
         inspectorTogglePressed={v12InspectorTogglePressed}
         onPreferences={openPreferences}
+        searchValue={activePane === "local" ? localPane.filterText : remotePane.filterText}
+        searchPlaceholder={`Filter ${activePane}`}
+        onSearchChange={(value) =>
+          activePane === "local" ? updateLocalFilter(activeTab.id, value) : updateRemoteFilter(activeTab.id, value)
+        }
       />
     ) : null;
 
@@ -2785,6 +2890,169 @@ export function App(props: AppProps = {}) {
     await refreshV12EmbeddedRemoteCatalog();
   }
 
+  const localNavTools = (
+    <div className="nav-efficiency-bar">
+      <form
+        className="path-form path-form--inline"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void navigateLocal(activeTab.id, localPane.pathInput);
+        }}
+      >
+        <input
+          value={localPane.pathInput}
+          list="cofinder-local-path-suggestions"
+          onChange={(event) =>
+            setTabs((prev) =>
+              prev.map((tab) =>
+                tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: event.target.value } } : tab
+              )
+            )
+          }
+          aria-label="Local path"
+        />
+        <datalist id="cofinder-local-path-suggestions">
+          {localPathSuggestions.map((path) => (
+            <option key={path} value={path} />
+          ))}
+        </datalist>
+      </form>
+      <input
+        className="pane-filter-input"
+        value={localPane.filterText}
+        onChange={(event) => updateLocalFilter(activeTab.id, event.target.value)}
+        placeholder="Filter names"
+        aria-label="Filter local files by name"
+      />
+      <select
+        className="history-select"
+        value=""
+        aria-label="Local recent locations"
+        onChange={(event) => {
+          const path = event.target.value;
+          if (path) void navigateLocal(activeTab.id, path, "push");
+        }}
+      >
+        <option value="">Recent</option>
+        {localRecentPaths.map((item) => (
+          <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
+            {item.label} - {item.path}
+          </option>
+        ))}
+      </select>
+      <select
+        className="history-select"
+        value=""
+        aria-label="Local back and forward history"
+        onChange={(event) => {
+          const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
+          if (path) void navigateLocal(activeTab.id, path, mode);
+        }}
+      >
+        <option value="">History</option>
+        {localPane.history.backStack.slice().reverse().map((path) => (
+          <option key={`back-${path}`} value={`back:${path}`}>
+            Back: {path}
+          </option>
+        ))}
+        {localPane.history.forwardStack.map((path) => (
+          <option key={`forward-${path}`} value={`forward:${path}`}>
+            Forward: {path}
+          </option>
+        ))}
+      </select>
+      <button type="button" className="toolbar-button" disabled={localRecentPaths.length === 0} onClick={clearLocalRecents}>
+        Clear Recent
+      </button>
+    </div>
+  );
+
+  const remoteNavTools = (
+    <div className="nav-efficiency-bar">
+      <form
+        className="path-form path-form--inline"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.pathInput, "push", activeTab.id);
+        }}
+      >
+        <input
+          value={remotePane.pathInput}
+          list="cofinder-remote-path-suggestions"
+          disabled={!remotePane.connectionId}
+          onChange={(event) =>
+            setTabs((prev) =>
+              prev.map((tab) =>
+                tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: event.target.value } } : tab
+              )
+            )
+          }
+          aria-label="Remote path"
+        />
+        <datalist id="cofinder-remote-path-suggestions">
+          {remotePathSuggestions.map((path) => (
+            <option key={path} value={path} />
+          ))}
+        </datalist>
+      </form>
+      <input
+        className="pane-filter-input"
+        value={remotePane.filterText}
+        disabled={!remotePane.connectionId}
+        onChange={(event) => updateRemoteFilter(activeTab.id, event.target.value)}
+        placeholder="Filter names"
+        aria-label="Filter remote files by name"
+      />
+      <select
+        className="history-select"
+        value=""
+        disabled={!remotePane.connectionId || remoteRecentPaths.length === 0}
+        aria-label="Remote recent locations"
+        onChange={(event) => {
+          const path = event.target.value;
+          if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
+        }}
+      >
+        <option value="">Recent</option>
+        {remoteRecentPaths.map((item) => (
+          <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
+            {item.label} - {item.path}
+          </option>
+        ))}
+      </select>
+      <select
+        className="history-select"
+        value=""
+        disabled={!remotePane.connectionId}
+        aria-label="Remote back and forward history"
+        onChange={(event) => {
+          const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
+          if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, mode, activeTab.id);
+        }}
+      >
+        <option value="">History</option>
+        {remotePane.history.backStack.slice().reverse().map((path) => (
+          <option key={`back-${path}`} value={`back:${path}`}>
+            Back: {path}
+          </option>
+        ))}
+        {remotePane.history.forwardStack.map((path) => (
+          <option key={`forward-${path}`} value={`forward:${path}`}>
+            Forward: {path}
+          </option>
+        ))}
+      </select>
+      <button
+        type="button"
+        className="toolbar-button"
+        disabled={!activeProfile?.id || remoteRecentPaths.length === 0}
+        onClick={() => clearRemoteRecents(activeProfile?.id)}
+      >
+        Clear Recent
+      </button>
+    </div>
+  );
+
   const localPaneEl = (
     <section
       className={localPaneSectionClass}
@@ -2802,6 +3070,7 @@ export function App(props: AppProps = {}) {
               pathRootLabel="Macintosh HD"
               onNavigate={(path) => void navigateLocal(activeTab.id, path)}
             />
+            {localNavTools}
           </div>
           <div className="v12m-pane-body">
             <div className="v12m-pane-split">
@@ -2986,27 +3255,7 @@ export function App(props: AppProps = {}) {
             </button>
           </div>
 
-          <form
-            className="path-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void navigateLocal(activeTab.id, localPane.pathInput);
-            }}
-          >
-            <input
-              value={localPane.pathInput}
-              onChange={(event) =>
-                setTabs((prev) =>
-                  prev.map((tab) =>
-                    tab.id === activeTab.id
-                      ? { ...tab, localPane: { ...tab.localPane, pathInput: event.target.value } }
-                      : tab
-                  )
-                )
-              }
-              aria-label="Local path"
-            />
-          </form>
+          {localNavTools}
 
           {localPane.error ? <div className="error-banner">{localPane.error}</div> : null}
 
@@ -3158,6 +3407,7 @@ export function App(props: AppProps = {}) {
                 badge={remoteBadgeV12}
                 onNavigate={() => {}}
               />
+              {remoteNavTools}
             </div>
             <div className="v12m-pane-body">
               <div className="v12m-pane-split">
@@ -3202,6 +3452,7 @@ export function App(props: AppProps = {}) {
                   </button>
                 }
               />
+              {remoteNavTools}
             </div>
             <div className="v12m-pane-body">
               <div className="v12m-pane-split">
@@ -3397,27 +3648,7 @@ export function App(props: AppProps = {}) {
                 </button>
               </div>
 
-              <form
-                className="path-form"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  void listRemotePath(remotePane.connectionId!, remotePane.pathInput, "push", activeTab.id);
-                }}
-              >
-                <input
-                  value={remotePane.pathInput}
-                  onChange={(event) =>
-                    setTabs((prev) =>
-                      prev.map((tab) =>
-                        tab.id === activeTab.id
-                          ? { ...tab, remotePane: { ...tab.remotePane, pathInput: event.target.value } }
-                          : tab
-                      )
-                    )
-                  }
-                  aria-label="Remote path"
-                />
-              </form>
+              {remoteNavTools}
 
               {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
 
@@ -4184,6 +4415,7 @@ function createLocalPaneState(): LocalPaneState {
   return {
     currentPath: "",
     pathInput: "",
+    filterText: "",
     entries: [],
     selectedFullPaths: [],
     selectionAnchorFullPath: null,
@@ -4206,6 +4438,7 @@ function createRemotePaneState(): RemotePaneState {
     homePath: "/",
     currentPath: "/",
     pathInput: "/",
+    filterText: "",
     entries: [],
     selectedFullPaths: [],
     selectionAnchorFullPath: null,
@@ -4274,4 +4507,55 @@ function promptForConflictPolicy(conflicts: TransferConflict[]): Exclude<Transfe
 
 function readLastLocalPath(): string {
   return window.localStorage.getItem(COFINDER_LAST_LOCAL_PATH_KEY)?.trim() ?? "";
+}
+
+function readRecentPathList(key: string): RecentPath[] {
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is RecentPath => {
+        if (typeof item !== "object" || item === null || Array.isArray(item)) return false;
+        const row = item as Record<string, unknown>;
+        return typeof row.path === "string" && typeof row.label === "string" && typeof row.visitedAt === "number";
+      })
+      .slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
+function readRemoteRecentPathsByProfile(): Record<string, RecentPath[]> {
+  try {
+    const raw = window.localStorage.getItem(COFINDER_REMOTE_RECENTS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return {};
+    const out: Record<string, RecentPath[]> = {};
+    for (const [profileId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!profileId.trim()) continue;
+      if (Array.isArray(value)) {
+        out[profileId] = value
+          .filter((item): item is RecentPath => {
+            if (typeof item !== "object" || item === null || Array.isArray(item)) return false;
+            const row = item as Record<string, unknown>;
+            return typeof row.path === "string" && typeof row.label === "string" && typeof row.visitedAt === "number";
+          })
+          .slice(0, 12);
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function writeJsonLocalStorage(key: string, value: unknown): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // Recent-path persistence is a convenience only; navigation must keep working if storage is unavailable.
+  }
 }

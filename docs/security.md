@@ -19,6 +19,12 @@
 - Settings are non-secret UI/behavior fields only: default local path, confirmation/display toggles, transfer conflict defaults, queue auto-hide delay, timestamp preservation, row density, inspector visibility, pane ratio, and sidebar visibility.
 - Settings must not store passwords, tokens, private keys, saved remote credentials, or free-form `rsync`/`ssh` arguments.
 
+## Navigation History Storage
+
+- V1.7 recent locations are stored in renderer localStorage as non-secret local paths and per-profile remote paths.
+- Recent locations must not store passwords, tokens, private keys, saved credentials, or command arguments.
+- Remote path autocomplete uses already-known paths only and does not crawl the server.
+
 ## IPC details and main logs
 
 - IPC failure payloads still use `{ ok, error }`; **`error.detail`** is length-limited and passed through a minimal scrubber for patterns such as `password`, `passphrase`, `privateKey`, and `token`.

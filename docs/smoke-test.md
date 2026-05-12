@@ -58,6 +58,17 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Appearance:** toggle compact/comfortable density, default inspector visibility, pane ratio, and sidebar visibility; relaunch and confirm settings apply.
 - **Shortcut display:** confirm Preferences shows the implemented shortcut list and that the bindings still match the V1.3 shortcut smoke section.
 
+## V1.7 search, filter, and navigation
+
+- **Local quick filter:** open a local folder with several files/folders, type a substring in the local filter box, and confirm only matching names remain. Clear the filter and confirm the full current listing returns.
+- **Remote quick filter:** connect to the remote test root, type a substring in the remote filter box or focus the remote pane and use the V12 toolbar filter, and confirm filtering is local to the already-loaded listing with no navigation.
+- **Selection safety:** select several rows, change the filter, and confirm the selection is cleared instead of leaving hidden selected rows active.
+- **Local autocomplete:** navigate to two or more local folders, type the beginning of a known recent/favorite path in the local path field, and confirm suggestions appear. Pick one and press Enter to navigate.
+- **Remote autocomplete:** navigate to two or more remote folders under the current profile, type the beginning of a visited path, and confirm suggestions appear without extra remote listing until you submit the path.
+- **Recent locations:** navigate local and remote paths, use the Recent dropdowns to jump back, then use Clear Recent and confirm the dropdown empties. Remote recents should be scoped to the active saved profile.
+- **History dropdown:** navigate A -> B -> C in local and remote panes, use Back/Forward buttons and the History dropdown to jump among entries, and confirm tab-local history remains isolated.
+- **Boundary check:** confirm favorites remain pinned sidebar shortcuts, recents are transient history, and Site Manager profiles are only connection records.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.

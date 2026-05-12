@@ -81,6 +81,11 @@
 - Renderer tab state:
   - each tab has independent local pane and remote pane.
   - each pane tracks path/history/sort/selection/error/loading.
+  - V1.7 filter text is per pane; changing it clears selection to avoid hidden active selections.
+- Navigation efficiency:
+  - Current-directory filters run entirely in renderer over already-loaded entries.
+  - Local/remote recent paths are renderer localStorage only (`cofinder.recent.*`).
+  - Remote recents are keyed by profile id; no additional SFTP traffic or main-process IPC is used for autocomplete.
 - Transfer queue:
   - global in main process, not per tab.
   - each task binds to `tabId` for UI context.
