@@ -97,6 +97,13 @@ export function V12TbIcon(props: { name: string }): ReactElement {
           <path d="M5 12l5-5 5 5" />
         </svg>
       );
+    case "home":
+      return (
+        <svg {...s}>
+          <path d="M4 9.5l6-5 6 5" />
+          <path d="M6 8.5v7h8v-7" />
+        </svg>
+      );
     case "arrow-clockwise":
       return (
         <svg {...s}>
@@ -113,6 +120,13 @@ export function V12TbIcon(props: { name: string }): ReactElement {
       return (
         <svg {...s}>
           <path d="M4 14h12M6 10l4 4 4-4M10 6v8" />
+        </svg>
+      );
+    case "copy":
+      return (
+        <svg {...s}>
+          <rect x="7" y="5" width="8" height="10" rx="1" />
+          <path d="M5 13.5H4.5a1 1 0 01-1-1v-8a1 1 0 011-1H11a1 1 0 011 1V5" />
         </svg>
       );
     case "folder-badge-plus":

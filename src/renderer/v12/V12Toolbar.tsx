@@ -5,11 +5,15 @@ export type V12ToolbarProps = {
   onBack: () => void;
   onForward: () => void;
   onUp: () => void;
+  onHome: () => void;
   onRefresh: () => void;
+  onCopyCurrentPath: () => void;
   backDisabled: boolean;
   forwardDisabled: boolean;
   upDisabled: boolean;
+  homeDisabled: boolean;
   refreshDisabled: boolean;
+  copyCurrentPathDisabled: boolean;
 
   /** Disconnected / failed: open Site Manager; connected: disconnect */
   onConnectAction: () => void;
@@ -77,6 +81,16 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
         >
           <V12TbIcon name="chevron-up" />
         </button>
+        <button
+          type="button"
+          className="v12m-tb"
+          title="Home"
+          aria-label="Home"
+          disabled={props.homeDisabled}
+          onClick={() => props.onHome()}
+        >
+          <V12TbIcon name="home" />
+        </button>
       </div>
       <span className="v12m-tsep" aria-hidden />
       <div className="v12m-tg">
@@ -89,6 +103,16 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
           onClick={() => props.onRefresh()}
         >
           <V12TbIcon name="arrow-clockwise" />
+        </button>
+        <button
+          type="button"
+          className="v12m-tb"
+          title="Copy current path"
+          aria-label="Copy current path"
+          disabled={props.copyCurrentPathDisabled}
+          onClick={() => props.onCopyCurrentPath()}
+        >
+          <V12TbIcon name="copy" />
         </button>
         <button
           type="button"

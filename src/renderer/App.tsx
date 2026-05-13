@@ -565,6 +565,9 @@ export function App(props: AppProps = {}) {
       } else if (cmd && event.shiftKey && key === "c") {
         void copySelection(activeTab.id, activePane, "path");
         prevent();
+      } else if (cmd && event.altKey && key === "c") {
+        void copyCurrentPath(activePane);
+        prevent();
       } else if (cmd && key === "r") {
         if (activePane === "local" && localPane.currentPath) void navigateLocal(activeTab.id, localPane.currentPath, "replace");
         if (activePane === "remote" && remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.currentPath, "replace", activeTab.id);
@@ -1301,7 +1304,9 @@ export function App(props: AppProps = {}) {
     }
 
     const { connectionId, homePath } = connectResult.data;
-    const initialPath = attempt.defaultRemotePathTrimmed || homePath || "/";
+    const restoredRemotePath =
+      appSettings.general.restoreLastSession && profileId ? remoteRecentPathsByProfile[profileId]?.[0]?.path : "";
+    const initialPath = restoredRemotePath || attempt.defaultRemotePathTrimmed || homePath || "/";
 
     await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, attempt.aliasForTitle, profileId ?? null, {
       host: attempt.host.trim(),
@@ -2079,6 +2084,13 @@ export function App(props: AppProps = {}) {
     if (!result.ok) setQueueError(result.error.message);
   }
 
+  async function copyCurrentPath(pane: ActivePane = activePane): Promise<void> {
+    const pathToCopy = pane === "local" ? localPane.currentPath : remotePane.currentPath;
+    if (!pathToCopy || (pane === "remote" && !remotePane.connectionId)) return;
+    const result = await window.cofinder.system.copyText({ text: pathToCopy });
+    if (!result.ok) setQueueError(result.error.message);
+  }
+
   async function renameLocalSelection(tabId: string, targetPath: string, nextName: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
@@ -2641,6 +2653,14 @@ export function App(props: AppProps = {}) {
             void listRemotePath(remotePane.connectionId, getParentPath(remotePane.currentPath), "push", activeTab.id);
           }
         }}
+        onHome={() => {
+          if (activePane === "local") {
+            if (localHomePath) void navigateLocal(activeTab.id, localHomePath, "push");
+            else void initializeLocalHome(activeTab.id);
+          } else if (remotePane.connectionId) {
+            void listRemotePath(remotePane.connectionId, remotePane.homePath || "/", "push", activeTab.id);
+          }
+        }}
         onRefresh={() => {
           if (activePane === "local") {
             if (localPane.currentPath) void navigateLocal(activeTab.id, localPane.currentPath, "replace");
@@ -2648,6 +2668,7 @@ export function App(props: AppProps = {}) {
             void listRemotePath(remotePane.connectionId, remotePane.currentPath, "replace", activeTab.id);
           }
         }}
+        onCopyCurrentPath={() => void copyCurrentPath(activePane)}
         backDisabled={
           activePane === "local"
             ? localPane.history.backStack.length === 0
@@ -2659,7 +2680,9 @@ export function App(props: AppProps = {}) {
             : remotePane.history.forwardStack.length === 0 || !remotePane.connectionId
         }
         upDisabled={activePane === "local" ? false : !remotePane.connectionId}
+        homeDisabled={activePane === "local" ? !localHomePath : !remotePane.connectionId}
         refreshDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
+        copyCurrentPathDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
         onConnectAction={() => {
           if (remoteConnected) void disconnectRemote(activeTab.id);
           else openSiteManagerForTab(activeTab.id);
@@ -4056,7 +4079,7 @@ export function App(props: AppProps = {}) {
                 />
               </label>
               {[
-                ["Restore last session", "restoreLastSession"],
+                ["Restore last local path and remote profile paths", "restoreLastSession"],
                 ["Confirm before delete", "confirmBeforeDelete"],
                 ["Show hidden files", "showHiddenFiles"]
               ].map(([label, key]) => (
