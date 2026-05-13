@@ -41,6 +41,10 @@ describe("rsync arg helpers", () => {
     expect(validateRsyncPath("foo/../bar")).toBe("/bar");
   });
 
+  it("allows unicode remote paths while still normalizing", () => {
+    expect(validateRsyncPath("/远程/数据/样本.txt")).toBe("/远程/数据/样本.txt");
+  });
+
   it("rejects dangerous/unsupported remote path characters", () => {
     expect(() => validateRsyncPath("/tmp/a\nfile")).toThrow(/unsupported|required|contains/i);
     expect(() => validateRsyncPath("/tmp/file$bad")).toThrow(/unsupported/i);

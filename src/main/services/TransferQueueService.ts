@@ -25,6 +25,7 @@ type TransferQueueDeps = {
   runCommand: RunCommand;
   spawnProcess: SpawnProcess;
   pathExists: (fullPath: string) => Promise<boolean>;
+  localPathKind: (fullPath: string) => Promise<"file" | "directory" | "other">;
 };
 
 export class TransferQueueService {
@@ -39,7 +40,8 @@ export class TransferQueueService {
       now: deps?.now ?? (() => Date.now()),
       runCommand: deps?.runCommand ?? runSimpleCommand,
       spawnProcess: deps?.spawnProcess ?? defaultSpawnProcess,
-      pathExists: deps?.pathExists ?? defaultPathExists
+      pathExists: deps?.pathExists ?? defaultPathExists,
+      localPathKind: deps?.localPathKind ?? defaultLocalPathKind
     };
   }
 
@@ -63,7 +65,12 @@ export class TransferQueueService {
       validateLocalPath(source);
       await ensureExistingPath(this.deps.pathExists, source);
       const sourceName = path.basename(source);
-      const remotePath = validateRsyncPath(request.remoteTargetOverrides?.[source] ?? posixPath.join(request.remoteDestinationDir, sourceName));
+      const sourceKind = await this.deps.localPathKind(source);
+      const destinationPath = validateRsyncPath(request.remoteTargetOverrides?.[source] ?? posixPath.join(request.remoteDestinationDir, sourceName));
+      const rsyncRemotePath =
+        sourceKind === "directory" && !request.remoteTargetOverrides?.[source]
+          ? validateRsyncPath(request.remoteDestinationDir)
+          : destinationPath;
       const task = this.makeTask({
         tabId: request.tabId,
         direction: "upload",
@@ -73,11 +80,11 @@ export class TransferQueueService {
         port: request.port,
         username: request.username,
         source,
-        destination: remotePath,
+        destination: destinationPath,
         sourceDisplay: source,
-        destinationDisplay: `${request.username}@${request.host}:${remotePath}`,
+        destinationDisplay: `${request.username}@${request.host}:${destinationPath}`,
         localPath: source,
-        remotePath,
+        remotePath: rsyncRemotePath,
         preserveTimestamps: request.preserveTimestamps ?? true
       });
       this.tasks.push(task);
@@ -247,16 +254,6 @@ export class TransferQueueService {
       this.failTask(task, rsyncCheck.message, rsyncCheck.detail);
       return;
     }
-    const sshCheck = await this.deps.runCommand(
-      "ssh",
-      ["-o", "BatchMode=yes", "-p", String(task.port), `${task.username}@${task.host}`, "true"],
-      "SSH key/passwordless login required for rsync transfer."
-    );
-    if (!sshCheck.ok) {
-      this.failTask(task, sshCheck.message, sshCheck.detail);
-      return;
-    }
-
     const args =
       task.direction === "upload"
         ? buildRsyncUploadArgs(task.port, task.username, task.host, task.localPath, task.remotePath, task.preserveTimestamps)
@@ -513,4 +510,11 @@ async function defaultPathExists(fullPath: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function defaultLocalPathKind(fullPath: string): Promise<"file" | "directory" | "other"> {
+  const stat = await fs.stat(fullPath);
+  if (stat.isDirectory()) return "directory";
+  if (stat.isFile()) return "file";
+  return "other";
 }
