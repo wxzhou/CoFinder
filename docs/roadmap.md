@@ -21,6 +21,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.8 | no standalone tag | Included in v1.0.0 |
 | V1.9 | no standalone tag | Included in v1.0.0 |
 | V2.0 | v1.0.0 | Shipped |
+| V2.1 | v1.1.0 | Planned |
 
 ## Shipped phases (summary)
 
@@ -50,6 +51,22 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V1.8 | no standalone tag | Remote Operations Expansion — included in v1.0.0 |
 | V1.9 | no standalone tag | Packaging, Updates, and Reliability — included in v1.0.0 |
 | V2.0 | v1.0.0 | Stable Personal Release — shipped |
+| V2.1 | v1.1.0 | v1.0 Feedback Stabilization — planned |
+
+## Planned Next Phase
+
+### V2.1 / v1.1.0 — v1.0 Feedback Stabilization
+
+V2.1 is driven by v1.0.0 hands-on feedback. It prioritizes correctness bugs before broader polish:
+
+- Transfer startup latency, Unicode path transfer support, and folder upload target semantics.
+- Remote folder delete and local/remote New Folder reliability.
+- Better text sniffing for remote preview, including `.bed`-style text files.
+- Inspector becomes the single Info surface; the Get Info modal is removed.
+- Restore last local/remote path preferences, Home and Copy Current Path navigation actions, stronger active-pane indicator.
+- macOS Preferences menu entry and resizable sidebar.
+
+See **`docs/dev/V2.1_PLAN.md`** for the detailed triage and acceptance checks.
 
 ## Explicitly out of scope or not on the main line (today)
 

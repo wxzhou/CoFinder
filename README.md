@@ -26,6 +26,7 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.4** sh
 | V1.8 | no standalone tag | Included in v1.0.0 |
 | V1.9 | no standalone tag | Included in v1.0.0 |
 | V2.0 | v1.0.0 | Shipped |
+| V2.1 | v1.1.0 | Planned |
 
 ## V1 Status
 
@@ -71,6 +72,12 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 - Full remote ACL editor; V1.8 only supports basic octal chmod.
 - Remote duplicate for directories or files larger than 50 MB.
 - Full i18n
+
+### Planned in V2.1 / v1.1.0
+
+V2.1 is a v1.0 feedback stabilization release. It is planned to address transfer startup latency, Unicode path transfer support, folder upload target semantics, remote folder deletion, New Folder reliability, `.bed` text preview sniffing, Inspector/Get Info consolidation, restore-last-path preferences, Home/Copy Current Path navigation, active-pane visibility, macOS Preferences menu integration, and resizable sidebar.
+
+Detailed scope lives in `docs/dev/V2.1_PLAN.md`.
 
 ### Included in v1.0.0: V1.9 Reliability
 

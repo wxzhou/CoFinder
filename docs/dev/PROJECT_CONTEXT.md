@@ -89,6 +89,11 @@ This document is the short-onboarding baseline for future post-V2.0 development.
    - `npm run build`
    - targeted manual smoke from `docs/smoke-test.md`
 
+## Current Planned Work
+
+- Next planned milestone: **V2.1 / v1.1.0**, tracked in `docs/dev/V2.1_PLAN.md`.
+- V2.1 is driven by v1.0.0 feedback and prioritizes transfer correctness, file-operation reliability, Inspector/Get Info consolidation, path/navigation polish, and macOS layout integration.
+
 ## Out of Scope for This Document
 
 - No speculative architecture rewrite.
