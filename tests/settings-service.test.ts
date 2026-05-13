@@ -19,13 +19,14 @@ describe("SettingsService", () => {
     const saved = await service.set({
       general: { showHiddenFiles: true },
       transfer: { defaultConflictPolicy: "rename", queueAutoHideDelayMs: 2500 },
-      appearance: { rowDensity: "compact", defaultPaneRatio: 0.7 }
+      appearance: { rowDensity: "compact", defaultPaneRatio: 0.7, sidebarWidth: 320 }
     });
 
     expect(saved.general.showHiddenFiles).toBe(true);
     expect(saved.transfer.defaultConflictPolicy).toBe("rename");
     expect(saved.transfer.queueAutoHideDelayMs).toBe(2500);
     expect(saved.appearance.rowDensity).toBe("compact");
+    expect(saved.appearance.sidebarWidth).toBe(320);
     await expect(service.get()).resolves.toEqual(saved);
   });
 
@@ -34,7 +35,7 @@ describe("SettingsService", () => {
       schemaVersion: 99,
       general: { confirmBeforeDelete: "no" },
       transfer: { defaultConflictPolicy: "cancel", queueAutoHideDelayMs: -1 },
-      appearance: { rowDensity: "huge", defaultPaneRatio: 1 }
+      appearance: { rowDensity: "huge", defaultPaneRatio: 1, sidebarWidth: 999 }
     });
 
     expect(settings.schemaVersion).toBe(2);
@@ -44,6 +45,7 @@ describe("SettingsService", () => {
     expect(settings.transfer.queueAutoHideDelayMs).toBe(0);
     expect(settings.appearance.rowDensity).toBe("comfortable");
     expect(settings.appearance.defaultPaneRatio).toBe(0.75);
+    expect(settings.appearance.sidebarWidth).toBe(420);
   });
 
   it("migrates v1 settings into the v2 onboarding field", () => {

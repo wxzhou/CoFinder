@@ -182,6 +182,7 @@ export type AppSettings = {
     defaultInspectorVisible: boolean;
     defaultPaneRatio: number;
     sidebarVisible: boolean;
+    sidebarWidth: number;
   };
 };
 
@@ -346,5 +347,6 @@ export interface IpcApi {
     openLogFile: () => Promise<IpcResponse<{ opened: true; path: string }>>;
     copyDiagnostics: () => Promise<IpcResponse<{ copied: true; diagnostics: DiagnosticsBundle }>>;
     checkForUpdates: () => Promise<IpcResponse<{ available: false; message: string }>>;
+    onOpenPreferences: (handler: () => void) => () => void;
   };
 }

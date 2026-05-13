@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, Menu } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -71,6 +71,7 @@ function createMainWindow(): BrowserWindow {
 app.whenReady().then(() => {
   registerProcessDiagnostics();
   registerIpcHandlers();
+  installApplicationMenu();
   createMainWindow();
 
   app.on("activate", () => {
@@ -79,6 +80,34 @@ app.whenReady().then(() => {
     }
   });
 });
+
+function installApplicationMenu(): void {
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        {
+          label: "Preferences...",
+          accelerator: "CmdOrCtrl+,",
+          click: () => BrowserWindow.getFocusedWindow()?.webContents.send("system:openPreferences")
+        },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" }
+      ]
+    },
+    { role: "fileMenu" },
+    { role: "editMenu" },
+    { role: "viewMenu" },
+    { role: "windowMenu" }
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

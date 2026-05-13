@@ -89,7 +89,12 @@ const api: IpcApi = {
     openLogFolder: () => ipcRenderer.invoke("system:openLogFolder"),
     openLogFile: () => ipcRenderer.invoke("system:openLogFile"),
     copyDiagnostics: () => ipcRenderer.invoke("system:copyDiagnostics"),
-    checkForUpdates: () => ipcRenderer.invoke("system:checkForUpdates")
+    checkForUpdates: () => ipcRenderer.invoke("system:checkForUpdates"),
+    onOpenPreferences: (handler) => {
+      const wrapped = () => handler();
+      ipcRenderer.on("system:openPreferences", wrapped);
+      return () => ipcRenderer.off("system:openPreferences", wrapped);
+    }
   }
 };
 

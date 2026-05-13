@@ -132,6 +132,29 @@
   padding: 10px 0 14px;
 }
 
+.cfv12-sidebar-wrap {
+  flex: 0 0 auto;
+  min-width: 180px;
+  max-width: 420px;
+  min-height: 0;
+  display: flex;
+}
+
+.cfv12-sidebar-wrap .cfv12-sidebar {
+  width: 100%;
+}
+
+.cfv12-sidebar-resizer {
+  flex: 0 0 5px;
+  cursor: col-resize;
+  background: transparent;
+  border-right: 1px solid var(--cfv12-sep);
+}
+
+.cfv12-sidebar-resizer:hover {
+  background: color-mix(in srgb, var(--cfv12-accent) 14%, transparent);
+}
+
 .cfv12-ssec {
   margin-bottom: 14px;
 }

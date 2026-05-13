@@ -21,7 +21,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     rowDensity: "comfortable",
     defaultInspectorVisible: false,
     defaultPaneRatio: 0.5,
-    sidebarVisible: true
+    sidebarVisible: true,
+    sidebarWidth: 260
   }
 };
 
@@ -75,7 +76,8 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
       rowDensity: rowDensity === "compact" || rowDensity === "comfortable" ? rowDensity : base.appearance.rowDensity,
       defaultInspectorVisible: bool(appearance.defaultInspectorVisible, base.appearance.defaultInspectorVisible),
       defaultPaneRatio: numberInRange(appearance.defaultPaneRatio, base.appearance.defaultPaneRatio, 0.25, 0.75),
-      sidebarVisible: bool(appearance.sidebarVisible, base.appearance.sidebarVisible)
+      sidebarVisible: bool(appearance.sidebarVisible, base.appearance.sidebarVisible),
+      sidebarWidth: numberInRange(appearance.sidebarWidth, base.appearance.sidebarWidth, 180, 420)
     }
   };
 }

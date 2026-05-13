@@ -183,7 +183,8 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     rowDensity: "comfortable",
     defaultInspectorVisible: false,
     defaultPaneRatio: 0.5,
-    sidebarVisible: true
+    sidebarVisible: true,
+    sidebarWidth: 260
   }
 };
 
@@ -428,6 +429,8 @@ export function App(props: AppProps = {}) {
     return off;
   }, []);
 
+  useEffect(() => window.cofinder.system.onOpenPreferences(openPreferences), [appSettings]);
+
   useEffect(() => {
     if (!marquee) return;
     const onMove = (event: MouseEvent) => {
@@ -659,6 +662,32 @@ export function App(props: AppProps = {}) {
     setAppSettings(res.data);
     setPreferences({ open: false, draft: res.data, error: "" });
     setV12PaneRatio(res.data.appearance.defaultPaneRatio);
+  }
+
+  function beginSidebarResize(event: ReactMouseEvent<HTMLDivElement>): void {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = appSettings.appearance.sidebarWidth;
+    let nextWidth = startWidth;
+    const clamp = (value: number) => Math.max(180, Math.min(420, value));
+    const onMove = (move: MouseEvent) => {
+      nextWidth = clamp(startWidth + move.clientX - startX);
+      setAppSettings((prev) => ({ ...prev, appearance: { ...prev.appearance, sidebarWidth: nextWidth } }));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      void window.cofinder.settings.set({ appearance: { sidebarWidth: nextWidth } }).then((res) => {
+        if (res.ok) {
+          setAppSettings(res.data);
+          setPreferences((prev) => ({ ...prev, draft: res.data }));
+        } else {
+          setQueueError(res.error.message);
+        }
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
   }
 
   async function dismissOnboarding(): Promise<void> {
@@ -3950,33 +3979,44 @@ export function App(props: AppProps = {}) {
           remotePane={remotePaneEl}
           sidebar={
             appSettings.appearance.sidebarVisible ? (
-              <V12LocalFavoritesSidebar
-              favorites={v12LocalFavorites}
-              currentLocalPath={localPane.currentPath || "/"}
-              hint={v12FavoriteHint}
-              remoteFavorites={activeProfile?.remoteFavorites ?? []}
-              remoteConnected={remoteConnected}
-              currentRemotePath={remotePane.currentPath || "/"}
-              onSelectFavorite={(path) => {
-                setActivePane("local");
-                clearLocalSelection(activeTab.id);
-                cancelV12LocalInspRevealTimer();
-                setV12LocalInspectorReveal(false);
-                void navigateLocal(activeTab.id, path, "push");
-              }}
-              onAddCurrentPath={() => void handleV12AddLocalFavorite()}
-              onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
-              onReorderFavorite={(id, direction) => void handleV12ReorderLocalFavorite(id, direction)}
-              onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
-              onSelectRemoteFavorite={(path) => {
-                setActivePane("remote");
-                clearRemoteSelection(activeTab.id);
-                if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
-              }}
-              onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
-              onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
-              onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
-            />
+              <>
+                <div className="cfv12-sidebar-wrap" style={{ width: `${appSettings.appearance.sidebarWidth}px` }}>
+                  <V12LocalFavoritesSidebar
+                    favorites={v12LocalFavorites}
+                    currentLocalPath={localPane.currentPath || "/"}
+                    hint={v12FavoriteHint}
+                    remoteFavorites={activeProfile?.remoteFavorites ?? []}
+                    remoteConnected={remoteConnected}
+                    currentRemotePath={remotePane.currentPath || "/"}
+                    onSelectFavorite={(path) => {
+                      setActivePane("local");
+                      clearLocalSelection(activeTab.id);
+                      cancelV12LocalInspRevealTimer();
+                      setV12LocalInspectorReveal(false);
+                      void navigateLocal(activeTab.id, path, "push");
+                    }}
+                    onAddCurrentPath={() => void handleV12AddLocalFavorite()}
+                    onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
+                    onReorderFavorite={(id, direction) => void handleV12ReorderLocalFavorite(id, direction)}
+                    onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
+                    onSelectRemoteFavorite={(path) => {
+                      setActivePane("remote");
+                      clearRemoteSelection(activeTab.id);
+                      if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
+                    }}
+                    onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
+                    onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
+                    onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
+                  />
+                </div>
+                <div
+                  className="cfv12-sidebar-resizer"
+                  role="separator"
+                  aria-orientation="vertical"
+                  title="Drag to resize sidebar"
+                  onMouseDown={beginSidebarResize}
+                />
+              </>
             ) : null
           }
         />
