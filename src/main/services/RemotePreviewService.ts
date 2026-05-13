@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { shell } from "electron";
@@ -70,7 +71,7 @@ export class RemotePreviewService {
       existing.modifyTime === modifyTime &&
       (await cacheFileStillMatches(existing))
     ) {
-      await openLocalPreview(existing.localPath);
+      await openLocalPreview(existing.localPath, existing.kind);
       return { opened: true, localPath: existing.localPath, kind: existing.kind };
     }
 
@@ -98,7 +99,7 @@ export class RemotePreviewService {
       localMtimeMs: localStat.mtimeMs,
       kind
     });
-    await openLocalPreview(localPath);
+    await openLocalPreview(localPath, kind);
     return { opened: true, localPath, kind };
   }
 
@@ -182,17 +183,41 @@ function isSupportedImage(sample: Buffer): boolean {
 function isLikelyText(sample: Buffer): boolean {
   if (sample.length === 0) return true;
   let suspicious = 0;
+  let highBit = 0;
   for (const byte of sample) {
     if (byte === 0) return false;
+    if (byte >= 0x80) highBit += 1;
     const control = byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d && byte !== 0x0c;
     if (control) suspicious += 1;
   }
-  return suspicious / sample.length < 0.02 && new TextDecoder("utf-8", { fatal: false }).decode(sample).length >= 0;
+  if (suspicious / sample.length >= 0.02) return false;
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(sample);
+    return true;
+  } catch {
+    return highBit === 0;
+  }
 }
 
-async function openLocalPreview(localPath: string): Promise<void> {
+async function openLocalPreview(localPath: string, kind: PreviewKind): Promise<void> {
+  if (process.platform === "darwin") {
+    const args = kind === "text" ? ["-t", localPath] : ["-a", "Preview", localPath];
+    await runOpenCommand(args);
+    return;
+  }
   const result = await shell.openPath(localPath);
   if (result) throw new RemotePreviewError("REMOTE_PREVIEW_FAILED", "Failed to open local preview file.", result);
+}
+
+async function runOpenCommand(args: string[]): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn("open", args, { stdio: "ignore" });
+    child.once("error", (error) => reject(new RemotePreviewError("REMOTE_PREVIEW_FAILED", "Failed to open local preview file.", String(error))));
+    child.once("exit", (code) => {
+      if (code === 0) resolve();
+      else reject(new RemotePreviewError("REMOTE_PREVIEW_FAILED", "Failed to open local preview file.", `open exited with ${code ?? "unknown"}`));
+    });
+  });
 }
 
 async function cacheFileStillMatches(entry: CacheEntry): Promise<boolean> {
