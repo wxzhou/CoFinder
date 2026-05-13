@@ -213,6 +213,23 @@ export class RemoteFileService {
     }
   }
 
+  async createTextFile(connectionId: string, parentPath: string, name?: string): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const client = connection.client as unknown as RemoteCreateClient;
+    const normalizedParent = this.normalizeRemotePath(parentPath);
+    const targetPath = name?.trim()
+      ? posixPath.join(normalizedParent, this.validateNewChildName(name))
+      : await this.nextAvailableTextFilePath(client, normalizedParent);
+    try {
+      if (name?.trim()) await this.assertRemotePathAvailable(client, targetPath);
+      await client.put(Buffer.from(""), targetPath);
+      return targetPath;
+    } catch (error) {
+      throw this.mapCreateFileError(error);
+    }
+  }
+
   async chmodPath(connectionId: string, targetPath: string, mode: number): Promise<void> {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
@@ -309,7 +326,7 @@ export class RemoteFileService {
 
   private validateNewChildName(name: string): string {
     const trimmed = name.trim();
-    if (!trimmed || trimmed === "." || trimmed === ".." || trimmed.includes("/") || trimmed.includes("\\")) {
+    if (!trimmed || trimmed === "." || trimmed === ".." || trimmed.includes("/") || trimmed.includes("\\") || /[\u0000\r\n]/.test(trimmed)) {
       throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Remote name is invalid.");
     }
     return trimmed;
@@ -386,7 +403,7 @@ export class RemoteFileService {
 
   private async deleteRemotePathRecursive(client: RemoteDeleteClient, targetPath: string): Promise<void> {
     const stat = await client.stat(targetPath);
-    if (stat.type === "d") {
+    if (resolveRemoteType(stat) === "directory") {
       const entries = (await client.list(targetPath)) as RemoteListItem[];
       for (const entry of entries) {
         if (entry.name === "." || entry.name === "..") continue;
@@ -473,6 +490,28 @@ export class RemoteFileService {
     throw new RemoteServiceError("REMOTE_DUPLICATE_FAILED", "Could not find an available duplicate name.");
   }
 
+  private async nextAvailableTextFilePath(client: RemoteCreateClient, parentPath: string): Promise<string> {
+    for (let i = 1; i <= 999; i += 1) {
+      const name = i === 1 ? "Untitled.txt" : `Untitled ${i}.txt`;
+      const candidate = posixPath.join(parentPath, name);
+      try {
+        await client.stat(candidate);
+      } catch {
+        return candidate;
+      }
+    }
+    throw new RemoteServiceError("REMOTE_CREATE_FILE_FAILED", "Could not find an available text file name.");
+  }
+
+  private async assertRemotePathAvailable(client: RemoteCreateClient, targetPath: string): Promise<void> {
+    try {
+      await client.stat(targetPath);
+      throw new RemoteServiceError("REMOTE_CREATE_FILE_FAILED", "Remote file already exists.");
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+    }
+  }
+
   private mapDeleteError(error: unknown): RemoteServiceError {
     const message =
       typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote delete failed";
@@ -510,6 +549,15 @@ export class RemoteFileService {
     if (/EACCES|Permission denied/i.test(message)) return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
     if (/No such file|ENOENT/i.test(message)) return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote parent path does not exist.", message);
     return new RemoteServiceError("REMOTE_MKDIR_FAILED", "Failed to create remote directory.", message);
+  }
+
+  private mapCreateFileError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote create file failed";
+    if (/already exists|EEXIST/i.test(message)) return new RemoteServiceError("REMOTE_CREATE_FILE_FAILED", "Remote file already exists.", message);
+    if (/EACCES|Permission denied/i.test(message)) return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    if (/No such file|ENOENT/i.test(message)) return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote parent path does not exist.", message);
+    return new RemoteServiceError("REMOTE_CREATE_FILE_FAILED", "Failed to create remote text file.", message);
   }
 
   private mapChmodError(error: unknown): RemoteServiceError {
@@ -552,6 +600,11 @@ type RemoteDeleteClient = {
 
 type RemoteDuplicateClient = RemoteDeleteClient & {
   get: (path: string) => Promise<Buffer | NodeJS.ReadableStream>;
+  put: (input: Buffer | NodeJS.ReadableStream, path: string) => Promise<unknown>;
+};
+
+type RemoteCreateClient = {
+  stat: (path: string) => Promise<RemoteStatItem>;
   put: (input: Buffer | NodeJS.ReadableStream, path: string) => Promise<unknown>;
 };
 

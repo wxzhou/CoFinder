@@ -73,6 +73,36 @@ describe("LocalFileService deletePaths", () => {
   });
 });
 
+describe("LocalFileService creation", () => {
+  it("creates a local directory under the current folder", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+
+    const created = await service.makeDirectory(dir, "new folder");
+    expect(created).toBe(path.join(dir, "new folder"));
+    await expect(fs.stat(created)).resolves.toMatchObject({ isDirectory: expect.any(Function) });
+  });
+
+  it("creates unique local text files without overwriting existing files", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    await fs.writeFile(path.join(dir, "Untitled.txt"), "keep me");
+
+    const created = await service.createTextFile(dir);
+    expect(created).toBe(path.join(dir, "Untitled 2.txt"));
+    await expect(fs.readFile(path.join(dir, "Untitled.txt"), "utf8")).resolves.toBe("keep me");
+    await expect(fs.readFile(created, "utf8")).resolves.toBe("");
+  });
+
+  it("rejects invalid local child names", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+
+    await expect(service.makeDirectory(dir, "bad/name")).rejects.toMatchObject({ code: "UNKNOWN" });
+    await expect(service.createTextFile(dir, "../bad.txt")).rejects.toMatchObject({ code: "UNKNOWN" });
+  });
+});
+
 describe("LocalFileService getPathInfo", () => {
   it("returns info for a local file", async () => {
     const service = new LocalFileService();

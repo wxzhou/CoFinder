@@ -20,9 +20,11 @@ export type V12ToolbarProps = {
   onUpload: () => void;
   onDownload: () => void;
   onNewFolder: () => void;
+  onNewTextFile: () => void;
   uploadDisabled: boolean;
   downloadDisabled: boolean;
   newFolderDisabled: boolean;
+  newTextFileDisabled: boolean;
 
   onDelete: () => void;
   deleteDisabled: boolean;
@@ -127,12 +129,22 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
         <button
           type="button"
           className="v12m-tb"
-          title="New remote folder"
+          title="New folder"
           aria-label="New folder"
           disabled={props.newFolderDisabled}
           onClick={() => props.onNewFolder()}
         >
           <V12TbIcon name="folder-badge-plus" />
+        </button>
+        <button
+          type="button"
+          className="v12m-tb"
+          title="New text file"
+          aria-label="New text file"
+          disabled={props.newTextFileDisabled}
+          onClick={() => props.onNewTextFile()}
+        >
+          <V12TbIcon name="doc-badge-plus" />
         </button>
         <button
           type="button"

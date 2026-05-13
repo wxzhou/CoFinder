@@ -2435,13 +2435,68 @@ export function App(props: AppProps = {}) {
 
   async function createRemoteDirectory(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
-    if (!tab?.remotePane.connectionId) return;
+    if (!tab?.remotePane.connectionId) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Connect to a remote server first." } } : item
+        )
+      );
+      return;
+    }
     const name = window.prompt("New remote folder name");
     if (!name?.trim()) return;
     const result = await window.cofinder.remote.mkdir({
       connectionId: tab.remotePane.connectionId,
       parentPath: tab.remotePane.currentPath,
       name
+    });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+  }
+
+  async function createLocalDirectory(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.localPane.currentPath) return;
+    const name = window.prompt("New local folder name");
+    if (!name?.trim()) return;
+    const result = await window.cofinder.local.mkdir({
+      parentPath: tab.localPane.currentPath,
+      name
+    });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+      return;
+    }
+    await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+  }
+
+  async function createTextFile(tabId: string, pane: ActivePane): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "local") {
+      if (!tab.localPane.currentPath) return;
+      const result = await window.cofinder.local.createTextFile({ parentPath: tab.localPane.currentPath });
+      if (!result.ok) {
+        setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+        return;
+      }
+      await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+      return;
+    }
+    if (!tab.remotePane.connectionId) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Connect to a remote server first." } } : item
+        )
+      );
+      return;
+    }
+    const result = await window.cofinder.remote.createTextFile({
+      connectionId: tab.remotePane.connectionId,
+      parentPath: tab.remotePane.currentPath
     });
     if (!result.ok) {
       setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
@@ -2741,12 +2796,14 @@ export function App(props: AppProps = {}) {
         connectActionAriaLabel={remoteConnected ? "Disconnect" : "Connect"}
         onUpload={() => void enqueueUpload(activeTab.id)}
         onDownload={() => void enqueueDownload(activeTab.id)}
-        onNewFolder={() => void createRemoteDirectory(activeTab.id)}
+        onNewFolder={() => void (activePane === "local" ? createLocalDirectory(activeTab.id) : createRemoteDirectory(activeTab.id))}
+        onNewTextFile={() => void createTextFile(activeTab.id, activePane)}
         uploadDisabled={localPane.selectedFullPaths.length === 0 || !remotePane.connectionId}
         downloadDisabled={
           remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId
         }
-        newFolderDisabled={!remotePane.connectionId}
+        newFolderDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
+        newTextFileDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
         onDelete={() => openDeleteConfirm(activeTab.id, activePane)}
         deleteDisabled={
           activePane === "local"
@@ -3390,6 +3447,22 @@ export function App(props: AppProps = {}) {
             >
               Upload
             </button>
+            <button
+              type="button"
+              className="toolbar-button"
+              disabled={!localPane.currentPath}
+              onClick={() => void createLocalDirectory(activeTab.id)}
+            >
+              New Folder
+            </button>
+            <button
+              type="button"
+              className="toolbar-button"
+              disabled={!localPane.currentPath}
+              onClick={() => void createTextFile(activeTab.id, "local")}
+            >
+              New Text File
+            </button>
             <button type="button" className="toolbar-button" onClick={() => void openTerminalHere(activeTab.id, "local")}>
               Terminal
             </button>
@@ -3785,6 +3858,9 @@ export function App(props: AppProps = {}) {
                 </button>
                 <button type="button" className="toolbar-button" onClick={() => void createRemoteDirectory(activeTab.id)}>
                   New Folder
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void createTextFile(activeTab.id, "remote")}>
+                  New Text File
                 </button>
                 <button type="button" className="toolbar-button" onClick={() => void openTerminalHere(activeTab.id, "remote")}>
                   SSH Terminal
@@ -4298,6 +4374,26 @@ export function App(props: AppProps = {}) {
               <button
                 type="button"
                 className="context-item"
+                onClick={async () => {
+                  await createLocalDirectory(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                New Folder
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await createTextFile(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                New Text File
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 disabled={
                   (tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) === 0 ||
                   !(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.connectionId ?? null)
@@ -4408,6 +4504,16 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 New Folder
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await createTextFile(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                New Text File
               </button>
               <button
                 type="button"

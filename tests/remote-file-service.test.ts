@@ -121,6 +121,65 @@ describe("RemoteFileService path/list behavior", () => {
     expect(rmdir).toHaveBeenCalledWith("/dir");
   });
 
+  it("deletes remote folders when stat returns numeric directory type", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/dir") return { type: 2, mode: 0o040755 };
+      if (target === "/dir/child.txt") return { type: 1, mode: 0o100644 };
+      throw new Error("No such file");
+    });
+    const list = vi.fn(async (target: string) => {
+      if (target === "/dir") return [{ name: "child.txt", type: "-", size: 1, modifyTime: Date.now() }];
+      return [];
+    });
+    const del = vi.fn().mockResolvedValue(undefined);
+    const rmdir = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, list, delete: del, rmdir }
+      })
+    } as any);
+
+    await expect(service.deletePaths("c1", ["/dir"])).resolves.toBe(1);
+    expect(del).toHaveBeenCalledWith("/dir/child.txt");
+    expect(rmdir).toHaveBeenCalledWith("/dir");
+  });
+
+  it("creates a unique remote text file without overwriting existing files", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/work/Untitled.txt") return { type: "-", size: 3, modifyTime: Date.now() };
+      throw new Error("No such file");
+    });
+    const put = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, put }
+      })
+    } as any);
+
+    await expect(service.createTextFile("c1", "/work")).resolves.toBe("/work/Untitled 2.txt");
+    expect(put).toHaveBeenCalledWith(Buffer.from(""), "/work/Untitled 2.txt");
+  });
+
+  it("rejects invalid remote text file names before uploading", async () => {
+    const stat = vi.fn().mockRejectedValue(new Error("No such file"));
+    const put = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, put }
+      })
+    } as any);
+
+    await expect(service.createTextFile("c1", "/work", "bad/name.txt")).rejects.toMatchObject({ code: "REMOTE_INVALID_INPUT" });
+    await expect(service.createTextFile("c1", "/work", "bad\nname.txt")).rejects.toMatchObject({ code: "REMOTE_INVALID_INPUT" });
+    expect(put).not.toHaveBeenCalled();
+  });
+
   it("maps remote delete missing path to REMOTE_NOT_FOUND", async () => {
     const stat = vi.fn().mockRejectedValue(new Error("No such file or directory"));
     const list = vi.fn().mockResolvedValue([]);

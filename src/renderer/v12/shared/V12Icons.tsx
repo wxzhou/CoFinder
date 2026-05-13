@@ -122,6 +122,13 @@ export function V12TbIcon(props: { name: string }): ReactElement {
           <path d="M10 11v4M8 13h4" />
         </svg>
       );
+    case "doc-badge-plus":
+      return (
+        <svg {...s}>
+          <path d="M5 3.5h6.5L15 7v9.5H5v-13z" />
+          <path d="M11.5 3.5V7H15M10 10.5v4M8 12.5h4" />
+        </svg>
+      );
     case "trash":
       return (
         <svg {...s}>

@@ -9,6 +9,8 @@ const api: IpcApi = {
     getHomePath: () => ipcRenderer.invoke("local:getHomePath"),
     rename: (request) => ipcRenderer.invoke("local:rename", request),
     delete: (request) => ipcRenderer.invoke("local:delete", request),
+    mkdir: (request) => ipcRenderer.invoke("local:mkdir", request),
+    createTextFile: (request) => ipcRenderer.invoke("local:createTextFile", request),
     getInfo: (request) => ipcRenderer.invoke("local:getInfo", request)
   },
   remote: {
@@ -20,6 +22,7 @@ const api: IpcApi = {
     delete: (request) => ipcRenderer.invoke("remote:delete", request),
     getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request),
     mkdir: (request) => ipcRenderer.invoke("remote:mkdir", request),
+    createTextFile: (request) => ipcRenderer.invoke("remote:createTextFile", request),
     chmod: (request) => ipcRenderer.invoke("remote:chmod", request),
     duplicate: (request) => ipcRenderer.invoke("remote:duplicate", request),
     directorySizeStart: (request) => ipcRenderer.invoke("remote:directorySizeStart", request),

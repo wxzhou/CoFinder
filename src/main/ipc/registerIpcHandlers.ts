@@ -164,6 +164,29 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.mkdir, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:mkdir request.");
+      const parentPath = validateLocalPathInput(body.parentPath, "LOCAL_INVALID_INPUT", "parentPath");
+      const name = requiredString(body.name, "name", "LOCAL_INVALID_INPUT", undefined, { maxLength: 255 });
+      const createdPath = await localFileService.makeDirectory(parentPath, name);
+      return ok({ created: true as const, path: createdPath });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_MKDIR_FAILED", "Failed to create local directory.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.local.createTextFile, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:createTextFile request.");
+      const parentPath = validateLocalPathInput(body.parentPath, "LOCAL_INVALID_INPUT", "parentPath");
+      const createdPath = await localFileService.createTextFile(parentPath, optionalString(body.name));
+      return ok({ created: true as const, path: createdPath });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_CREATE_FILE_FAILED", "Failed to create local text file.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.local.getInfo, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:getInfo request.");
@@ -303,6 +326,18 @@ export function registerIpcHandlers(): void {
       return ok({ created: true as const, path: createdPath });
     } catch (error) {
       return toIpcError(error, "REMOTE_MKDIR_FAILED", "Failed to create remote directory.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.createTextFile, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:createTextFile request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const parentPath = normalizeRemotePathInput(body.parentPath, "REMOTE_INVALID_INPUT", "parentPath");
+      const createdPath = await remoteFileService.createTextFile(connectionId, parentPath, optionalString(body.name));
+      return ok({ created: true as const, path: createdPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_CREATE_FILE_FAILED", "Failed to create remote text file.");
     }
   });
 

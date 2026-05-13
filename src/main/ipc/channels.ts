@@ -6,6 +6,8 @@ export const IPC_CHANNELS = {
     getHomePath: "local:getHomePath",
     rename: "local:rename",
     delete: "local:delete",
+    mkdir: "local:mkdir",
+    createTextFile: "local:createTextFile",
     getInfo: "local:getInfo"
   },
   remote: {
@@ -17,6 +19,7 @@ export const IPC_CHANNELS = {
     delete: "remote:delete",
     getInfo: "remote:getInfo",
     mkdir: "remote:mkdir",
+    createTextFile: "remote:createTextFile",
     chmod: "remote:chmod",
     duplicate: "remote:duplicate",
     directorySizeStart: "remote:directorySizeStart",
