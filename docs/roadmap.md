@@ -21,7 +21,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.8 | no standalone tag | Included in v1.0.0 |
 | V1.9 | no standalone tag | Included in v1.0.0 |
 | V2.0 | v1.0.0 | Shipped |
-| V2.1 | v1.1.0 | Planned |
+| V2.1 | v1.1.0 | Shipped |
 
 ## Shipped phases (summary)
 
@@ -51,13 +51,13 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V1.8 | no standalone tag | Remote Operations Expansion — included in v1.0.0 |
 | V1.9 | no standalone tag | Packaging, Updates, and Reliability — included in v1.0.0 |
 | V2.0 | v1.0.0 | Stable Personal Release — shipped |
-| V2.1 | v1.1.0 | v1.0 Feedback Stabilization — planned |
+| V2.1 | v1.1.0 | v1.0 Feedback Stabilization — shipped |
 
-## Planned Next Phase
+## Latest Shipped Phase
 
 ### V2.1 / v1.1.0 — v1.0 Feedback Stabilization
 
-V2.1 is driven by v1.0.0 hands-on feedback. It prioritizes correctness bugs before broader polish:
+V2.1 is driven by v1.0.0 hands-on feedback. It prioritized correctness bugs before broader polish:
 
 - Transfer startup latency, Unicode path transfer support, and folder upload target semantics.
 - Remote folder delete and local/remote New Folder reliability.

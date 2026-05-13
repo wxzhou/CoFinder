@@ -4,11 +4,26 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v1.0.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest shipped release: v1.1.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.0.0**.
+No user-facing changes since **v1.1.0**.
+
+## v1.1.0 — Product milestone V2.1
+
+V2.1 is a stabilization release driven by v1.0.0 hands-on feedback.
+
+- Transfers start promptly by removing the extra SSH preflight delay while keeping rsync BatchMode safeguards.
+- Folder uploads now target the selected remote directory once, avoiding duplicated `/folder/folder` nesting.
+- Unicode local and remote transfer paths, including Chinese characters, are accepted while shell-dangerous/control characters remain blocked.
+- Remote folder deletion handles SFTP directory stat variants correctly.
+- Local and remote New Folder actions are pane-aware, return visible errors, and the app adds New Text File for both panes with unique default names.
+- Remote preview text sniffing now handles `.bed`, tab-delimited text, and UTF-8 content by content rather than extension; text previews open with the macOS text editor path.
+- Inspector is the single info surface: the old Get Info modal is removed, core metadata moved into Inspector, and directory child file/folder counts are shown.
+- Selecting a row no longer auto-opens Inspector and squeezes the file list; explicit Inspector toggle or `Cmd+I` reveals it.
+- Navigation polish adds active-pane Home, Copy Current Path, `Cmd+Option+C`, stronger active-pane styling, and per-profile remote last-path restore when restore-last-session is enabled.
+- macOS application menu now exposes Preferences, and the V12 sidebar can be resized with persisted width.
 
 ## v1.0.0 — Product milestone V2.0
 

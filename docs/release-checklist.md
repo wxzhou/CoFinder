@@ -132,6 +132,13 @@
 - Run the full smoke checklist, with the remote subset limited to an isolated test root.
 - Confirm README, CHANGELOG, roadmap, security, architecture, project context, and both V1.9/V2.0 plan files match the implemented app.
 - Confirm package version, git tag `v1.0.0`, dmg/zip filenames, and release notes agree.
+
+## V2.1 v1.1.0 gates
+
+- Run `npm test`, `npm run typecheck`, `npm run build`, and `npm run check:secrets`.
+- Run the V2.1 smoke section in `docs/smoke-test.md`, including isolated SFTP tests under `/mnt/gpfs1/Users/zhouwenxiong/CoFinder_test` when using `sge`.
+- Confirm README, CHANGELOG, roadmap, project context, and `docs/dev/V2.1_PLAN.md` match the implemented app.
+- Confirm package version, git tag `v1.1.0`, dmg/zip filenames, and release notes agree before publishing.
 - Confirm the stable-release scope cuts are explicit: no remote edit auto-sync, no full auto-update install, no App Store, no cross-platform port.
 - Confirm diagnostics, logs, profiles, credentials, and settings contain no plaintext secrets.
 - Launch the packaged app and verify the renderer loads from `file://` without a blank window.

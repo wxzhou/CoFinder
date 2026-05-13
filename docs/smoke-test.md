@@ -93,6 +93,16 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.
 - **Packaged file load:** launch `release/mac-arm64/CoFinder.app` or the dmg-installed app and confirm the V12 shell renders from `file://` without a blank page.
 - **Release identity:** confirm About/version surfaces `1.0.0`, artifact filenames use `CoFinder-1.0.0-arm64`, and docs/changelog refer to V2.0/v1.0.0 consistently.
+
+## V2.1 feedback stabilization
+
+- **Transfer startup:** upload and download a small file; tasks should move from running to active transfer without an unexplained fixed delay.
+- **Folder target:** upload a local folder `xyz` into a remote target and confirm the result is `target/xyz`, not `target/xyz/xyz`.
+- **Unicode paths:** upload/download files and folders with Chinese characters in local and remote paths.
+- **Create/delete:** create local and remote folders, create local and remote text files, and delete local and remote folders inside isolated test roots.
+- **Remote preview:** open a remote `.bed` or tab-delimited text file and a common image; binary unsupported files should show a clear unsupported message.
+- **Inspector:** `Cmd+I`, context-menu Show Inspector, and toolbar Inspector should reveal the Inspector without opening a modal; directory selections should show file/folder child counts.
+- **Navigation/layout:** verify Home, Copy Current Path (`Cmd+Option+C`), active-pane indicator, macOS CoFinder > Preferences, restore-last-path behavior, and persisted sidebar resizing.
 - **Scope cuts:** confirm there is no UI implying remote edit auto-sync, full auto-update install, App Store distribution, or cross-platform support.
 - **Security closeout:** repeat profile/credential/settings/log/diagnostics checks and confirm no plaintext secrets are exposed.
 
