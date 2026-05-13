@@ -125,10 +125,13 @@ describe("LocalFileService getPathInfo", () => {
     const nested = path.join(folder, "a.bin");
     await fs.mkdir(folder, { recursive: true });
     await fs.writeFile(nested, Buffer.alloc(4096));
+    await fs.mkdir(path.join(folder, "child-folder"));
 
     const info = await service.getPathInfo(folder);
     expect(info.type).toBe("directory");
     expect(info.size).toBe(4096);
+    expect(info.fileCount).toBe(1);
+    expect(info.folderCount).toBe(1);
   });
 
   it("can skip recursive size calculation for local directory", async () => {

@@ -44,7 +44,6 @@ import type {
   PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
-  RemoteDirectorySizeUpdatePayload,
   TransferConflict,
   TransferConflictPolicy,
   TransferUpdatePayload
@@ -115,14 +114,6 @@ type DeleteConfirmState = {
   names: string[];
 };
 
-type InfoDialogState = {
-  pane: "local" | "remote";
-  info: PathInfo;
-  isSizeLoading: boolean;
-  sizeJobId?: string;
-  sizeCapped?: boolean;
-};
-
 type ActivePane = "local" | "remote";
 
 type TransferDragPayload = {
@@ -174,9 +165,6 @@ const COFINDER_LOCAL_RECENTS_KEY = "cofinder.recent.localPaths.v1";
 const COFINDER_REMOTE_RECENTS_KEY = "cofinder.recent.remotePathsByProfile.v1";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
-/** After a row `click` with `detail === 1`, wait this long before showing inspector so a double-click rarely mounts the column. Cmd+A bypasses. If already revealed, no delay and no hide. */
-const V12_INSPECTOR_CLICK_GAP_MS = 350;
-
 const DEFAULT_RENDERER_SETTINGS: AppSettings = {
   schemaVersion: 2,
   general: {
@@ -262,8 +250,6 @@ export function App(props: AppProps = {}) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
-  const [infoDialog, setInfoDialog] = useState<InfoDialogState | null>(null);
-  const infoRequestTokenRef = useRef(0);
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
@@ -302,23 +288,9 @@ export function App(props: AppProps = {}) {
   };
   const scheduleV12LocalInspRevealFromRowClick = (): void => {
     cancelV12LocalInspRevealTimer();
-    if (v12LocalInspectorReveal) {
-      return;
-    }
-    v12LocalInspRevealTimerRef.current = setTimeout(() => {
-      v12LocalInspRevealTimerRef.current = null;
-      setV12LocalInspectorReveal(true);
-    }, V12_INSPECTOR_CLICK_GAP_MS);
   };
   const scheduleV12RemoteInspRevealFromRowClick = (): void => {
     cancelV12RemoteInspRevealTimer();
-    if (v12RemoteInspectorReveal) {
-      return;
-    }
-    v12RemoteInspRevealTimerRef.current = setTimeout(() => {
-      v12RemoteInspRevealTimerRef.current = null;
-      setV12RemoteInspectorReveal(true);
-    }, V12_INSPECTOR_CLICK_GAP_MS);
   };
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
@@ -457,31 +429,6 @@ export function App(props: AppProps = {}) {
   }, []);
 
   useEffect(() => {
-    const off = window.cofinder.remote.onDirectorySizeUpdate((payload: RemoteDirectorySizeUpdatePayload) => {
-      setInfoDialog((prev) => {
-        if (!prev || prev.sizeJobId !== payload.jobId) return prev;
-        if (payload.status === "success") {
-          return {
-            ...prev,
-            isSizeLoading: false,
-            sizeCapped: payload.capped,
-            info: { ...prev.info, size: payload.size ?? prev.info.size }
-          };
-        }
-        if (payload.status === "failed") {
-          return { ...prev, isSizeLoading: false };
-        }
-        if (payload.status === "canceled") {
-          return { ...prev, isSizeLoading: false, sizeJobId: undefined };
-        }
-        return prev;
-      });
-      if (payload.status === "failed" && payload.error) setQueueError(payload.error);
-    });
-    return off;
-  }, []);
-
-  useEffect(() => {
     if (!marquee) return;
     const onMove = (event: MouseEvent) => {
       const rect = normalizeDragRect(marquee.startX, marquee.startY, event.clientX, event.clientY);
@@ -576,7 +523,6 @@ export function App(props: AppProps = {}) {
           );
           if (uiShell === "v12") {
             cancelV12LocalInspRevealTimer();
-            setV12LocalInspectorReveal(true);
           }
           event.preventDefault();
           event.stopPropagation();
@@ -590,7 +536,6 @@ export function App(props: AppProps = {}) {
           );
           if (uiShell === "v12") {
             cancelV12RemoteInspRevealTimer();
-            setV12RemoteInspectorReveal(true);
           }
           event.preventDefault();
           event.stopPropagation();
@@ -1000,10 +945,14 @@ export function App(props: AppProps = {}) {
     cancelV12LocalInspRevealTimer();
     cancelV12RemoteInspRevealTimer();
     const tab = tabs.find((t) => t.id === activeTabId) ?? activeTab;
-    const rc = tab.remotePane.connectionStatus === "connected" && !!tab.remotePane.connectionId;
-    setV12LocalInspectorReveal(tab.localPane.selectedFullPaths.length > 0);
-    setV12RemoteInspectorReveal(rc && tab.remotePane.selectedFullPaths.length > 0);
-  }, [activeTabId, uiShell, tabs, activeTab]);
+    setV12LocalInspectorReveal(appSettings.appearance.defaultInspectorVisible && tab.localPane.selectedFullPaths.length > 0);
+    setV12RemoteInspectorReveal(
+      appSettings.appearance.defaultInspectorVisible &&
+        tab.remotePane.connectionStatus === "connected" &&
+        !!tab.remotePane.connectionId &&
+        tab.remotePane.selectedFullPaths.length > 0
+    );
+  }, [activeTabId, uiShell, tabs, activeTab, appSettings.appearance.defaultInspectorVisible]);
 
   useEffect(() => {
     if (uiShell !== "v12") return;
@@ -1030,13 +979,6 @@ export function App(props: AppProps = {}) {
       }
       const base = r.data.info;
       setV12LocalInsp({ status: "ready", info: base, error: "" });
-      if (base.type === "directory") {
-        const r2 = await window.cofinder.local.getInfo({ path, includeDirectorySize: true });
-        if (token !== v12LocalInspTokenRef.current) return;
-        if (r2.ok) {
-          setV12LocalInsp({ status: "ready", info: { ...base, size: r2.data.info.size }, error: "" });
-        }
-      }
     })();
   }, [uiShell, remoteConnected, activeTab.id, localPane.selectedFullPaths, v12LocalInspectorReveal]);
 
@@ -1065,13 +1007,6 @@ export function App(props: AppProps = {}) {
       }
       const base = r.data.info;
       setV12RemoteInsp({ status: "ready", info: base, error: "" });
-      if (base.type === "directory") {
-        const r2 = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: true });
-        if (token !== v12RemoteInspTokenRef.current) return;
-        if (r2.ok) {
-          setV12RemoteInsp({ status: "ready", info: { ...base, size: r2.data.info.size }, error: "" });
-        }
-      }
     })();
   }, [uiShell, remotePane.connectionId, remotePane.selectedFullPaths, activeTab.id, v12RemoteInspectorReveal]);
 
@@ -2357,80 +2292,18 @@ export function App(props: AppProps = {}) {
   async function openInfoDialog(tabId: string, pane: "local" | "remote"): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const token = ++infoRequestTokenRef.current;
     if (pane === "local") {
-      const targetPath = tab.localPane.selectedFullPaths[0];
-      if (!targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
-      const result = await window.cofinder.local.getInfo({ path: targetPath, includeDirectorySize: false });
-      if (!result.ok) {
-        setTabs((prev) =>
-          prev.map((item) =>
-            item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
-          )
-        );
-        return;
-      }
-      const shouldLoadSize = result.data.info.type === "directory";
-      setInfoDialog({
-        pane: "local",
-        info: result.data.info,
-        isSizeLoading: shouldLoadSize
-      });
-      if (shouldLoadSize) {
-        void (async () => {
-          const sizeRes = await window.cofinder.local.getInfo({ path: targetPath, includeDirectorySize: true });
-          if (!sizeRes.ok) return;
-          setInfoDialog((prev) => {
-            if (!prev || infoRequestTokenRef.current !== token) return prev;
-            return {
-              ...prev,
-              info: { ...prev.info, size: sizeRes.data.info.size },
-              isSizeLoading: false
-            };
-          });
-        })();
-      }
+      if (tab.localPane.selectedFullPaths.length !== 1) return;
+      setActivePane("local");
+      cancelV12LocalInspRevealTimer();
+      setV12LocalInspectorReveal(true);
       return;
     }
 
-    const targetPath = tab.remotePane.selectedFullPaths[0];
-    if (!targetPath || tab.remotePane.selectedFullPaths.length !== 1 || !tab.remotePane.connectionId) return;
-    const result = await window.cofinder.remote.getInfo({
-      connectionId: tab.remotePane.connectionId,
-      path: targetPath,
-      includeDirectorySize: false
-    });
-    if (!result.ok) {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
-        )
-      );
-      return;
-    }
-    const shouldLoadSize = result.data.info.type === "directory";
-    setInfoDialog({
-      pane: "remote",
-      info: result.data.info,
-      isSizeLoading: shouldLoadSize
-    });
-    if (shouldLoadSize) {
-      const connectionId = tab.remotePane.connectionId;
-      void (async () => {
-        const sizeRes = await window.cofinder.remote.directorySizeStart({
-          connectionId,
-          path: targetPath
-        });
-        if (!sizeRes.ok) return;
-        setInfoDialog((prev) => {
-          if (!prev || infoRequestTokenRef.current !== token) return prev;
-          return {
-            ...prev,
-            sizeJobId: sizeRes.data.jobId
-          };
-        });
-      })();
-    }
+    if (tab.remotePane.selectedFullPaths.length !== 1 || !tab.remotePane.connectionId) return;
+    setActivePane("remote");
+    cancelV12RemoteInspRevealTimer();
+    setV12RemoteInspectorReveal(true);
   }
 
   async function createRemoteDirectory(tabId: string): Promise<void> {
@@ -2809,12 +2682,6 @@ export function App(props: AppProps = {}) {
           activePane === "local"
             ? localPane.selectedFullPaths.length === 0
             : remotePane.selectedFullPaths.length === 0
-        }
-        onGetInfo={() => void openInfoDialog(activeTab.id, activePane)}
-        getInfoDisabled={
-          activePane === "local"
-            ? localPane.selectedFullPaths.length !== 1
-            : remotePane.selectedFullPaths.length !== 1
         }
         onInspectorToggle={() => {
           if (activePane === "local") {
@@ -3370,7 +3237,6 @@ export function App(props: AppProps = {}) {
                     if (!result.ok) setQueueError(result.error.message);
                   }}
                   onCopyPaths={() => void copySelection(activeTab.id, "local", "path")}
-                  onGetInfo={() => void openInfoDialog(activeTab.id, "local")}
                 />
               ) : null}
             </div>
@@ -3765,7 +3631,6 @@ export function App(props: AppProps = {}) {
                     formatTime={formatTime}
                     hostLabel={`${remotePane.username}@${remotePane.host}:${remotePane.port}`}
                     onCopyPaths={() => void copySelection(activeTab.id, "remote", "path")}
-                    onGetInfo={() => void openInfoDialog(activeTab.id, "remote")}
                   />
                 ) : null}
               </div>
@@ -4341,7 +4206,7 @@ export function App(props: AppProps = {}) {
                   setContextMenu(null);
                 }}
               >
-                Get Info
+                Show Inspector
                 <span className="context-shortcut">⌘I</span>
               </button>
               <button
@@ -4536,7 +4401,7 @@ export function App(props: AppProps = {}) {
                   setContextMenu(null);
                 }}
               >
-                Get Info
+                Show Inspector
                 <span className="context-shortcut">⌘I</span>
               </button>
               <button
@@ -4642,65 +4507,6 @@ export function App(props: AppProps = {}) {
               </button>
               <button type="button" className="toolbar-button danger" onClick={() => void submitDeleteConfirm()}>
                 Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-      {infoDialog ? (
-        <div className="info-dialog-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setInfoDialog(null)}>
-          <div className="info-dialog" role="dialog" aria-modal="true" aria-labelledby="info-dialog-title">
-            <h3 id="info-dialog-title">Get Info ({infoDialog.pane})</h3>
-            <dl className="info-grid">
-              <dt>Name</dt>
-              <dd>{infoDialog.info.name}</dd>
-              <dt>Path</dt>
-              <dd className="info-path">{infoDialog.info.fullPath}</dd>
-              <dt>Type</dt>
-              <dd>{infoDialog.info.type}</dd>
-              <dt>Size</dt>
-              <dd>
-                {infoDialog.isSizeLoading ? (
-                  <span className="info-size-loading">
-                    <span className="info-spinner" aria-hidden="true" />
-                    Calculating...
-                    {infoDialog.sizeJobId ? (
-                      <button
-                        type="button"
-                        className="toolbar-button"
-                        onClick={() => {
-                          if (infoDialog.sizeJobId) void window.cofinder.remote.directorySizeCancel({ jobId: infoDialog.sizeJobId });
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    ) : null}
-                  </span>
-                ) : (
-                  `${formatSize(infoDialog.info.size)}${infoDialog.sizeCapped ? " (partial)" : ""}`
-                )}
-              </dd>
-              <dt>Modified</dt>
-              <dd>{formatTime(infoDialog.info.mtime)}</dd>
-              <dt>Permissions</dt>
-              <dd>{infoDialog.info.permissions ?? "-"}</dd>
-              <dt>Owner</dt>
-              <dd>{infoDialog.info.owner ?? "-"}</dd>
-              <dt>Group</dt>
-              <dd>{infoDialog.info.group ?? "-"}</dd>
-            </dl>
-            <div className="info-actions">
-              {infoDialog.pane === "remote" && infoDialog.info.type !== "unknown" ? (
-                <button
-                  type="button"
-                  className="toolbar-button"
-                  onClick={() => void chmodRemoteSelection(activeTab.id)}
-                >
-                  Chmod
-                </button>
-              ) : null}
-              <button type="button" className="toolbar-button" onClick={() => setInfoDialog(null)}>
-                Close
               </button>
             </div>
           </div>

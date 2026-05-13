@@ -148,6 +148,7 @@ export class LocalFileService {
       const stats = await fs.lstat(normalizedPath);
       const type = stats.isDirectory() ? "directory" : stats.isFile() ? "file" : stats.isSymbolicLink() ? "symlink" : "unknown";
       const size = type === "directory" && options?.includeDirectorySize !== false ? await this.getDirectorySize(normalizedPath) : stats.size;
+      const counts = type === "directory" ? await directoryChildCounts(normalizedPath) : {};
       return {
         name: path.basename(normalizedPath),
         fullPath: normalizedPath,
@@ -156,7 +157,8 @@ export class LocalFileService {
         mtime: stats.mtime.toISOString(),
         permissions: modeToRwx(stats.mode),
         owner: typeof (stats as { uid?: unknown }).uid === "number" ? String((stats as { uid: number }).uid) : undefined,
-        group: typeof (stats as { gid?: unknown }).gid === "number" ? String((stats as { gid: number }).gid) : undefined
+        group: typeof (stats as { gid?: unknown }).gid === "number" ? String((stats as { gid: number }).gid) : undefined,
+        ...counts
       };
     } catch (error) {
       throw this.mapInfoError(error, normalizedPath);
@@ -254,6 +256,17 @@ async function nextAvailableLocalTextFile(parentPath: string): Promise<string> {
     }
   }
   throw new LocalFileServiceError("UNKNOWN", "Could not find an available text file name.");
+}
+
+async function directoryChildCounts(dirPath: string): Promise<{ fileCount: number; folderCount: number }> {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  let fileCount = 0;
+  let folderCount = 0;
+  for (const entry of entries) {
+    if (entry.isDirectory()) folderCount += 1;
+    else fileCount += 1;
+  }
+  return { fileCount, folderCount };
 }
 
 function unique(items: string[]): string[] {

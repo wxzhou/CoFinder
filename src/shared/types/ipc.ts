@@ -21,6 +21,8 @@ export type PathInfo = {
   permissions?: string;
   owner?: string;
   group?: string;
+  fileCount?: number;
+  folderCount?: number;
 };
 
 export interface LocalErrorPayload {

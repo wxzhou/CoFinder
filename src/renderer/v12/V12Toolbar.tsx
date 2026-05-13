@@ -29,9 +29,6 @@ export type V12ToolbarProps = {
   onDelete: () => void;
   deleteDisabled: boolean;
 
-  onGetInfo: () => void;
-  getInfoDisabled: boolean;
-
   onInspectorToggle: () => void;
   inspectorToggleDisabled: boolean;
   inspectorTogglePressed: boolean;
@@ -155,16 +152,6 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
           onClick={() => props.onDelete()}
         >
           <V12TbIcon name="trash" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Get Info"
-          aria-label="Get info"
-          disabled={props.getInfoDisabled}
-          onClick={() => props.onGetInfo()}
-        >
-          <V12TbIcon name="info-circle" />
         </button>
       </div>
       <span className="v12m-tsep" aria-hidden />

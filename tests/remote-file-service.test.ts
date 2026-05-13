@@ -240,10 +240,15 @@ describe("RemoteFileService path/list behavior", () => {
     const stat = vi.fn(async (target: string) => {
       if (target === "/dir") return { type: 2, mode: 0o040755, size: 0, modifyTime: Date.now() };
       if (target === "/dir/a.txt") return { type: 1, mode: 0o100644, size: 1024, modifyTime: Date.now() };
+      if (target === "/dir/sub") return { type: 2, mode: 0o040755, size: 0, modifyTime: Date.now() };
       throw new Error("No such file");
     });
     const list = vi.fn(async (target: string) => {
-      if (target === "/dir") return [{ name: "a.txt", type: "-", size: 1024, modifyTime: Date.now() }];
+      if (target === "/dir") return [
+        { name: "a.txt", type: "-", size: 1024, modifyTime: Date.now() },
+        { name: "sub", type: "d", size: 0, modifyTime: Date.now() }
+      ];
+      if (target === "/dir/sub") return [];
       return [];
     });
     const service = new RemoteFileService({
@@ -258,6 +263,8 @@ describe("RemoteFileService path/list behavior", () => {
     expect(info.type).toBe("directory");
     expect(info.size).toBe(1024);
     expect(info.permissions).toBe("rwxr-xr-x");
+    expect(info.fileCount).toBe(1);
+    expect(info.folderCount).toBe(1);
   });
 
   it("can skip recursive size calculation for remote directory", async () => {
@@ -277,7 +284,9 @@ describe("RemoteFileService path/list behavior", () => {
     const info = await service.getPathInfo("c1", "/dir", { includeDirectorySize: false });
     expect(info.type).toBe("directory");
     expect(info.size).toBe(4096);
-    expect(list).not.toHaveBeenCalled();
+    expect(info.fileCount).toBe(0);
+    expect(info.folderCount).toBe(0);
+    expect(list).toHaveBeenCalledWith("/dir");
   });
 
   it("creates a remote directory under the current folder", async () => {

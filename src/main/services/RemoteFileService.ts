@@ -277,6 +277,9 @@ export class RemoteFileService {
       const size = type === "directory" && options?.includeDirectorySize !== false
         ? await this.getRemoteDirectorySize(connection.client as unknown as RemoteDeleteClient, normalizedPath)
         : (stat.size ?? 0);
+      const counts = type === "directory"
+        ? await this.getRemoteDirectoryChildCounts(connection.client as unknown as RemoteDeleteClient, normalizedPath)
+        : {};
       const rights = stat.rights ? rightsToRwx(stat.rights) : undefined;
       return {
         name: posixPath.basename(normalizedPath),
@@ -286,7 +289,8 @@ export class RemoteFileService {
         mtime: new Date(stat.modifyTime ?? Date.now()).toISOString(),
         permissions: rights ?? (typeof stat.mode === "number" ? modeToRwx(stat.mode) : undefined),
         owner: stat.owner !== undefined ? String(stat.owner) : undefined,
-        group: stat.group !== undefined ? String(stat.group) : undefined
+        group: stat.group !== undefined ? String(stat.group) : undefined,
+        ...counts
       };
     } catch (error) {
       throw this.mapInfoError(error);
@@ -437,6 +441,18 @@ export class RemoteFileService {
       }
     }
     return total;
+  }
+
+  private async getRemoteDirectoryChildCounts(client: RemoteDeleteClient, targetPath: string): Promise<{ fileCount: number; folderCount: number }> {
+    const entries = (await client.list(targetPath)) as RemoteListItem[];
+    let fileCount = 0;
+    let folderCount = 0;
+    for (const entry of entries) {
+      if (entry.name === "." || entry.name === "..") continue;
+      if (entry.type === "d") folderCount += 1;
+      else fileCount += 1;
+    }
+    return { fileCount, folderCount };
   }
 
   private async getRemoteDirectorySizeLimited(
