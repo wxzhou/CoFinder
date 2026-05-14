@@ -182,24 +182,6 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
       <div className="v12m-tg">
         <button
           type="button"
-          className="v12m-tb on"
-          title="List view"
-          aria-label="List"
-          disabled
-        >
-          <V12TbIcon name="list-bullet" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Columns view (not available)"
-          aria-label="Columns"
-          disabled
-        >
-          <V12TbIcon name="rectangle-split" />
-        </button>
-        <button
-          type="button"
           className={`v12m-tb${props.inspectorTogglePressed ? " on" : ""}`}
           title="Toggle inspector column"
           aria-label="Toggle inspector"
