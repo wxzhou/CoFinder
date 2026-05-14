@@ -38,6 +38,7 @@ import {
   type SelectionState
 } from "./selection";
 import type { LocalFavoriteListItem } from "../shared/localFavorites";
+import type { RemoteEditSession } from "../shared/remoteEdit";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -250,6 +251,7 @@ export function App(props: AppProps = {}) {
   const [queuePanelState, setQueuePanelState] = useState<QueuePanelState>("hidden");
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
+  const [remoteEditSessions, setRemoteEditSessions] = useState<RemoteEditSession[]>([]);
   const [queueError, setQueueError] = useState<string>("");
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_RENDERER_SETTINGS);
   const [preferences, setPreferences] = useState<PreferencesState>({
@@ -446,6 +448,10 @@ export function App(props: AppProps = {}) {
   useEffect(() => {
     const off = window.cofinder.remote.onEditUpdate((payload: RemoteEditUpdatePayload) => {
       const { session } = payload;
+      setRemoteEditSessions((prev) => {
+        const without = prev.filter((item) => item.id !== session.id);
+        return [session, ...without].sort((a, b) => b.updatedAt - a.updatedAt);
+      });
       if (session.state === "uploaded") {
         setQueueError(`Uploaded edits to ${session.remotePath}`);
         const tab = tabs.find((item) => item.id === session.tabId);
@@ -456,6 +462,7 @@ export function App(props: AppProps = {}) {
         setQueueError(session.error || `Remote edit ${session.state}: ${session.remotePath}`);
       }
     });
+    void loadRemoteEditSessions();
     return off;
   }, [tabs]);
 
@@ -657,6 +664,52 @@ export function App(props: AppProps = {}) {
       return;
     }
     setTransferTasks(res.data);
+  }
+
+  async function loadRemoteEditSessions(): Promise<void> {
+    const res = await window.cofinder.remote.editList();
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions(res.data.sessions);
+  }
+
+  async function revealRemoteEditCopy(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editRevealLocal({ sessionId });
+    if (!res.ok) setQueueError(res.error.message);
+  }
+
+  async function redownloadRemoteEdit(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editRedownload({ sessionId });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
+  }
+
+  async function forceUploadRemoteEdit(sessionId: string): Promise<void> {
+    const session = remoteEditSessions.find((item) => item.id === sessionId);
+    if (session && !window.confirm(`Upload local edits to ${session.remotePath} and overwrite the current remote file?`)) return;
+    const res = await window.cofinder.remote.editForceUpload({ sessionId });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
+  }
+
+  async function closeRemoteEdit(sessionId: string): Promise<void> {
+    const session = remoteEditSessions.find((item) => item.id === sessionId);
+    const risky = session?.state === "dirty" || session?.state === "failed" || session?.state === "conflict";
+    if (risky && !window.confirm(`Close this edit session and discard the local edit copy for ${session.remotePath}?`)) return;
+    const res = await window.cofinder.remote.editClose({ sessionId, discardLocal: true });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => prev.filter((item) => item.id !== sessionId));
   }
 
   async function clearCompletedTransfers(): Promise<void> {
@@ -1141,6 +1194,11 @@ export function App(props: AppProps = {}) {
       return queueStats.failedCount > 0 ? `${queueStats.failedCount} failed task(s)` : "No active transfers";
     }
     return `${queueStats.activeCount} active, ${queueStats.queuedCount} queued`;
+  }
+
+  function basenameRemotePath(input: string): string {
+    const parts = input.split("/").filter(Boolean);
+    return parts.at(-1) ?? input;
   }
 
   function emptyProfileDraft(): ProfileUpsertPayload {
@@ -3059,6 +3117,52 @@ export function App(props: AppProps = {}) {
     />
   );
 
+  const remoteEditStatusPanel =
+    remoteEditSessions.length > 0 ? (
+      <section className="remote-edit-panel" aria-label="Remote edit sessions">
+        <div className="remote-edit-head">
+          <strong>Remote edits</strong>
+          <span>
+            {remoteEditSessions.length} active ·{" "}
+            {remoteEditSessions.filter((session) => session.state === "failed" || session.state === "conflict").length} need attention
+          </span>
+        </div>
+        <div className="remote-edit-list">
+          {remoteEditSessions.map((session) => (
+            <div key={session.id} className={`remote-edit-row state-${session.state}`}>
+              <span className={`remote-edit-state state-${session.state}`}>{session.state}</span>
+              <span className="remote-edit-path" title={session.remotePath}>
+                {basenameRemotePath(session.remotePath)}
+              </span>
+              {session.error ? (
+                <span className="remote-edit-error" title={session.error}>
+                  {session.error}
+                </span>
+              ) : null}
+              <span className="remote-edit-actions">
+                <button type="button" className="toolbar-button" onClick={() => void revealRemoteEditCopy(session.id)}>
+                  Reveal
+                </button>
+                {session.state === "conflict" || session.state === "failed" ? (
+                  <>
+                    <button type="button" className="toolbar-button" onClick={() => void redownloadRemoteEdit(session.id)}>
+                      Re-download
+                    </button>
+                    <button type="button" className="toolbar-button" onClick={() => void forceUploadRemoteEdit(session.id)}>
+                      Force upload
+                    </button>
+                  </>
+                ) : null}
+                <button type="button" className="toolbar-button" onClick={() => void closeRemoteEdit(session.id)}>
+                  Close
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    ) : null;
+
   async function resolveTransferConflicts(
     direction: "upload" | "download",
     request: EnqueueUploadRequest | EnqueueDownloadRequest
@@ -4310,7 +4414,12 @@ export function App(props: AppProps = {}) {
           banner={null}
           toolbar={v12Toolbar!}
           devHint={import.meta.env.DEV ? <V12ProdDevHint /> : null}
-          drawer={queueV12Drawer}
+          drawer={
+            <>
+              {remoteEditStatusPanel}
+              {queueV12Drawer}
+            </>
+          }
           localPane={localPaneEl}
           splitter={
             <div
@@ -4367,7 +4476,12 @@ export function App(props: AppProps = {}) {
           }
         />
       )}
-      {uiShell === "v11" ? queueV11Section : null}
+      {uiShell === "v11" ? (
+        <>
+          {remoteEditStatusPanel}
+          {queueV11Section}
+        </>
+      ) : null}
       {marqueeOverlay}
       {preferences.open ? (
         <div className="preferences-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setPreferences((p) => ({ ...p, open: false }))}>
