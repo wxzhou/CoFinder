@@ -301,13 +301,6 @@ export function App(props: AppProps = {}) {
       v12RemoteInspRevealTimerRef.current = null;
     }
   };
-  const scheduleV12LocalInspRevealFromRowClick = (): void => {
-    cancelV12LocalInspRevealTimer();
-  };
-  const scheduleV12RemoteInspRevealFromRowClick = (): void => {
-    cancelV12RemoteInspRevealTimer();
-  };
-
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const localPane = activeTab.localPane;
   const remotePane = activeTab.remotePane;
@@ -328,8 +321,8 @@ export function App(props: AppProps = {}) {
       setPreferences((prev) => ({ ...prev, draft: settings }));
       setOnboardingOpen(!settings.general.firstRunOnboardingDismissed);
       setV12PaneRatio(settings.appearance.defaultPaneRatio);
-      setV12LocalInspectorReveal(settings.appearance.defaultInspectorVisible);
-      setV12RemoteInspectorReveal(settings.appearance.defaultInspectorVisible);
+      setV12LocalInspectorReveal(false);
+      setV12RemoteInspectorReveal(false);
       const restoredLocalPath = settings.general.restoreLastSession ? readLastLocalPath() : "";
       await initializeLocalHome(tabState.firstTabId, restoredLocalPath || settings.general.defaultLocalPath);
     })();
@@ -992,15 +985,9 @@ export function App(props: AppProps = {}) {
     prevActiveTabIdForV12InspRef.current = activeTabId;
     cancelV12LocalInspRevealTimer();
     cancelV12RemoteInspRevealTimer();
-    const tab = tabs.find((t) => t.id === activeTabId) ?? activeTab;
-    setV12LocalInspectorReveal(appSettings.appearance.defaultInspectorVisible && tab.localPane.selectedFullPaths.length > 0);
-    setV12RemoteInspectorReveal(
-      appSettings.appearance.defaultInspectorVisible &&
-        tab.remotePane.connectionStatus === "connected" &&
-        !!tab.remotePane.connectionId &&
-        tab.remotePane.selectedFullPaths.length > 0
-    );
-  }, [activeTabId, uiShell, tabs, activeTab, appSettings.appearance.defaultInspectorVisible]);
+    setV12LocalInspectorReveal(false);
+    setV12RemoteInspectorReveal(false);
+  }, [activeTabId, uiShell]);
 
   useEffect(() => {
     if (uiShell !== "v12") return;
@@ -1991,7 +1978,7 @@ export function App(props: AppProps = {}) {
         cancelV12LocalInspRevealTimer();
         setV12LocalInspectorReveal(false);
       } else {
-        scheduleV12LocalInspRevealFromRowClick();
+        cancelV12LocalInspRevealTimer();
       }
     }
   }
@@ -2028,7 +2015,7 @@ export function App(props: AppProps = {}) {
         cancelV12RemoteInspRevealTimer();
         setV12RemoteInspectorReveal(false);
       } else {
-        scheduleV12RemoteInspRevealFromRowClick();
+        cancelV12RemoteInspRevealTimer();
       }
     }
   }
@@ -4281,7 +4268,6 @@ export function App(props: AppProps = {}) {
                 </label>
               ))}
               {[
-                ["Show inspector by default", "defaultInspectorVisible"],
                 ["Show sidebar", "sidebarVisible"]
               ].map(([label, key]) => (
                 <label key={key} className="preferences-check">
