@@ -331,6 +331,19 @@ body,
   padding: 0;
 }
 
+.cfv12-root .v12m-tb,
+.cfv12-root .v12m-pane-action,
+.cfv12-root .v12m-path-copy {
+  transition: background-color 120ms ease, border-color 120ms ease, opacity 120ms ease;
+}
+
+.cfv12-root .v12m-tb:focus-visible,
+.cfv12-root .v12m-pane-action:focus-visible,
+.cfv12-root .v12m-path-copy:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: 2px;
+}
+
 .cfv12-root .v12m-pane-action:hover:not(:disabled) {
   background: #fff;
 }
@@ -341,6 +354,7 @@ body,
 
 .cfv12-root .v12m-pane-action:disabled {
   opacity: 0.42;
+  cursor: default;
 }
 
 @media (max-width: 980px) {
