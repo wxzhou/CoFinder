@@ -124,6 +124,13 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Open remains read-only:** use right-click `Open` or double-click on the same remote text file and confirm it still follows the read-only remote preview path, separate from Edit.
 - **Unsupported edit:** select a remote directory, a multi-selection, and a binary file in turn; confirm Edit is disabled where possible or shows a clear unsupported message without starting an edit session.
 
+## V2.7 V12 UI regression
+
+- **Task filters:** expand the transfer drawer and switch All / Running / Failed / Done. Confirm filtering does not clear unresolved failed tasks.
+- **Empty panes:** open empty local and remote directories and confirm the empty state is visible and not mistaken for a broken list.
+- **Inspector density:** open Inspector on local and remote single selections and confirm metadata remains scannable without auto-opening on ordinary single click.
+- **Layout checklist:** run `docs/dev/v12-layout-regression-checks.md` before release candidates.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.
