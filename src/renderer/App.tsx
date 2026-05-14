@@ -4287,7 +4287,7 @@ export function App(props: AppProps = {}) {
             </div>
             <div className="preferences-shortcuts">
               <strong>Shortcuts</strong>
-              <p>F2 rename · Delete remove · Cmd+I info · Cmd+Shift+C copy path · Cmd+R refresh · Cmd+U upload · Cmd+D download · Cmd+K Site Manager</p>
+              <p>F2 rename · Delete remove · Cmd+I info · Cmd+Shift+C copy selected path · Cmd+Option+C copy current path · Cmd+R refresh · Cmd+U upload · Cmd+D download · Cmd+K Site Manager</p>
             </div>
             <div className="preferences-shortcuts">
               <strong>Diagnostics</strong>

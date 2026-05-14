@@ -107,7 +107,7 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
         <button
           type="button"
           className="v12m-tb"
-          title="Copy current path"
+          title="Copy current path (⌘⌥C)"
           aria-label="Copy current path"
           disabled={props.copyCurrentPathDisabled}
           onClick={() => props.onCopyCurrentPath()}
