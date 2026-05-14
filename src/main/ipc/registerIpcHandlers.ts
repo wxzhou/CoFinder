@@ -496,6 +496,16 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.remote.editSyncNow, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editSyncNow request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      return ok({ session: await remoteEditService.syncSession(sessionId) });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to save remote edit now.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.remote.editRevealLocal, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editRevealLocal request.");

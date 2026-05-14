@@ -689,6 +689,15 @@ export function App(props: AppProps = {}) {
     setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
   }
 
+  async function saveRemoteEditNow(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editSyncNow({ sessionId });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
+  }
+
   async function forceUploadRemoteEdit(sessionId: string): Promise<void> {
     const session = remoteEditSessions.find((item) => item.id === sessionId);
     if (session && !window.confirm(`Upload local edits to ${session.remotePath} and overwrite the current remote file?`)) return;
@@ -700,10 +709,21 @@ export function App(props: AppProps = {}) {
     setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
   }
 
-  async function closeRemoteEdit(sessionId: string): Promise<void> {
+  async function stopRemoteEditMonitoring(sessionId: string): Promise<void> {
     const session = remoteEditSessions.find((item) => item.id === sessionId);
     const risky = session?.state === "dirty" || session?.state === "failed" || session?.state === "conflict";
-    if (risky && !window.confirm(`Close this edit session and discard the local edit copy for ${session.remotePath}?`)) return;
+    if (risky && !window.confirm(`Stop monitoring ${session.remotePath}? The local edit copy will be kept but no longer uploaded.`)) return;
+    const res = await window.cofinder.remote.editClose({ sessionId, discardLocal: false });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => prev.filter((item) => item.id !== sessionId));
+  }
+
+  async function discardRemoteEditCopy(sessionId: string): Promise<void> {
+    const session = remoteEditSessions.find((item) => item.id === sessionId);
+    if (session && !window.confirm(`Discard the local edit copy for ${session.remotePath}?`)) return;
     const res = await window.cofinder.remote.editClose({ sessionId, discardLocal: true });
     if (!res.ok) {
       setQueueError(res.error.message);
@@ -3151,6 +3171,14 @@ export function App(props: AppProps = {}) {
                 <button type="button" className="toolbar-button" onClick={() => void revealRemoteEditCopy(session.id)}>
                   Reveal
                 </button>
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  disabled={session.state === "uploading"}
+                  onClick={() => void saveRemoteEditNow(session.id)}
+                >
+                  Save Back Now
+                </button>
                 {session.state === "conflict" || session.state === "failed" ? (
                   <>
                     <button type="button" className="toolbar-button" onClick={() => void redownloadRemoteEdit(session.id)}>
@@ -3161,8 +3189,11 @@ export function App(props: AppProps = {}) {
                     </button>
                   </>
                 ) : null}
-                <button type="button" className="toolbar-button" onClick={() => void closeRemoteEdit(session.id)}>
-                  Close
+                <button type="button" className="toolbar-button" onClick={() => void stopRemoteEditMonitoring(session.id)}>
+                  Stop
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void discardRemoteEditCopy(session.id)}>
+                  Discard
                 </button>
               </span>
             </div>

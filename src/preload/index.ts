@@ -38,6 +38,7 @@ const api: IpcApi = {
     previewClearForConnection: (request) => ipcRenderer.invoke("remote:previewClearForConnection", request),
     editOpen: (request) => ipcRenderer.invoke("remote:editOpen", request),
     editList: () => ipcRenderer.invoke("remote:editList"),
+    editSyncNow: (request) => ipcRenderer.invoke("remote:editSyncNow", request),
     editRevealLocal: (request) => ipcRenderer.invoke("remote:editRevealLocal", request),
     editRedownload: (request) => ipcRenderer.invoke("remote:editRedownload", request),
     editForceUpload: (request) => ipcRenderer.invoke("remote:editForceUpload", request),

@@ -212,4 +212,39 @@ describe("RemoteEditService", () => {
     service.closeAll();
     await fs.rm(dir, { recursive: true, force: true });
   });
+
+  it("retries a failed upload with Save Back Now even when the local file is unchanged", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi
+        .fn()
+        .mockResolvedValueOnce({ type: "-", size: 12, modifyTime: 1000 })
+        .mockResolvedValueOnce({ type: "-", size: 12, modifyTime: 1000 })
+        .mockResolvedValueOnce({ type: "-", size: 12, modifyTime: 1000 })
+        .mockResolvedValueOnce({ type: "-", size: 14, modifyTime: 2000 }),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, "remote text\n", "utf8");
+      }),
+      put: vi.fn().mockRejectedValueOnce(new Error("Permission denied")).mockResolvedValueOnce(undefined)
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+    const session = await service.openTextEditSession({ tabId: "tab", connectionId: "c1", remotePath: "/note.txt" });
+    await fs.writeFile(session.localPath, "retry content\n", "utf8");
+
+    const failed = await service.syncSession(session.id);
+    const retried = await service.syncSession(session.id);
+
+    expect(failed.state).toBe("failed");
+    expect(retried.state).toBe("uploaded");
+    expect(client.put).toHaveBeenCalledTimes(2);
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
 });

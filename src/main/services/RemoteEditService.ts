@@ -230,7 +230,8 @@ export class RemoteEditService {
     const localStat = await fs.stat(session.localPath).catch((error) => {
       throw mapRemoteEditError(error, "Failed to inspect local edit copy.");
     });
-    if (localStat.size === session.lastLocalSize && localStat.mtimeMs === session.lastLocalMtimeMs) return session;
+    const shouldRetry = session.state === "dirty" || session.state === "failed" || session.state === "conflict";
+    if (!shouldRetry && localStat.size === session.lastLocalSize && localStat.mtimeMs === session.lastLocalMtimeMs) return session;
 
     this.replaceSession(sessionId, {
       state: "dirty",
