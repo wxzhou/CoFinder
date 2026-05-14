@@ -87,7 +87,7 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     height: 18,
     viewBox: "0 0 20 20",
     fill: "none",
-    stroke: "rgba(55, 55, 60, 0.72)",
+    stroke: "currentColor",
     strokeWidth: 1.25,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
@@ -181,10 +181,32 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     case "list-bullet":
       return (
         <svg width={18} height={18} viewBox="0 0 20 20" aria-hidden>
-          <path d="M6 6h9M6 10h9M6 14h9" fill="none" stroke="rgba(55,55,60,0.72)" strokeWidth="1.25" strokeLinecap="round" />
-          <circle cx="4" cy="6" r="0.85" fill="rgba(55,55,60,0.72)" />
-          <circle cx="4" cy="10" r="0.85" fill="rgba(55,55,60,0.72)" />
-          <circle cx="4" cy="14" r="0.85" fill="rgba(55,55,60,0.72)" />
+          <path d="M6 6h9M6 10h9M6 14h9" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+          <circle cx="4" cy="6" r="0.85" fill="currentColor" />
+          <circle cx="4" cy="10" r="0.85" fill="currentColor" />
+          <circle cx="4" cy="14" r="0.85" fill="currentColor" />
+        </svg>
+      );
+    case "clock":
+      return (
+        <svg {...s}>
+          <circle cx="10" cy="10" r="6.5" />
+          <path d="M10 6.5v4l2.6 1.5" />
+        </svg>
+      );
+    case "history":
+      return (
+        <svg {...s}>
+          <path d="M5.5 7.2H3.4V5.1" />
+          <path d="M4 7a6.5 6.5 0 111.6 6.6" />
+          <path d="M10 6.5v4l2.5 1.5" />
+        </svg>
+      );
+    case "clear-clock":
+      return (
+        <svg {...s}>
+          <circle cx="9" cy="9" r="5.4" />
+          <path d="M9 6v3.2l2 1.2M13.8 13.8l2.7 2.7M16.5 13.8l-2.7 2.7" />
         </svg>
       );
     case "rectangle-split":

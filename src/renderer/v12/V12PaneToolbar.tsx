@@ -1,4 +1,4 @@
-import type { ReactElement, ReactNode } from "react";
+import type { ChangeEvent, ReactElement, ReactNode } from "react";
 import { V12TbIcon } from "./shared/V12Icons";
 
 export type V12PaneToolbarAction = {
@@ -8,6 +8,7 @@ export type V12PaneToolbarAction = {
   disabled?: boolean;
   pressed?: boolean;
   danger?: boolean;
+  tone?: "nav" | "transfer" | "create" | "edit" | "danger";
   onClick: () => void;
 };
 
@@ -25,7 +26,14 @@ export function V12PaneToolbar(props: V12PaneToolbarProps): ReactElement {
           <button
             key={action.label}
             type="button"
-            className={`v12m-pane-action${action.danger ? " is-danger" : ""}${action.pressed ? " is-pressed" : ""}`}
+            className={[
+              "v12m-pane-action",
+              action.danger || action.tone === "danger" ? "is-danger" : "",
+              action.tone ? `tone-${action.tone}` : "",
+              action.pressed ? "is-pressed" : ""
+            ]
+              .filter(Boolean)
+              .join(" ")}
             title={action.title}
             aria-label={action.label}
             aria-pressed={action.pressed}
@@ -38,5 +46,31 @@ export function V12PaneToolbar(props: V12PaneToolbarProps): ReactElement {
       </div>
       <div className="v12m-pane-toolbar-controls">{props.children}</div>
     </div>
+  );
+}
+
+export type V12ToolbarIconSelectProps = {
+  label: string;
+  title: string;
+  icon: string;
+  disabled?: boolean;
+  onChange: (event: ChangeEvent<HTMLSelectElement>) => void;
+  children: ReactNode;
+};
+
+export function V12ToolbarIconSelect(props: V12ToolbarIconSelectProps): ReactElement {
+  return (
+    <span className="v12m-icon-select-wrap" title={props.title}>
+      <V12TbIcon name={props.icon} />
+      <select
+        className="history-select v12m-icon-select"
+        value=""
+        disabled={props.disabled}
+        aria-label={props.label}
+        onChange={props.onChange}
+      >
+        {props.children}
+      </select>
+    </span>
   );
 }

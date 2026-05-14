@@ -10,12 +10,12 @@ import {
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
-import { V12PaneToolbar } from "./v12/V12PaneToolbar";
+import { V12PaneToolbar, V12ToolbarIconSelect } from "./v12/V12PaneToolbar";
 import { V12TransferDrawer } from "./v12/V12TransferDrawer";
 import { V12PaneInspector } from "./v12/V12PaneInspector";
 import { pathToSegments } from "./v12/pane/pathSegments";
 import { inspectorColumnVisible } from "./v12/v12InspectorVisibility";
-import { V12PaneFootStatus, V12ProdDevHint, V12VisualFileList, V12VisualLocationStrip } from "./v12/shared";
+import { V12PaneFootStatus, V12ProdDevHint, V12TbIcon, V12VisualFileList, V12VisualLocationStrip } from "./v12/shared";
 import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
@@ -2875,11 +2875,9 @@ export function App(props: AppProps = {}) {
       : "Remote";
   const remotePaneMetaV12 = remoteConnected
     ? `${remotePane.username}@${remotePane.host}:${remotePane.port}`
-    : remotePane.connectionStatus === "connecting"
-      ? "Connecting…"
-      : remotePane.connectionStatus === "failed" && remotePane.error
+    : remotePane.connectionStatus === "failed" && remotePane.error
         ? remotePane.error
-        : "Offline";
+        : "";
 
   const remoteBadgeV12 =
     !remoteConnected && remotePane.connectionStatus !== "connecting" ? (
@@ -3413,6 +3411,7 @@ export function App(props: AppProps = {}) {
             label: "Back",
             title: "Back",
             icon: "chevron-back",
+            tone: "nav",
             disabled: localPane.history.backStack.length === 0,
             onClick: () => {
               const target = localPane.history.backStack[localPane.history.backStack.length - 1];
@@ -3423,6 +3422,7 @@ export function App(props: AppProps = {}) {
             label: "Forward",
             title: "Forward",
             icon: "chevron-forward",
+            tone: "nav",
             disabled: localPane.history.forwardStack.length === 0,
             onClick: () => {
               const target = localPane.history.forwardStack[0];
@@ -3433,12 +3433,14 @@ export function App(props: AppProps = {}) {
             label: "Enclosing folder",
             title: "Enclosing folder",
             icon: "chevron-up",
+            tone: "nav",
             onClick: () => void navigateLocal(activeTab.id, getParentPath(localPane.currentPath))
           },
           {
             label: "Home",
             title: "Home",
             icon: "home",
+            tone: "nav",
             disabled: !localHomePath,
             onClick: () => {
               if (localHomePath) void navigateLocal(activeTab.id, localHomePath, "push");
@@ -3449,6 +3451,7 @@ export function App(props: AppProps = {}) {
             label: "Refresh",
             title: "Refresh",
             icon: "arrow-clockwise",
+            tone: "nav",
             disabled: !localPane.currentPath,
             onClick: () => void navigateLocal(activeTab.id, localPane.currentPath, "replace")
           },
@@ -3467,6 +3470,7 @@ export function App(props: AppProps = {}) {
             label: "Upload",
             title: "Upload local selection to remote pane",
             icon: "arrow-up-tray",
+            tone: "transfer",
             disabled: localPane.selectedFullPaths.length === 0 || !remotePane.connectionId,
             onClick: () => void enqueueUpload(activeTab.id)
           },
@@ -3474,6 +3478,7 @@ export function App(props: AppProps = {}) {
             label: "New local folder",
             title: "New local folder",
             icon: "folder-badge-plus",
+            tone: "create",
             disabled: !localPane.currentPath,
             onClick: () => void createLocalDirectory(activeTab.id)
           },
@@ -3481,6 +3486,7 @@ export function App(props: AppProps = {}) {
             label: "New local text file",
             title: "New local text file",
             icon: "doc-badge-plus",
+            tone: "create",
             disabled: !localPane.currentPath,
             onClick: () => void createTextFile(activeTab.id, "local")
           },
@@ -3508,10 +3514,10 @@ export function App(props: AppProps = {}) {
           placeholder="Filter names"
           aria-label="Filter local files by name"
         />
-        <select
-          className="history-select"
-          value=""
-          aria-label="Local recent locations"
+        <V12ToolbarIconSelect
+          label="Local recent locations"
+          title="Recent locations"
+          icon="clock"
           onChange={(event) => {
             const path = event.target.value;
             if (path) void navigateLocal(activeTab.id, path, "push");
@@ -3523,11 +3529,11 @@ export function App(props: AppProps = {}) {
               {item.label} - {item.path}
             </option>
           ))}
-        </select>
-        <select
-          className="history-select"
-          value=""
-          aria-label="Local back and forward history"
+        </V12ToolbarIconSelect>
+        <V12ToolbarIconSelect
+          label="Local back and forward history"
+          title="Back and forward history"
+          icon="history"
           onChange={(event) => {
             const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
             if (path) void navigateLocal(activeTab.id, path, mode);
@@ -3544,9 +3550,16 @@ export function App(props: AppProps = {}) {
               Forward: {path}
             </option>
           ))}
-        </select>
-        <button type="button" className="toolbar-button" disabled={localRecentPaths.length === 0} onClick={clearLocalRecents}>
-          Clear Recent
+        </V12ToolbarIconSelect>
+        <button
+          type="button"
+          className="toolbar-button v12m-icon-button"
+          title="Clear recent locations"
+          aria-label="Clear recent locations"
+          disabled={localRecentPaths.length === 0}
+          onClick={clearLocalRecents}
+        >
+          <V12TbIcon name="clear-clock" />
         </button>
       </V12PaneToolbar>
     ) : null;
@@ -3560,6 +3573,7 @@ export function App(props: AppProps = {}) {
             label: "Back",
             title: "Back",
             icon: "chevron-back",
+            tone: "nav",
             disabled: remotePane.history.backStack.length === 0 || !remotePane.connectionId,
             onClick: () => {
               const target = remotePane.history.backStack[remotePane.history.backStack.length - 1];
@@ -3570,6 +3584,7 @@ export function App(props: AppProps = {}) {
             label: "Forward",
             title: "Forward",
             icon: "chevron-forward",
+            tone: "nav",
             disabled: remotePane.history.forwardStack.length === 0 || !remotePane.connectionId,
             onClick: () => {
               const target = remotePane.history.forwardStack[0];
@@ -3580,6 +3595,7 @@ export function App(props: AppProps = {}) {
             label: "Enclosing folder",
             title: "Enclosing folder",
             icon: "chevron-up",
+            tone: "nav",
             disabled: !remotePane.connectionId,
             onClick: () => {
               if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, getParentPath(remotePane.currentPath), "push", activeTab.id);
@@ -3589,6 +3605,7 @@ export function App(props: AppProps = {}) {
             label: "Home",
             title: "Home",
             icon: "home",
+            tone: "nav",
             disabled: !remotePane.connectionId,
             onClick: () => {
               if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.homePath || "/", "push", activeTab.id);
@@ -3598,6 +3615,7 @@ export function App(props: AppProps = {}) {
             label: "Refresh",
             title: "Refresh",
             icon: "arrow-clockwise",
+            tone: "nav",
             disabled: !remotePane.connectionId,
             onClick: () => {
               if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.currentPath, "replace", activeTab.id);
@@ -3618,6 +3636,7 @@ export function App(props: AppProps = {}) {
             label: "Download",
             title: "Download remote selection to local pane",
             icon: "arrow-down-tray",
+            tone: "transfer",
             disabled: remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId,
             onClick: () => void enqueueDownload(activeTab.id)
           },
@@ -3625,6 +3644,7 @@ export function App(props: AppProps = {}) {
             label: "Edit remote file",
             title: "Edit selected remote text file",
             icon: "pencil",
+            tone: "edit",
             disabled: remotePane.selectedFullPaths.length !== 1 || !remotePane.connectionId,
             onClick: () => void editRemoteSelection(activeTab.id)
           },
@@ -3632,6 +3652,7 @@ export function App(props: AppProps = {}) {
             label: "New remote folder",
             title: "New remote folder",
             icon: "folder-badge-plus",
+            tone: "create",
             disabled: !remotePane.connectionId,
             onClick: () => void createRemoteDirectory(activeTab.id)
           },
@@ -3639,6 +3660,7 @@ export function App(props: AppProps = {}) {
             label: "New remote text file",
             title: "New remote text file",
             icon: "doc-badge-plus",
+            tone: "create",
             disabled: !remotePane.connectionId,
             onClick: () => void createTextFile(activeTab.id, "remote")
           },
@@ -3661,6 +3683,7 @@ export function App(props: AppProps = {}) {
             label: "Disconnect",
             title: "Disconnect remote pane",
             icon: "plug",
+            tone: "danger",
             disabled: !remotePane.connectionId,
             onClick: () => void disconnectRemote(activeTab.id)
           }
@@ -3674,11 +3697,11 @@ export function App(props: AppProps = {}) {
           placeholder="Filter names"
           aria-label="Filter remote files by name"
         />
-        <select
-          className="history-select"
-          value=""
+        <V12ToolbarIconSelect
+          label="Remote recent locations"
+          title="Recent locations"
+          icon="clock"
           disabled={!remotePane.connectionId || remoteRecentPaths.length === 0}
-          aria-label="Remote recent locations"
           onChange={(event) => {
             const path = event.target.value;
             if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
@@ -3690,12 +3713,12 @@ export function App(props: AppProps = {}) {
               {item.label} - {item.path}
             </option>
           ))}
-        </select>
-        <select
-          className="history-select"
-          value=""
+        </V12ToolbarIconSelect>
+        <V12ToolbarIconSelect
+          label="Remote back and forward history"
+          title="Back and forward history"
+          icon="history"
           disabled={!remotePane.connectionId}
-          aria-label="Remote back and forward history"
           onChange={(event) => {
             const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
             if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, mode, activeTab.id);
@@ -3712,14 +3735,16 @@ export function App(props: AppProps = {}) {
               Forward: {path}
             </option>
           ))}
-        </select>
+        </V12ToolbarIconSelect>
         <button
           type="button"
-          className="toolbar-button"
+          className="toolbar-button v12m-icon-button"
+          title="Clear recent locations"
+          aria-label="Clear recent locations"
           disabled={!activeProfile?.id || remoteRecentPaths.length === 0}
           onClick={() => clearRemoteRecents(activeProfile?.id)}
         >
-          Clear Recent
+          <V12TbIcon name="clear-clock" />
         </button>
       </V12PaneToolbar>
     ) : null;
