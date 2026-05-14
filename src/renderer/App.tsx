@@ -116,6 +116,14 @@ type DeleteConfirmState = {
 
 type DeleteBusyByTab = Record<string, Partial<Record<ActivePane, string>>>;
 
+type CreateFolderDialogState = {
+  pane: ActivePane;
+  tabId: string;
+  name: string;
+  error: string;
+  busy: boolean;
+};
+
 type ActivePane = "local" | "remote";
 
 type TransferDragPayload = {
@@ -253,6 +261,7 @@ export function App(props: AppProps = {}) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
+  const [createFolderDialog, setCreateFolderDialog] = useState<CreateFolderDialogState | null>(null);
   const [deleteBusyByTab, setDeleteBusyByTab] = useState<DeleteBusyByTab>({});
   const deleteInFlightKeysRef = useRef(new Set<string>());
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
@@ -2416,8 +2425,37 @@ export function App(props: AppProps = {}) {
       );
       return;
     }
-    const name = window.prompt("New remote folder name");
-    if (!name?.trim()) return;
+    setCreateFolderDialog({ pane: "remote", tabId, name: "New Folder", error: "", busy: false });
+  }
+
+  async function createLocalDirectory(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.localPane.currentPath) return;
+    setCreateFolderDialog({ pane: "local", tabId, name: "New Folder", error: "", busy: false });
+  }
+
+  async function submitCreateFolderDialog(): Promise<void> {
+    if (!createFolderDialog || createFolderDialog.busy) return;
+    const draft = createFolderDialog;
+    const name = draft.name.trim();
+    if (!name) {
+      setCreateFolderDialog((prev) => (prev ? { ...prev, error: "Folder name is required." } : prev));
+      return;
+    }
+    setCreateFolderDialog((prev) => (prev ? { ...prev, error: "", busy: true } : prev));
+    if (draft.pane === "local") {
+      await performCreateLocalDirectory(draft.tabId, name);
+      return;
+    }
+    await performCreateRemoteDirectory(draft.tabId, name);
+  }
+
+  async function performCreateRemoteDirectory(tabId: string, name: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId) {
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: "Connect to a remote server first." } : prev));
+      return;
+    }
     const result = await window.cofinder.remote.mkdir({
       connectionId: tab.remotePane.connectionId,
       parentPath: tab.remotePane.currentPath,
@@ -2425,25 +2463,30 @@ export function App(props: AppProps = {}) {
     });
     if (!result.ok) {
       setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
       return;
     }
     await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+    setCreateFolderDialog(null);
   }
 
-  async function createLocalDirectory(tabId: string): Promise<void> {
+  async function performCreateLocalDirectory(tabId: string, name: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
-    if (!tab?.localPane.currentPath) return;
-    const name = window.prompt("New local folder name");
-    if (!name?.trim()) return;
+    if (!tab?.localPane.currentPath) {
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: "Select a local folder first." } : prev));
+      return;
+    }
     const result = await window.cofinder.local.mkdir({
       parentPath: tab.localPane.currentPath,
       name
     });
     if (!result.ok) {
       setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
       return;
     }
     await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+    setCreateFolderDialog(null);
   }
 
   async function createTextFile(tabId: string, pane: ActivePane): Promise<void> {
@@ -4633,6 +4676,47 @@ export function App(props: AppProps = {}) {
               </button>
               <button type="button" className="toolbar-button danger" onClick={() => void submitDeleteConfirm()}>
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {createFolderDialog ? (
+        <div
+          className="delete-confirm-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !createFolderDialog.busy) setCreateFolderDialog(null);
+          }}
+        >
+          <div className="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="create-folder-title">
+            <h3 id="create-folder-title">New Folder</h3>
+            <p>Create a folder in {createFolderDialog.pane === "local" ? "local" : "remote"} current path.</p>
+            <label className="create-folder-field">
+              Folder name
+              <input
+                autoFocus
+                value={createFolderDialog.name}
+                disabled={createFolderDialog.busy}
+                onChange={(event) => setCreateFolderDialog((prev) => (prev ? { ...prev, name: event.target.value, error: "" } : prev))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitCreateFolderDialog();
+                  } else if (event.key === "Escape" && !createFolderDialog.busy) {
+                    event.preventDefault();
+                    setCreateFolderDialog(null);
+                  }
+                }}
+              />
+            </label>
+            {createFolderDialog.error ? <div className="error-banner">{createFolderDialog.error}</div> : null}
+            <div className="delete-confirm-actions">
+              <button type="button" className="toolbar-button" disabled={createFolderDialog.busy} onClick={() => setCreateFolderDialog(null)}>
+                Cancel
+              </button>
+              <button type="button" className="toolbar-button is-active" disabled={createFolderDialog.busy} onClick={() => void submitCreateFolderDialog()}>
+                {createFolderDialog.busy ? "Creating..." : "Create"}
               </button>
             </div>
           </div>
