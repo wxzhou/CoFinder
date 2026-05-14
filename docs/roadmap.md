@@ -65,7 +65,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.5 | v1.5.0 | Remote Text Edit Auto-Sync MVP — complete on dev |
 | V2.6 | v1.6.0 | Remote Edit Reliability and Session Management — complete on dev |
 | V2.7 | v1.7.0 | V12 UI Refinement and Task-Center Polish — complete on dev |
-| V2.8 | v1.8.0 | Advanced Remote Navigation and Preview Decisions — planned |
+| V2.8 | v1.8.0 | Remote Quick Look — planned |
 
 ## Latest Completed Phase
 
