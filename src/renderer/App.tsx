@@ -284,6 +284,7 @@ export function App(props: AppProps = {}) {
   const prevActiveTabIdForV12InspRef = useRef(activeTabId);
   const [v12LocalInspectorReveal, setV12LocalInspectorReveal] = useState(false);
   const [v12RemoteInspectorReveal, setV12RemoteInspectorReveal] = useState(false);
+  const [pathEditPane, setPathEditPane] = useState<ActivePane | null>(null);
   type V12InspPaneState = { status: "idle" | "loading" | "ready" | "error"; info: PathInfo | null; error: string };
   const [v12LocalInsp, setV12LocalInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
   const [v12RemoteInsp, setV12RemoteInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
@@ -558,8 +559,14 @@ export function App(props: AppProps = {}) {
       }
 
       const cmd = event.metaKey || event.ctrlKey;
-      if (!cmd && event.key !== "F2" && event.key !== "Delete" && event.key !== "Backspace") return;
       if (contextMenu) return;
+      if (cmd && event.key.toLowerCase() === "l") {
+        beginPathEdit(activePane);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (!cmd && event.key !== "F2" && event.key !== "Delete" && event.key !== "Backspace") return;
       if (isEditableTarget(document.activeElement)) return;
 
       const key = event.key.toLowerCase();
@@ -742,7 +749,7 @@ export function App(props: AppProps = {}) {
     tabId: string,
     targetPath: string,
     mode: "push" | "replace" | "back" | "forward" = "push"
-  ): Promise<void> {
+  ): Promise<boolean> {
     const previousPath = tabs.find((tab) => tab.id === tabId)?.localPane.currentPath ?? "";
     const response = await window.cofinder.local.listDirectory({ path: targetPath });
     if (!response.ok) {
@@ -760,7 +767,7 @@ export function App(props: AppProps = {}) {
               }
         )
       );
-      return;
+      return false;
     }
     setTabs((prev) =>
       prev.map((tab) => {
@@ -782,6 +789,7 @@ export function App(props: AppProps = {}) {
       })
     );
     rememberLocalRecent(response.data.path);
+    return true;
   }
 
   const showV12FavoriteHint = useCallback((message: string) => {
@@ -2148,6 +2156,45 @@ export function App(props: AppProps = {}) {
     if (!result.ok) setQueueError(result.error.message);
   }
 
+  function beginPathEdit(pane: ActivePane): void {
+    if (pane === "remote" && !remotePane.connectionId) return;
+    setActivePane(pane);
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id !== activeTab.id
+          ? item
+          : pane === "local"
+            ? { ...item, localPane: { ...item.localPane, pathInput: item.localPane.currentPath } }
+            : { ...item, remotePane: { ...item.remotePane, pathInput: item.remotePane.currentPath } }
+      )
+    );
+    setPathEditPane(pane);
+  }
+
+  function cancelPathEdit(pane: ActivePane): void {
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id !== activeTab.id
+          ? item
+          : pane === "local"
+            ? { ...item, localPane: { ...item.localPane, pathInput: item.localPane.currentPath } }
+            : { ...item, remotePane: { ...item.remotePane, pathInput: item.remotePane.currentPath } }
+      )
+    );
+    setPathEditPane((current) => (current === pane ? null : current));
+  }
+
+  async function submitPathEdit(pane: ActivePane): Promise<void> {
+    if (pane === "local") {
+      const ok = await navigateLocal(activeTab.id, localPane.pathInput);
+      if (ok) setPathEditPane(null);
+      return;
+    }
+    if (!remotePane.connectionId) return;
+    const ok = await listRemotePath(remotePane.connectionId, remotePane.pathInput, "push", activeTab.id);
+    if (ok) setPathEditPane(null);
+  }
+
   async function renameLocalSelection(tabId: string, targetPath: string, nextName: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
@@ -3119,32 +3166,34 @@ export function App(props: AppProps = {}) {
   }
 
   const localNavTools = (
-    <div className="nav-efficiency-bar">
-      <form
-        className="path-form path-form--inline"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void navigateLocal(activeTab.id, localPane.pathInput);
-        }}
-      >
-        <input
-          value={localPane.pathInput}
-          list="cofinder-local-path-suggestions"
-          onChange={(event) =>
-            setTabs((prev) =>
-              prev.map((tab) =>
-                tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: event.target.value } } : tab
+    <div className={`nav-efficiency-bar ${uiShell === "v12" ? "nav-efficiency-bar--no-path" : ""}`}>
+      {uiShell === "v12" ? null : (
+        <form
+          className="path-form path-form--inline"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void navigateLocal(activeTab.id, localPane.pathInput);
+          }}
+        >
+          <input
+            value={localPane.pathInput}
+            list="cofinder-local-path-suggestions"
+            onChange={(event) =>
+              setTabs((prev) =>
+                prev.map((tab) =>
+                  tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: event.target.value } } : tab
+                )
               )
-            )
-          }
-          aria-label="Local path"
-        />
-        <datalist id="cofinder-local-path-suggestions">
-          {localPathSuggestions.map((path) => (
-            <option key={path} value={path} />
-          ))}
-        </datalist>
-      </form>
+            }
+            aria-label="Local path"
+          />
+          <datalist id="cofinder-local-path-suggestions">
+            {localPathSuggestions.map((path) => (
+              <option key={path} value={path} />
+            ))}
+          </datalist>
+        </form>
+      )}
       <input
         className="pane-filter-input"
         value={localPane.filterText}
@@ -3196,33 +3245,35 @@ export function App(props: AppProps = {}) {
   );
 
   const remoteNavTools = (
-    <div className="nav-efficiency-bar">
-      <form
-        className="path-form path-form--inline"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.pathInput, "push", activeTab.id);
-        }}
-      >
-        <input
-          value={remotePane.pathInput}
-          list="cofinder-remote-path-suggestions"
-          disabled={!remotePane.connectionId}
-          onChange={(event) =>
-            setTabs((prev) =>
-              prev.map((tab) =>
-                tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: event.target.value } } : tab
+    <div className={`nav-efficiency-bar ${uiShell === "v12" ? "nav-efficiency-bar--no-path" : ""}`}>
+      {uiShell === "v12" ? null : (
+        <form
+          className="path-form path-form--inline"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.pathInput, "push", activeTab.id);
+          }}
+        >
+          <input
+            value={remotePane.pathInput}
+            list="cofinder-remote-path-suggestions"
+            disabled={!remotePane.connectionId}
+            onChange={(event) =>
+              setTabs((prev) =>
+                prev.map((tab) =>
+                  tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: event.target.value } } : tab
+                )
               )
-            )
-          }
-          aria-label="Remote path"
-        />
-        <datalist id="cofinder-remote-path-suggestions">
-          {remotePathSuggestions.map((path) => (
-            <option key={path} value={path} />
-          ))}
-        </datalist>
-      </form>
+            }
+            aria-label="Remote path"
+          />
+          <datalist id="cofinder-remote-path-suggestions">
+            {remotePathSuggestions.map((path) => (
+              <option key={path} value={path} />
+            ))}
+          </datalist>
+        </form>
+      )}
       <input
         className="pane-filter-input"
         value={remotePane.filterText}
@@ -3297,6 +3348,17 @@ export function App(props: AppProps = {}) {
               currentPath={localPane.currentPath || "/"}
               pathRootLabel="Macintosh HD"
               onNavigate={(path) => void navigateLocal(activeTab.id, path)}
+              editingPath={pathEditPane === "local"}
+              pathInput={localPane.pathInput}
+              onBeginPathInput={() => beginPathEdit("local")}
+              onPathInputChange={(value) =>
+                setTabs((prev) =>
+                  prev.map((tab) => (tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: value } } : tab))
+                )
+              }
+              onSubmitPathInput={() => void submitPathEdit("local")}
+              onCancelPathInput={() => cancelPathEdit("local")}
+              onCopyPath={() => void copyCurrentPath("local")}
             />
             {localNavTools}
           </div>
@@ -3664,6 +3726,8 @@ export function App(props: AppProps = {}) {
                 pathRootLabel="/"
                 badge={remoteBadgeV12}
                 onNavigate={() => {}}
+                pathInputDisabled
+                onCopyPath={() => void copyCurrentPath("remote")}
               />
               {remoteNavTools}
             </div>
@@ -3704,6 +3768,20 @@ export function App(props: AppProps = {}) {
                 pathRootLabel="/"
                 badge={remoteBadgeV12}
                 onNavigate={(path) => void listRemotePath(remotePane.connectionId!, path, "push", activeTab.id)}
+                editingPath={pathEditPane === "remote"}
+                pathInput={remotePane.pathInput}
+                pathInputDisabled={!remotePane.connectionId}
+                onBeginPathInput={() => beginPathEdit("remote")}
+                onPathInputChange={(value) =>
+                  setTabs((prev) =>
+                    prev.map((tab) =>
+                      tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: value } } : tab
+                    )
+                  )
+                }
+                onSubmitPathInput={() => void submitPathEdit("remote")}
+                onCancelPathInput={() => cancelPathEdit("remote")}
+                onCopyPath={() => void copyCurrentPath("remote")}
                 trailing={
                   <button type="button" className="v12m-insp-linkbtn" onClick={() => void disconnectRemote(activeTab.id)}>
                     Disconnect
