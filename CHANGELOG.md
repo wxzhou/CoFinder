@@ -4,11 +4,21 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v1.2.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest shipped release: v1.3.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.2.0**.
+No user-facing changes since **v1.3.0**.
+
+## v1.3.0 — Product milestone V2.3
+
+V2.3 is a navigation and preference polish release driven by v1.2.0 hands-on feedback.
+
+- Preferences now uses an explicit text-editor selector with System default, TextEdit, TextMate, and Custom options.
+- `Cmd+Option+C` now detects the physical C key, making Copy Current Path reliable on macOS while preserving `Cmd+Shift+C` for selected paths.
+- V12 panes no longer show a separate full path address field beside breadcrumbs.
+- Breadcrumbs switch to full path entry via empty breadcrumb click, breadcrumb double-click, or `Cmd+L`; Enter navigates and Escape/blur returns to breadcrumb mode.
+- Breadcrumb chrome includes a Copy Path icon button while Filter names, Recent, History, and Clear Recent remain in the navigation row.
 
 ## v1.2.0 — Product milestone V2.2
 

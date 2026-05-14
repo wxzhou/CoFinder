@@ -106,6 +106,15 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Scope cuts:** confirm there is no UI implying remote edit auto-sync, full auto-update install, App Store distribution, or cross-platform support.
 - **Security closeout:** repeat profile/credential/settings/log/diagnostics checks and confirm no plaintext secrets are exposed.
 
+## V2.3 navigation feedback fixes
+
+- **Text editor preference:** open Preferences and confirm Text editor is a visible selector with System default, TextEdit, TextMate, and Custom. Select TextMate, save, relaunch if practical, and confirm the value persists.
+- **Copy current path shortcut:** focus local and remote panes in turn and press `Cmd+Option+C`; paste into a scratch field and confirm the active pane current path is copied. Confirm `Cmd+Shift+C` still copies selected full paths.
+- **Breadcrumb path entry:** in a V12 local pane, confirm no separate full path address field appears next to breadcrumb. Click empty breadcrumb space or double-click the breadcrumb, type a valid local path, press Enter, and confirm navigation.
+- **Remote breadcrumb path entry:** connect to the isolated remote test root, press `Cmd+L`, type another allowed remote path, press Enter, and confirm navigation. Press Escape from edit mode and confirm breadcrumb mode returns without navigation.
+- **Breadcrumb copy path:** click the breadcrumb Copy Path icon for local and remote panes and confirm the clipboard contains the pane current path.
+- **Navigation row:** confirm Filter names, Recent, History, and Clear Recent remain available and do not squeeze the breadcrumb path display.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.

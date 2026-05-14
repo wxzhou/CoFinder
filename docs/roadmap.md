@@ -23,6 +23,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.0 | v1.0.0 | Shipped |
 | V2.1 | v1.1.0 | Shipped |
 | V2.2 | v1.2.0 | Shipped |
+| V2.3 | v1.3.0 | Shipped |
 
 ## Shipped phases (summary)
 
@@ -54,8 +55,21 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.0 | v1.0.0 | Stable Personal Release — shipped |
 | V2.1 | v1.1.0 | v1.0 Feedback Stabilization — shipped |
 | V2.2 | v1.2.0 | v1.1 Feedback Fixes — shipped |
+| V2.3 | v1.3.0 | v1.2 Navigation Feedback Fixes — shipped |
 
 ## Latest Shipped Phase
+
+### V2.3 / v1.3.0 — v1.2 Navigation Feedback Fixes
+
+V2.3 is a focused polish release for v1.2.0 hands-on feedback:
+
+- Preferences now shows explicit text-editor choices for System default, TextEdit, TextMate, and Custom.
+- Copy Current Path keeps the `Cmd+Option+C` shortcut but detects the physical C key for macOS reliability.
+- V12 breadcrumbs and address entry are integrated: breadcrumb is the default view, while empty breadcrumb click, breadcrumb double-click, or `Cmd+L` switches to full path input.
+- Enter submits path navigation; Escape or blur returns to breadcrumb mode.
+- Copy Path is available from the breadcrumb area, and Filter names / Recent / History remain nearby without a duplicate address field.
+
+See **`docs/dev/V2.3_PLAN.md`** for the detailed triage and acceptance checks.
 
 ### V2.2 / v1.2.0 — v1.1 Feedback Fixes
 
@@ -86,7 +100,7 @@ See **`docs/dev/V2.1_PLAN.md`** for the detailed triage and acceptance checks.
 
 ## Planned Next Phase
 
-No V2.3 scope is defined yet. Future planning should start from new hands-on feedback against v1.2.0.
+No V2.4 scope is defined yet. Future planning should start from new hands-on feedback against v1.3.0.
 
 ## Explicitly out of scope or not on the main line (today)
 
@@ -103,4 +117,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.2 / v1.2.0 is the current stable personal release. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.3 / v1.3.0 is the current stable personal release. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
