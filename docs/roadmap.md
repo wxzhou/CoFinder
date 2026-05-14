@@ -27,7 +27,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.4 | v1.4.0 | Complete on dev |
 | V2.5 | v1.5.0 | Complete on dev |
 | V2.6 | v1.6.0 | Complete on dev |
-| V2.7 | v1.7.0 | Planned |
+| V2.7 | v1.7.0 | Complete on dev |
 | V2.8 | v1.8.0 | Planned |
 
 ## Shipped phases (summary)
@@ -64,7 +64,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.4 | v1.4.0 | Pane-Scoped Toolbar and Finder Visual Polish — complete on dev |
 | V2.5 | v1.5.0 | Remote Text Edit Auto-Sync MVP — complete on dev |
 | V2.6 | v1.6.0 | Remote Edit Reliability and Session Management — complete on dev |
-| V2.7 | v1.7.0 | V12 UI Refinement and Task-Center Polish — planned |
+| V2.7 | v1.7.0 | V12 UI Refinement and Task-Center Polish — complete on dev |
 | V2.8 | v1.8.0 | Advanced Remote Navigation and Preview Decisions — planned |
 
 ## Latest Completed Phase
@@ -90,6 +90,18 @@ V2.6 hardens remote editing after the MVP:
 - Isolated fake-SFTP harness for repeatable edit-session regression tests.
 
 See **`docs/dev/V2.6_PLAN.md`** for the detailed acceptance checks.
+
+### V2.7 / v1.7.0 — V12 UI Refinement and Task-Center Polish
+
+V2.7 improves the V12 daily-use surface:
+
+- Tighter control states and empty pane states.
+- Transfer task filters.
+- Denser Inspector metadata.
+- Explicit Column View deferral.
+- Manual layout regression checklist.
+
+See **`docs/dev/V2.7_PLAN.md`** for the detailed acceptance checks.
 
 ### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
 
@@ -184,4 +196,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.6 / v1.6.0 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Planned phases through V2.8 are intentionally scoped and may narrow further before implementation. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.7 / v1.7.0 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Planned phases through V2.8 are intentionally scoped and may narrow further before implementation. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

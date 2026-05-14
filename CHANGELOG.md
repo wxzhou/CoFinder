@@ -4,11 +4,22 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.6.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.7.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.6.0**.
+No user-facing changes since **v1.7.0**.
+
+## v1.7.0 — Product milestone V2.7
+
+V2.7 refines the V12 interface and task surfaces.
+
+- Tightened V12 control focus, hover, and disabled states.
+- Added explicit empty folder states for local and remote panes.
+- Added transfer drawer filters for All, Running, Failed, and Done.
+- Made Inspector metadata denser and easier to scan.
+- Documented the decision to defer real Column View until it can be implemented fully.
+- Added a V12 layout regression checklist for release-candidate visual review.
 
 ## v1.6.0 — Product milestone V2.6
 
