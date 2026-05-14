@@ -45,13 +45,13 @@ export function V12VisualLocationStrip(props: V12VisualLocationStripProps): Reac
     <div className="v12m-loc">
       <div className="v12m-loc-head">
         <div className="v12m-loc-titles">
-          <span className="v12m-loc-title">{props.title}</span>
+          <span className="v12m-loc-title-row">
+            <span className="v12m-loc-title">{props.title}</span>
+            {props.badge ?? null}
+          </span>
           <span className="v12m-loc-meta">{props.meta}</span>
         </div>
-        <div className="v12m-loc-tail">
-          {props.badge ?? null}
-          {props.trailing ?? null}
-        </div>
+        {props.trailing ? <div className="v12m-loc-tail">{props.trailing}</div> : null}
       </div>
       <div className="v12m-pathline">
         {props.editingPath ? (

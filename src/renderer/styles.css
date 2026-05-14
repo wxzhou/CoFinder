@@ -257,6 +257,27 @@ body,
   color: var(--text-secondary);
 }
 
+.cfv12-root .v12m-sidebar-footer {
+  margin-top: auto;
+  padding: 10px 12px 0;
+}
+
+.cfv12-root .v12m-sidebar-preferences {
+  width: 100%;
+  height: var(--control-h);
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, #fff 76%, var(--bg-soft));
+  color: var(--text-primary);
+  font-size: 12px;
+  text-align: left;
+  padding: 0 8px;
+}
+
+.cfv12-root .v12m-sidebar-preferences:hover {
+  background: #fff;
+}
+
 .pane-filter-input:disabled,
 .history-select:disabled,
 .path-form input:disabled {
@@ -311,6 +332,43 @@ body,
   background: #fff;
 }
 
+.cfv12-root .v12m-loc-title-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.cfv12-root .v12m-loc-title-row .v12m-badge {
+  transform: translateY(1px);
+}
+
+.cfv12-root .v12m-pane-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 6px;
+  flex-wrap: nowrap;
+}
+
+.cfv12-root .v12m-pane-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.cfv12-root .v12m-pane-toolbar-controls {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(92px, 0.32fr) minmax(92px, 0.32fr) auto;
+  gap: 6px;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .cfv12-root .v12m-pane-actions {
   display: flex;
   align-items: center;
@@ -320,8 +378,9 @@ body,
 }
 
 .cfv12-root .v12m-pane-action {
-  width: var(--control-h);
+  width: 27px;
   height: var(--control-h);
+  min-width: 27px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -348,6 +407,11 @@ body,
   background: #fff;
 }
 
+.cfv12-root .v12m-pane-action.is-pressed {
+  background: color-mix(in srgb, var(--accent) 10%, #fff);
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border-subtle));
+}
+
 .cfv12-root .v12m-pane-action.is-danger:hover:not(:disabled) svg {
   stroke: #b42318;
 }
@@ -360,6 +424,10 @@ body,
 @media (max-width: 980px) {
   .nav-efficiency-bar {
     grid-template-columns: minmax(140px, 1fr) minmax(100px, 0.75fr);
+  }
+
+  .cfv12-root .v12m-pane-toolbar-controls {
+    grid-template-columns: minmax(120px, 1fr) minmax(84px, 0.45fr) minmax(84px, 0.45fr) auto;
   }
 }
 

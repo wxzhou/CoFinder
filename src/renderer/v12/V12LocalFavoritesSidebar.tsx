@@ -22,6 +22,7 @@ export type V12LocalFavoritesSidebarProps = {
   onAddCurrentRemotePath: () => void;
   onRemoveRemoteFavorite: (id: string) => void;
   onReorderRemoteFavorite: (id: string, direction: "up" | "down") => void;
+  onOpenPreferences: () => void;
 };
 
 export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): ReactElement {
@@ -171,6 +172,11 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
             );
           })
         )}
+      </div>
+      <div className="v12m-sidebar-footer">
+        <button type="button" className="v12m-sidebar-preferences" onClick={() => props.onOpenPreferences()}>
+          Preferences
+        </button>
       </div>
     </aside>
   );

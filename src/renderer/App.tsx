@@ -10,8 +10,7 @@ import {
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
-import { V12Toolbar } from "./v12/V12Toolbar";
-import { V12PaneActionStrip } from "./v12/V12PaneActionStrip";
+import { V12PaneToolbar } from "./v12/V12PaneToolbar";
 import { V12TransferDrawer } from "./v12/V12TransferDrawer";
 import { V12PaneInspector } from "./v12/V12PaneInspector";
 import { pathToSegments } from "./v12/pane/pathSegments";
@@ -2903,96 +2902,6 @@ export function App(props: AppProps = {}) {
 
   const localInspectorCanShow = inspectorColumnVisible("local", localPane.selectedFullPaths.length, remoteConnected);
   const remoteInspectorCanShow = inspectorColumnVisible("remote", remotePane.selectedFullPaths.length, remoteConnected);
-  const v12InspectorToggleDisabled =
-    activePane === "local"
-      ? !localInspectorCanShow || localPane.selectedFullPaths.length === 0
-      : !remoteInspectorCanShow || remotePane.selectedFullPaths.length === 0;
-  const v12InspectorTogglePressed = activePane === "local" ? v12LocalInspectorReveal : v12RemoteInspectorReveal;
-
-  const v12Toolbar =
-    uiShell === "v12" ? (
-      <V12Toolbar
-        onBack={() => {
-          if (activePane === "local") {
-            const target = localPane.history.backStack[localPane.history.backStack.length - 1];
-            if (target) void navigateLocal(activeTab.id, target, "back");
-          } else {
-            const target = remotePane.history.backStack[remotePane.history.backStack.length - 1];
-            if (target && remotePane.connectionId) void listRemotePath(remotePane.connectionId, target, "back", activeTab.id);
-          }
-        }}
-        onForward={() => {
-          if (activePane === "local") {
-            const target = localPane.history.forwardStack[0];
-            if (target) void navigateLocal(activeTab.id, target, "forward");
-          } else {
-            const target = remotePane.history.forwardStack[0];
-            if (target && remotePane.connectionId) void listRemotePath(remotePane.connectionId, target, "forward", activeTab.id);
-          }
-        }}
-        onUp={() => {
-          if (activePane === "local") {
-            void navigateLocal(activeTab.id, getParentPath(localPane.currentPath));
-          } else if (remotePane.connectionId) {
-            void listRemotePath(remotePane.connectionId, getParentPath(remotePane.currentPath), "push", activeTab.id);
-          }
-        }}
-        onHome={() => {
-          if (activePane === "local") {
-            if (localHomePath) void navigateLocal(activeTab.id, localHomePath, "push");
-            else void initializeLocalHome(activeTab.id);
-          } else if (remotePane.connectionId) {
-            void listRemotePath(remotePane.connectionId, remotePane.homePath || "/", "push", activeTab.id);
-          }
-        }}
-        onRefresh={() => {
-          if (activePane === "local") {
-            if (localPane.currentPath) void navigateLocal(activeTab.id, localPane.currentPath, "replace");
-          } else if (remotePane.connectionId) {
-            void listRemotePath(remotePane.connectionId, remotePane.currentPath, "replace", activeTab.id);
-          }
-        }}
-        onCopyCurrentPath={() => void copyCurrentPath(activePane)}
-        backDisabled={
-          activePane === "local"
-            ? localPane.history.backStack.length === 0
-            : remotePane.history.backStack.length === 0 || !remotePane.connectionId
-        }
-        forwardDisabled={
-          activePane === "local"
-            ? localPane.history.forwardStack.length === 0
-            : remotePane.history.forwardStack.length === 0 || !remotePane.connectionId
-        }
-        upDisabled={activePane === "local" ? false : !remotePane.connectionId}
-        homeDisabled={activePane === "local" ? !localHomePath : !remotePane.connectionId}
-        refreshDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
-        copyCurrentPathDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
-        onConnectAction={() => {
-          if (remoteConnected) void disconnectRemote(activeTab.id);
-          else openSiteManagerForTab(activeTab.id);
-        }}
-        connectActionDisabled={remotePane.connectionStatus === "connecting"}
-        connectActionTitle={remoteConnected ? "Disconnect from server" : "Connect to server…"}
-        connectActionAriaLabel={remoteConnected ? "Disconnect" : "Connect"}
-        onInspectorToggle={() => {
-          if (activePane === "local") {
-            cancelV12LocalInspRevealTimer();
-            setV12LocalInspectorReveal((v) => !v);
-          } else {
-            cancelV12RemoteInspRevealTimer();
-            setV12RemoteInspectorReveal((v) => !v);
-          }
-        }}
-        inspectorToggleDisabled={v12InspectorToggleDisabled}
-        inspectorTogglePressed={v12InspectorTogglePressed}
-        onPreferences={openPreferences}
-        searchValue={activePane === "local" ? localPane.filterText : remotePane.filterText}
-        searchPlaceholder={`Filter ${activePane}`}
-        onSearchChange={(value) =>
-          activePane === "local" ? updateLocalFilter(activeTab.id, value) : updateRemoteFilter(activeTab.id, value)
-        }
-      />
-    ) : null;
 
   const queueExpandedBody = (
     <>
@@ -3495,11 +3404,65 @@ export function App(props: AppProps = {}) {
     </div>
   );
 
-  const localPaneActionStrip =
+  const localPaneToolbar =
     uiShell === "v12" ? (
-      <V12PaneActionStrip
-        label="Local pane actions"
+      <V12PaneToolbar
+        label="Local pane toolbar"
         actions={[
+          {
+            label: "Back",
+            title: "Back",
+            icon: "chevron-back",
+            disabled: localPane.history.backStack.length === 0,
+            onClick: () => {
+              const target = localPane.history.backStack[localPane.history.backStack.length - 1];
+              if (target) void navigateLocal(activeTab.id, target, "back");
+            }
+          },
+          {
+            label: "Forward",
+            title: "Forward",
+            icon: "chevron-forward",
+            disabled: localPane.history.forwardStack.length === 0,
+            onClick: () => {
+              const target = localPane.history.forwardStack[0];
+              if (target) void navigateLocal(activeTab.id, target, "forward");
+            }
+          },
+          {
+            label: "Enclosing folder",
+            title: "Enclosing folder",
+            icon: "chevron-up",
+            onClick: () => void navigateLocal(activeTab.id, getParentPath(localPane.currentPath))
+          },
+          {
+            label: "Home",
+            title: "Home",
+            icon: "home",
+            disabled: !localHomePath,
+            onClick: () => {
+              if (localHomePath) void navigateLocal(activeTab.id, localHomePath, "push");
+              else void initializeLocalHome(activeTab.id);
+            }
+          },
+          {
+            label: "Refresh",
+            title: "Refresh",
+            icon: "arrow-clockwise",
+            disabled: !localPane.currentPath,
+            onClick: () => void navigateLocal(activeTab.id, localPane.currentPath, "replace")
+          },
+          {
+            label: "Toggle local inspector",
+            title: "Toggle inspector",
+            icon: "sidebar-right",
+            disabled: !localInspectorCanShow || localPane.selectedFullPaths.length === 0,
+            pressed: v12LocalInspectorReveal,
+            onClick: () => {
+              cancelV12LocalInspRevealTimer();
+              setV12LocalInspectorReveal((v) => !v);
+            }
+          },
           {
             label: "Upload",
             title: "Upload local selection to remote pane",
@@ -3537,14 +3500,120 @@ export function App(props: AppProps = {}) {
             onClick: () => void openTerminalHere(activeTab.id, "local", localPane.currentPath)
           }
         ]}
-      />
+      >
+        <input
+          className="pane-filter-input"
+          value={localPane.filterText}
+          onChange={(event) => updateLocalFilter(activeTab.id, event.target.value)}
+          placeholder="Filter names"
+          aria-label="Filter local files by name"
+        />
+        <select
+          className="history-select"
+          value=""
+          aria-label="Local recent locations"
+          onChange={(event) => {
+            const path = event.target.value;
+            if (path) void navigateLocal(activeTab.id, path, "push");
+          }}
+        >
+          <option value="">Recent</option>
+          {localRecentPaths.map((item) => (
+            <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
+              {item.label} - {item.path}
+            </option>
+          ))}
+        </select>
+        <select
+          className="history-select"
+          value=""
+          aria-label="Local back and forward history"
+          onChange={(event) => {
+            const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
+            if (path) void navigateLocal(activeTab.id, path, mode);
+          }}
+        >
+          <option value="">History</option>
+          {localPane.history.backStack.slice().reverse().map((path) => (
+            <option key={`back-${path}`} value={`back:${path}`}>
+              Back: {path}
+            </option>
+          ))}
+          {localPane.history.forwardStack.map((path) => (
+            <option key={`forward-${path}`} value={`forward:${path}`}>
+              Forward: {path}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="toolbar-button" disabled={localRecentPaths.length === 0} onClick={clearLocalRecents}>
+          Clear Recent
+        </button>
+      </V12PaneToolbar>
     ) : null;
 
-  const remotePaneActionStrip =
+  const remotePaneToolbar =
     uiShell === "v12" ? (
-      <V12PaneActionStrip
-        label="Remote pane actions"
+      <V12PaneToolbar
+        label="Remote pane toolbar"
         actions={[
+          {
+            label: "Back",
+            title: "Back",
+            icon: "chevron-back",
+            disabled: remotePane.history.backStack.length === 0 || !remotePane.connectionId,
+            onClick: () => {
+              const target = remotePane.history.backStack[remotePane.history.backStack.length - 1];
+              if (target && remotePane.connectionId) void listRemotePath(remotePane.connectionId, target, "back", activeTab.id);
+            }
+          },
+          {
+            label: "Forward",
+            title: "Forward",
+            icon: "chevron-forward",
+            disabled: remotePane.history.forwardStack.length === 0 || !remotePane.connectionId,
+            onClick: () => {
+              const target = remotePane.history.forwardStack[0];
+              if (target && remotePane.connectionId) void listRemotePath(remotePane.connectionId, target, "forward", activeTab.id);
+            }
+          },
+          {
+            label: "Enclosing folder",
+            title: "Enclosing folder",
+            icon: "chevron-up",
+            disabled: !remotePane.connectionId,
+            onClick: () => {
+              if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, getParentPath(remotePane.currentPath), "push", activeTab.id);
+            }
+          },
+          {
+            label: "Home",
+            title: "Home",
+            icon: "home",
+            disabled: !remotePane.connectionId,
+            onClick: () => {
+              if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.homePath || "/", "push", activeTab.id);
+            }
+          },
+          {
+            label: "Refresh",
+            title: "Refresh",
+            icon: "arrow-clockwise",
+            disabled: !remotePane.connectionId,
+            onClick: () => {
+              if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.currentPath, "replace", activeTab.id);
+            }
+          },
+          {
+            label: "Toggle remote inspector",
+            title: "Toggle inspector",
+            icon: "sidebar-right",
+            disabled: !remoteInspectorCanShow || remotePane.selectedFullPaths.length === 0,
+            pressed: v12RemoteInspectorReveal,
+            onClick: () => {
+              cancelV12RemoteInspRevealTimer();
+              setV12RemoteInspectorReveal((v) => !v);
+            }
+          },
           {
             label: "Download",
             title: "Download remote selection to local pane",
@@ -3596,7 +3665,63 @@ export function App(props: AppProps = {}) {
             onClick: () => void disconnectRemote(activeTab.id)
           }
         ]}
-      />
+      >
+        <input
+          className="pane-filter-input"
+          value={remotePane.filterText}
+          disabled={!remotePane.connectionId}
+          onChange={(event) => updateRemoteFilter(activeTab.id, event.target.value)}
+          placeholder="Filter names"
+          aria-label="Filter remote files by name"
+        />
+        <select
+          className="history-select"
+          value=""
+          disabled={!remotePane.connectionId || remoteRecentPaths.length === 0}
+          aria-label="Remote recent locations"
+          onChange={(event) => {
+            const path = event.target.value;
+            if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
+          }}
+        >
+          <option value="">Recent</option>
+          {remoteRecentPaths.map((item) => (
+            <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
+              {item.label} - {item.path}
+            </option>
+          ))}
+        </select>
+        <select
+          className="history-select"
+          value=""
+          disabled={!remotePane.connectionId}
+          aria-label="Remote back and forward history"
+          onChange={(event) => {
+            const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
+            if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, mode, activeTab.id);
+          }}
+        >
+          <option value="">History</option>
+          {remotePane.history.backStack.slice().reverse().map((path) => (
+            <option key={`back-${path}`} value={`back:${path}`}>
+              Back: {path}
+            </option>
+          ))}
+          {remotePane.history.forwardStack.map((path) => (
+            <option key={`forward-${path}`} value={`forward:${path}`}>
+              Forward: {path}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="toolbar-button"
+          disabled={!activeProfile?.id || remoteRecentPaths.length === 0}
+          onClick={() => clearRemoteRecents(activeProfile?.id)}
+        >
+          Clear Recent
+        </button>
+      </V12PaneToolbar>
     ) : null;
 
   const localPaneEl = (
@@ -3627,8 +3752,7 @@ export function App(props: AppProps = {}) {
               onCancelPathInput={() => cancelPathEdit("local")}
               onCopyPath={() => void copyCurrentPath("local")}
             />
-            {localPaneActionStrip}
-            {localNavTools}
+            {localPaneToolbar}
           </div>
           <div className="v12m-pane-body">
             <div className="v12m-pane-split">
@@ -3998,8 +4122,7 @@ export function App(props: AppProps = {}) {
                 pathInputDisabled
                 onCopyPath={() => void copyCurrentPath("remote")}
               />
-              {remotePaneActionStrip}
-              {remoteNavTools}
+              {remotePaneToolbar}
             </div>
             <div className="v12m-pane-body">
               <div className="v12m-pane-split">
@@ -4052,14 +4175,8 @@ export function App(props: AppProps = {}) {
                 onSubmitPathInput={() => void submitPathEdit("remote")}
                 onCancelPathInput={() => cancelPathEdit("remote")}
                 onCopyPath={() => void copyCurrentPath("remote")}
-                trailing={
-                  <button type="button" className="v12m-insp-linkbtn" onClick={() => void disconnectRemote(activeTab.id)}>
-                    Disconnect
-                  </button>
-                }
               />
-              {remotePaneActionStrip}
-              {remoteNavTools}
+              {remotePaneToolbar}
             </div>
             <div className="v12m-pane-body">
               <div className="v12m-pane-split">
@@ -4453,7 +4570,7 @@ export function App(props: AppProps = {}) {
         <AppShellV12
           titleTabs={tabBar}
           banner={null}
-          toolbar={v12Toolbar!}
+          toolbar={null}
           devHint={import.meta.env.DEV ? <V12ProdDevHint /> : null}
           drawer={
             <>
@@ -4503,6 +4620,7 @@ export function App(props: AppProps = {}) {
                     onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
                     onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
                     onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
+                    onOpenPreferences={openPreferences}
                   />
                 </div>
                 <div
