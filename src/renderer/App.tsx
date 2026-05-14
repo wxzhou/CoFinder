@@ -4187,22 +4187,38 @@ export function App(props: AppProps = {}) {
               </label>
               <label>
                 Text editor
-                <input
-                  value={preferences.draft.general.defaultTextEditor}
-                  list="cofinder-text-editor-options"
+                <select
+                  value={["system", "TextEdit", "TextMate"].includes(preferences.draft.general.defaultTextEditor) ? preferences.draft.general.defaultTextEditor : "custom"}
                   onChange={(e) =>
                     setPreferences((p) => ({
                       ...p,
-                      draft: { ...p.draft, general: { ...p.draft.general, defaultTextEditor: e.target.value } }
+                      draft: {
+                        ...p.draft,
+                        general: {
+                          ...p.draft.general,
+                          defaultTextEditor: e.target.value === "custom" ? "" : e.target.value
+                        }
+                      }
                     }))
                   }
-                  placeholder="system, TextEdit, TextMate, or /Applications/TextMate.app"
-                />
-                <datalist id="cofinder-text-editor-options">
-                  <option value="system" />
-                  <option value="TextEdit" />
-                  <option value="TextMate" />
-                </datalist>
+                >
+                  <option value="system">System default</option>
+                  <option value="TextEdit">TextEdit</option>
+                  <option value="TextMate">TextMate</option>
+                  <option value="custom">Custom...</option>
+                </select>
+                {["system", "TextEdit", "TextMate"].includes(preferences.draft.general.defaultTextEditor) ? null : (
+                  <input
+                    value={preferences.draft.general.defaultTextEditor}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: { ...p.draft, general: { ...p.draft.general, defaultTextEditor: e.target.value } }
+                      }))
+                    }
+                    placeholder="App name or /Applications/TextMate.app"
+                  />
+                )}
               </label>
               <label>
                 Conflict policy
