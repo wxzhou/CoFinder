@@ -18,7 +18,6 @@ export type V12PaneInspectorProps = {
   onQuickLook?: () => void;
   onRevealInFinder?: () => void;
   onCopyPaths?: () => void;
-  onGetInfo?: () => void;
 };
 
 export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
@@ -51,7 +50,7 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
               {previewNames.length ? ` · ${previewNames.join(", ")}${n > previewNames.length ? ", …" : ""}` : ""}
             </p>
             <p className="v12m-insp-line v12m-insp-line--sub">
-              Details below apply to a single item. Select one row or use Get Info from the context menu.
+              Details below apply to a single item.
             </p>
           </div>
           <div className="v12m-insp-actions">
@@ -71,16 +70,13 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
             >
               {props.scope === "local" ? "Copy paths" : "Copy remote paths"}
             </button>
-            <button type="button" className="v12m-insp-linkbtn" disabled>
-              Get Info
-            </button>
           </div>
         </>
       ) : null}
 
       {single ? (
         <>
-          {props.infoLoading ? <p className="v12m-insp-empty">Loading…</p> : null}
+          {props.infoLoading ? <p className="v12m-insp-empty">Loading metadata...</p> : null}
           {!props.infoLoading && props.infoError ? <p className="v12m-insp-empty v12m-insp-empty--err">{props.infoError}</p> : null}
           {!props.infoLoading && !props.infoError && props.info ? (
             <>
@@ -97,12 +93,36 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                 </p>
               </div>
               <div className="v12m-insp-sect">
-                <h3>Details</h3>
+                <h3>Metadata</h3>
                 <ul className="v12m-insp-kv">
                   <li>
-                    <span>Where</span>
+                    <span>Type</span>
+                    <span>{pathInfoKindLabel(props.info.type)}</span>
+                  </li>
+                  <li>
+                    <span>Path</span>
                     <span className="v12m-mono">{props.info.fullPath}</span>
                   </li>
+                  <li>
+                    <span>Size</span>
+                    <span>{props.info.type === "directory" ? "—" : props.formatSize(props.info.size)}</span>
+                  </li>
+                  <li>
+                    <span>Modified</span>
+                    <span>{props.formatTime(props.info.mtime)}</span>
+                  </li>
+                  {props.info.type === "directory" && typeof props.info.fileCount === "number" ? (
+                    <li>
+                      <span>Files</span>
+                      <span>{props.info.fileCount}</span>
+                    </li>
+                  ) : null}
+                  {props.info.type === "directory" && typeof props.info.folderCount === "number" ? (
+                    <li>
+                      <span>Folders</span>
+                      <span>{props.info.folderCount}</span>
+                    </li>
+                  ) : null}
                   {props.info.permissions ? (
                     <li>
                       <span>Permissions</span>
@@ -145,9 +165,6 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                 ) : null}
                 <button type="button" className="v12m-insp-linkbtn" disabled={!props.onCopyPaths} onClick={() => props.onCopyPaths?.()}>
                   {props.scope === "local" ? "Copy path" : "Copy remote path"}
-                </button>
-                <button type="button" className="v12m-insp-linkbtn" disabled={!props.onGetInfo} onClick={() => props.onGetInfo?.()}>
-                  Get Info
                 </button>
               </div>
             </>

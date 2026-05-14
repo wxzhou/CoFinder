@@ -5,30 +5,21 @@ export type V12ToolbarProps = {
   onBack: () => void;
   onForward: () => void;
   onUp: () => void;
+  onHome: () => void;
   onRefresh: () => void;
+  onCopyCurrentPath: () => void;
   backDisabled: boolean;
   forwardDisabled: boolean;
   upDisabled: boolean;
+  homeDisabled: boolean;
   refreshDisabled: boolean;
+  copyCurrentPathDisabled: boolean;
 
   /** Disconnected / failed: open Site Manager; connected: disconnect */
   onConnectAction: () => void;
   connectActionDisabled: boolean;
   connectActionTitle: string;
   connectActionAriaLabel: string;
-
-  onUpload: () => void;
-  onDownload: () => void;
-  onNewFolder: () => void;
-  uploadDisabled: boolean;
-  downloadDisabled: boolean;
-  newFolderDisabled: boolean;
-
-  onDelete: () => void;
-  deleteDisabled: boolean;
-
-  onGetInfo: () => void;
-  getInfoDisabled: boolean;
 
   onInspectorToggle: () => void;
   inspectorToggleDisabled: boolean;
@@ -78,6 +69,16 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
         >
           <V12TbIcon name="chevron-up" />
         </button>
+        <button
+          type="button"
+          className="v12m-tb"
+          title="Home"
+          aria-label="Home"
+          disabled={props.homeDisabled}
+          onClick={() => props.onHome()}
+        >
+          <V12TbIcon name="home" />
+        </button>
       </div>
       <span className="v12m-tsep" aria-hidden />
       <div className="v12m-tg">
@@ -94,6 +95,16 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
         <button
           type="button"
           className="v12m-tb"
+          title="Copy current path (⌘⌥C)"
+          aria-label="Copy current path"
+          disabled={props.copyCurrentPathDisabled}
+          onClick={() => props.onCopyCurrentPath()}
+        >
+          <V12TbIcon name="copy" />
+        </button>
+        <button
+          type="button"
+          className="v12m-tb"
           title={props.connectActionTitle}
           aria-label={props.connectActionAriaLabel}
           disabled={props.connectActionDisabled}
@@ -102,79 +113,7 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
           <V12TbIcon name="plug" />
         </button>
       </div>
-      <span className="v12m-tsep" aria-hidden />
       <div className="v12m-tg">
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Upload selection to server"
-          aria-label="Upload"
-          disabled={props.uploadDisabled}
-          onClick={() => props.onUpload()}
-        >
-          <V12TbIcon name="arrow-up-tray" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Download selection to local folder"
-          aria-label="Download"
-          disabled={props.downloadDisabled}
-          onClick={() => props.onDownload()}
-        >
-          <V12TbIcon name="arrow-down-tray" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="New remote folder"
-          aria-label="New folder"
-          disabled={props.newFolderDisabled}
-          onClick={() => props.onNewFolder()}
-        >
-          <V12TbIcon name="folder-badge-plus" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Delete selection"
-          aria-label="Delete"
-          disabled={props.deleteDisabled}
-          onClick={() => props.onDelete()}
-        >
-          <V12TbIcon name="trash" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Get Info"
-          aria-label="Get info"
-          disabled={props.getInfoDisabled}
-          onClick={() => props.onGetInfo()}
-        >
-          <V12TbIcon name="info-circle" />
-        </button>
-      </div>
-      <span className="v12m-tsep" aria-hidden />
-      <div className="v12m-tg">
-        <button
-          type="button"
-          className="v12m-tb on"
-          title="List view"
-          aria-label="List"
-          disabled
-        >
-          <V12TbIcon name="list-bullet" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Columns view (not available)"
-          aria-label="Columns"
-          disabled
-        >
-          <V12TbIcon name="rectangle-split" />
-        </button>
         <button
           type="button"
           className={`v12m-tb${props.inspectorTogglePressed ? " on" : ""}`}

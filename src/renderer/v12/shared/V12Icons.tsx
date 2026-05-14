@@ -23,11 +23,26 @@ export function V12Icon(props: { name: "disk" | "folder" | "server" | "clock" | 
   if (name === "folder") {
     return (
       <svg {...c} className="v12m-svg-folder">
+        <defs>
+          <linearGradient id="v12-folder-tab" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#9fd0ff" />
+            <stop offset="100%" stopColor="#6eb4f3" />
+          </linearGradient>
+          <linearGradient id="v12-folder-body" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#87c7ff" />
+            <stop offset="100%" stopColor="#4ea3ec" />
+          </linearGradient>
+        </defs>
         <path
-          d="M3.25 5.25c0-.55.45-1 1-1h2.2l.85.85h6.45c.55 0 1 .45 1 1v8.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1v-8.35z"
-          fill="#7eb6ec"
+          d="M3.25 5.15c0-.57.46-1.03 1.03-1.03h2.35c.28 0 .55.11.75.31l.72.72h7.62c.57 0 1.03.46 1.03 1.03v7.52c0 .57-.46 1.03-1.03 1.03H4.28c-.57 0-1.03-.46-1.03-1.03V5.15z"
+          fill="url(#v12-folder-tab)"
         />
-        <path d="M3.25 6.5h13.5v7.1c0 .55-.45 1-1 1h-11.5c-.55 0-1-.45-1-1V6.5z" fill="#4d92d9" />
+        <path
+          d="M2.9 7.1c0-.56.45-1.01 1.01-1.01h12.18c.56 0 1.01.45 1.01 1.01v7.25c0 .84-.68 1.53-1.53 1.53H4.43c-.84 0-1.53-.68-1.53-1.53V7.1z"
+          fill="url(#v12-folder-body)"
+        />
+        <path d="M3.25 7.1h13.5" stroke="rgba(255,255,255,0.42)" strokeWidth="0.7" />
+        <path d="M4.2 15.3h11.6" stroke="rgba(38,116,190,0.26)" strokeWidth="0.7" strokeLinecap="round" />
       </svg>
     );
   }
@@ -97,6 +112,13 @@ export function V12TbIcon(props: { name: string }): ReactElement {
           <path d="M5 12l5-5 5 5" />
         </svg>
       );
+    case "home":
+      return (
+        <svg {...s}>
+          <path d="M4 9.5l6-5 6 5" />
+          <path d="M6 8.5v7h8v-7" />
+        </svg>
+      );
     case "arrow-clockwise":
       return (
         <svg {...s}>
@@ -115,11 +137,32 @@ export function V12TbIcon(props: { name: string }): ReactElement {
           <path d="M4 14h12M6 10l4 4 4-4M10 6v8" />
         </svg>
       );
+    case "copy":
+      return (
+        <svg {...s}>
+          <rect x="7" y="5" width="8" height="10" rx="1" />
+          <path d="M5 13.5H4.5a1 1 0 01-1-1v-8a1 1 0 011-1H11a1 1 0 011 1V5" />
+        </svg>
+      );
     case "folder-badge-plus":
       return (
         <svg {...s}>
           <path d="M3.5 6.5h4l1 1h8v9h-13v-10z" />
           <path d="M10 11v4M8 13h4" />
+        </svg>
+      );
+    case "doc-badge-plus":
+      return (
+        <svg {...s}>
+          <path d="M5 3.5h6.5L15 7v9.5H5v-13z" />
+          <path d="M11.5 3.5V7H15M10 10.5v4M8 12.5h4" />
+        </svg>
+      );
+    case "pencil":
+      return (
+        <svg {...s}>
+          <path d="M4.5 14.8l1.1-3.7 7.2-7.2a1.6 1.6 0 012.3 2.3l-7.2 7.2-3.4 1.4z" />
+          <path d="M11.7 5l2.3 2.3" />
         </svg>
       );
     case "trash":
@@ -155,6 +198,13 @@ export function V12TbIcon(props: { name: string }): ReactElement {
       return (
         <svg {...s}>
           <path d="M6 8h8M7 5v3M13 5v3M8 11v4M12 11v4" />
+        </svg>
+      );
+    case "terminal":
+      return (
+        <svg {...s}>
+          <rect x="3.5" y="4.5" width="13" height="11" rx="1.5" />
+          <path d="M6.5 8l2 2-2 2M10 12h3.5" />
         </svg>
       );
     case "sidebar-right":

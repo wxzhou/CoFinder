@@ -17,6 +17,7 @@ export type V12VisualFileListProps<T extends FileEntry> = {
   onRowContextMenu: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
   onRowDoubleClick: (entry: T) => void;
   onBackgroundMouseDown: (event: MouseEvent<HTMLDivElement>) => void;
+  onBackgroundContextMenu?: (event: MouseEvent<HTMLDivElement>) => void;
   onBackgroundDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onBackgroundDrop?: (event: DragEvent<HTMLDivElement>) => void;
   onDragLeave?: (event: DragEvent<HTMLDivElement>) => void;
@@ -39,6 +40,7 @@ export type V12VisualFileListProps<T extends FileEntry> = {
   sortMark: (direction: SortDirection) => string;
   /** Human-readable kind column (mock uses “Folder” / “Document”). */
   formatKind: (entry: T) => string;
+  emptyMessage?: string;
 };
 
 function rowSelClass(selected: boolean, paneActive: boolean): string {
@@ -71,10 +73,12 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
         className="v12m-list"
         role="list"
         onMouseDown={props.onBackgroundMouseDown}
+        onContextMenu={props.onBackgroundContextMenu}
         onDragOver={props.onBackgroundDragOver}
         onDrop={props.onBackgroundDrop}
         onDragLeave={props.onDragLeave}
       >
+        {props.entries.length === 0 ? <div className="v12m-list-empty">{props.emptyMessage ?? "This folder is empty."}</div> : null}
         {props.entries.map((entry) => {
           const selected = props.selectedFullPaths.includes(entry.fullPath);
           const sel = rowSelClass(selected, props.isPaneActive);

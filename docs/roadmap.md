@@ -21,6 +21,14 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.8 | no standalone tag | Included in v1.0.0 |
 | V1.9 | no standalone tag | Included in v1.0.0 |
 | V2.0 | v1.0.0 | Shipped |
+| V2.1 | v1.1.0 | Shipped |
+| V2.2 | v1.2.0 | Shipped |
+| V2.3 | v1.3.0 | Shipped |
+| V2.4 | v1.4.0 | Complete on dev |
+| V2.5 | v1.5.0 | Complete on dev |
+| V2.6 | v1.6.0 | Complete on dev |
+| V2.7 | v1.7.0 | Complete on dev |
+| V2.8 | v1.8.0 | Complete on dev |
 
 ## Shipped phases (summary)
 
@@ -50,13 +58,118 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V1.8 | no standalone tag | Remote Operations Expansion — included in v1.0.0 |
 | V1.9 | no standalone tag | Packaging, Updates, and Reliability — included in v1.0.0 |
 | V2.0 | v1.0.0 | Stable Personal Release — shipped |
+| V2.1 | v1.1.0 | v1.0 Feedback Stabilization — shipped |
+| V2.2 | v1.2.0 | v1.1 Feedback Fixes — shipped |
+| V2.3 | v1.3.0 | v1.2 Navigation Feedback Fixes — shipped |
+| V2.4 | v1.4.0 | Pane-Scoped Toolbar and Finder Visual Polish — complete on dev |
+| V2.5 | v1.5.0 | Remote Text Edit Auto-Sync MVP — complete on dev |
+| V2.6 | v1.6.0 | Remote Edit Reliability and Session Management — complete on dev |
+| V2.7 | v1.7.0 | V12 UI Refinement and Task-Center Polish — complete on dev |
+| V2.8 | v1.8.0 | Remote Quick Look — complete on dev |
+
+## Latest Completed Phase
+
+### V2.5 / v1.5.0 — Remote Text Edit Auto-Sync MVP
+
+V2.5 introduces the first write-capable remote edit workflow with tight text-only scope:
+
+- Separate **Edit Remote File** entry point for sniffed text files; **Open** remains read-only preview.
+- Edit cache isolation from read-only preview cache.
+- Local save watching with debounced upload and remote-baseline conflict checks.
+- Conflict/failure recovery actions and compact Remote edits status panel.
+
+See **`docs/dev/V2.5_PLAN.md`** for the detailed acceptance checks.
+
+### V2.6 / v1.6.0 — Remote Edit Reliability and Session Management
+
+V2.6 hardens remote editing after the MVP:
+
+- Richer edit-session detail and explicit manual actions.
+- Safer watcher behavior for atomic saves, deleted cache files, and transient upload retries.
+- Conflict-copy recovery for manual comparison without automatic merge.
+- Isolated fake-SFTP harness for repeatable edit-session regression tests.
+
+See **`docs/dev/V2.6_PLAN.md`** for the detailed acceptance checks.
+
+### V2.7 / v1.7.0 — V12 UI Refinement and Task-Center Polish
+
+V2.7 improves the V12 daily-use surface:
+
+- Tighter control states and empty pane states.
+- Transfer task filters.
+- Denser Inspector metadata.
+- Explicit Column View deferral.
+- Manual layout regression checklist.
+
+See **`docs/dev/V2.7_PLAN.md`** for the detailed acceptance checks.
+
+### V2.8 / v1.8.0 — Remote Quick Look
+
+V2.8 chooses Track B from the advanced navigation/preview decision:
+
+- Space opens read-only preview for a single selected remote text/image file.
+- Remote context menu has Quick Look separate from Open and Edit.
+- Column View and recursive remote search remain deferred.
+
+See **`docs/dev/V2.8_PLAN.md`** and **`docs/dev/V2.8_DECISION.md`**.
+
+### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
+
+V2.4 addresses V12 command ownership and visible polish before larger remote-edit work:
+
+- Pane-scoped action strips for local/remote operations.
+- Top toolbar kept for global/session navigation commands.
+- Removed unavailable view-mode toolbar controls.
+- Folder icon palette tuned lighter and closer to Finder.
+
+See **`docs/dev/V2.4_PLAN.md`** for the detailed acceptance checks.
+
+### V2.3 / v1.3.0 — v1.2 Navigation Feedback Fixes
+
+V2.3 is a focused polish release for v1.2.0 hands-on feedback:
+
+- Preferences now shows explicit text-editor choices for System default, TextEdit, TextMate, and Custom.
+- Copy Current Path keeps the `Cmd+Option+C` shortcut but detects the physical C key for macOS reliability.
+- V12 breadcrumbs and address entry are integrated: breadcrumb is the default view, while empty breadcrumb click, breadcrumb double-click, or `Cmd+L` switches to full path input.
+- Enter submits path navigation; Escape or blur returns to breadcrumb mode.
+- Copy Path is available from the breadcrumb area, and Filter names / Recent / History remain nearby without a duplicate address field.
+
+See **`docs/dev/V2.3_PLAN.md`** for the detailed triage and acceptance checks.
+
+### V2.2 / v1.2.0 — v1.1 Feedback Fixes
+
+V2.2 is a corrective release for v1.1.0 hands-on feedback. It focused on operations that appeared unresponsive or surprising:
+
+- Delete confirmation closes immediately after confirmation, duplicate delete submissions are guarded, and pane busy banners show long-running delete work.
+- Local and remote New Folder use an in-app dialog instead of hidden/unreliable system prompts.
+- Preferences can choose the default text editor for remote text preview, including TextMate.
+- Inspector no longer auto-opens on ordinary single-click and squeezes the file list.
+- Copy Current Path documents the `Cmd+Option+C` shortcut in the toolbar tooltip and Preferences reference.
+- Open Terminal Here / Open SSH Terminal Here works from pane background context menus and uses intuitive folder/file parent target semantics.
+- Remote SSH terminal launch preserves the requested path even when remote startup files contain `cd ...`.
+
+See **`docs/dev/V2.2_PLAN.md`** for the detailed triage and acceptance checks.
+
+### V2.1 / v1.1.0 — v1.0 Feedback Stabilization
+
+V2.1 is driven by v1.0.0 hands-on feedback. It prioritized correctness bugs before broader polish:
+
+- Transfer startup latency, Unicode path transfer support, and folder upload target semantics.
+- Remote folder delete and local/remote New Folder reliability.
+- Better text sniffing for remote preview, including `.bed`-style text files.
+- Inspector becomes the single Info surface; the Get Info modal is removed.
+- Restore last local/remote path preferences, Home and Copy Current Path navigation actions, stronger active-pane indicator.
+- macOS Preferences menu entry and resizable sidebar.
+
+See **`docs/dev/V2.1_PLAN.md`** for the detailed triage and acceptance checks.
 
 ## Explicitly out of scope or not on the main line (today)
 
 These remain **unsupported**, **deferred**, or **non-goals** across current plans unless a future milestone explicitly adopts them:
 
-- **Remote edit auto-sync**
-- **Full Remote Quick Look**. A limited read-only remote preview cache for text/images exists from **V1.3**; it is not a full macOS Quick Look equivalent and does not support editing/sync.
+- **Binary/document remote edit auto-sync**. V2.5/V2.6 plan text-file-only remote edit workflows first.
+- **Full Remote Quick Look**. A limited read-only remote preview cache for text/images exists from **V1.3**; V2.8 may choose a broader remote Quick Look track, but it remains deferred until then.
+- **Real Column View**. V2.7 defers it deliberately; see `docs/dev/column-view-decision.md`.
 - **Indexed/full-text search** (V1.7 only filters current listings and suggests already-known paths)
 - **Full ACL editor / remote shell file-manager mode** (V1.8 ships curated remote operations only)
 - **Full i18n** (no localized product shell in near phases)
@@ -66,4 +179,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.0 is the current stable personal release. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.8 / v1.8.0 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

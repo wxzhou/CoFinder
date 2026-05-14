@@ -1,4 +1,5 @@
 import type { LocalFavoriteListItem } from "../localFavorites";
+import type { RemoteEditSession } from "../remoteEdit";
 import type { ConnectionConfig, EntryType, RemoteFileEntry, ServerProfile, TransferTask } from "./models";
 import type { LocalFileEntry } from "./models";
 
@@ -21,6 +22,8 @@ export type PathInfo = {
   permissions?: string;
   owner?: string;
   group?: string;
+  fileCount?: number;
+  folderCount?: number;
 };
 
 export interface LocalErrorPayload {
@@ -41,6 +44,8 @@ export type RemoteErrorCode =
   | "LOCAL_OPEN_FAILED"
   | "LOCAL_RENAME_FAILED"
   | "LOCAL_DELETE_FAILED"
+  | "LOCAL_MKDIR_FAILED"
+  | "LOCAL_CREATE_FILE_FAILED"
   | "LOCAL_INFO_FAILED"
   | "LOCAL_UNKNOWN_ERROR"
   | "SYSTEM_INVALID_INPUT"
@@ -59,6 +64,7 @@ export type RemoteErrorCode =
   | "REMOTE_DELETE_FAILED"
   | "REMOTE_INFO_FAILED"
   | "REMOTE_MKDIR_FAILED"
+  | "REMOTE_CREATE_FILE_FAILED"
   | "REMOTE_CHMOD_FAILED"
   | "REMOTE_DUPLICATE_FAILED"
   | "REMOTE_DIRECTORY_SIZE_FAILED"
@@ -166,6 +172,7 @@ export type AppSettings = {
     confirmBeforeDelete: boolean;
     showHiddenFiles: boolean;
     firstRunOnboardingDismissed: boolean;
+    defaultTextEditor: string;
   };
   transfer: {
     defaultConflictPolicy: Exclude<TransferConflictPolicy, "cancel">;
@@ -177,6 +184,7 @@ export type AppSettings = {
     defaultInspectorVisible: boolean;
     defaultPaneRatio: number;
     sidebarVisible: boolean;
+    sidebarWidth: number;
   };
 };
 
@@ -228,6 +236,10 @@ export type RemoteDirectorySizeUpdatePayload = {
   error?: string;
 };
 
+export type RemoteEditUpdatePayload = {
+  session: RemoteEditSession;
+};
+
 /** Sent from Site Manager to create/update a profile; password is never persisted in profiles.json. */
 export type ProfileUpsertPayload = {
   id?: string;
@@ -250,6 +262,8 @@ export interface IpcApi {
     getHomePath: () => Promise<IpcResponse<{ homePath: string }>>;
     rename: (request: { path: string; newName: string }) => Promise<IpcResponse<{ renamed: true; newPath: string }>>;
     delete: (request: { paths: string[] }) => Promise<IpcResponse<{ deleted: number }>>;
+    mkdir: (request: { parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
+    createTextFile: (request: { parentPath: string; name?: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
     getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
   };
   remote: {
@@ -269,6 +283,11 @@ export interface IpcApi {
       includeDirectorySize?: boolean;
     }) => Promise<IpcResponse<{ info: PathInfo }>>;
     mkdir: (request: { connectionId: string; parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
+    createTextFile: (request: {
+      connectionId: string;
+      parentPath: string;
+      name?: string;
+    }) => Promise<IpcResponse<{ created: true; path: string }>>;
     chmod: (request: { connectionId: string; path: string; mode: string }) => Promise<IpcResponse<{ changed: true }>>;
     duplicate: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ duplicated: true; newPath: string }>>;
     directorySizeStart: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ jobId: string }>>;
@@ -281,6 +300,16 @@ export interface IpcApi {
     }) => Promise<IpcResponse<{ opened: true; localPath: string; kind: "text" | "image" }>>;
     previewClearForTab: (request: { tabId: string }) => Promise<IpcResponse<{ cleared: number }>>;
     previewClearForConnection: (request: { connectionId: string }) => Promise<IpcResponse<{ cleared: number }>>;
+    editOpen: (request: { tabId: string; connectionId: string; path: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
+    editList: () => Promise<IpcResponse<{ sessions: RemoteEditSession[] }>>;
+    editSyncNow: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
+    editRevealLocal: (request: { sessionId: string }) => Promise<IpcResponse<{ revealed: true; localPath: string }>>;
+    editRedownload: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
+    editForceUpload: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
+    editDownloadConflictCopy: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession; remoteCopyPath: string }>>;
+    editCopyConflictPaths: (request: { sessionId: string }) => Promise<IpcResponse<{ copied: true; text: string }>>;
+    editClose: (request: { sessionId: string; discardLocal?: boolean }) => Promise<IpcResponse<{ closed: true }>>;
+    onEditUpdate: (handler: (payload: RemoteEditUpdatePayload) => void) => () => void;
   };
   transfer: {
     checkUploadConflicts: (request: EnqueueUploadRequest) => Promise<IpcResponse<TransferConflictCheckResponse>>;
@@ -334,5 +363,6 @@ export interface IpcApi {
     openLogFile: () => Promise<IpcResponse<{ opened: true; path: string }>>;
     copyDiagnostics: () => Promise<IpcResponse<{ copied: true; diagnostics: DiagnosticsBundle }>>;
     checkForUpdates: () => Promise<IpcResponse<{ available: false; message: string }>>;
+    onOpenPreferences: (handler: () => void) => () => void;
   };
 }

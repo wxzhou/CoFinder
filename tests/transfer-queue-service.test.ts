@@ -40,6 +40,7 @@ function createService(options?: {
   runCommand?: (command: string) => Promise<{ ok: true } | { ok: false; message: string; detail?: string }>;
   procs?: FakeProc[];
   pathExists?: boolean;
+  localPathKind?: "file" | "directory" | "other";
 }) {
   const procs = options?.procs ?? [new FakeProc()];
   const spawnProcess = vi.fn(() => procs.shift() as unknown as ChildProcess);
@@ -55,7 +56,8 @@ function createService(options?: {
       if (result.ok) return result;
       return { ok: false as const, message: result.message || notFoundMessage, detail: result.detail };
     },
-    pathExists: async () => options?.pathExists ?? true
+    pathExists: async () => options?.pathExists ?? true,
+    localPathKind: async () => options?.localPathKind ?? "file"
   });
 
   return { service, spawnProcess, runCommand };
@@ -186,19 +188,24 @@ describe("TransferQueueService state machine", () => {
     });
   });
 
-  it("fails task when ssh BatchMode preflight fails", async () => {
-    const { service } = createService({
-      runCommand: async (command) => {
-        if (command === "ssh") return { ok: false, message: "SSH key/passwordless login required for rsync transfer." };
-        return { ok: true };
-      }
-    });
+  it("does not run a separate ssh preflight before spawning rsync", async () => {
+    const p1 = new FakeProc();
+    const { service, runCommand, spawnProcess } = createService({ procs: [p1] });
     await service.enqueueUpload(baseUpload);
     await vi.waitFor(() => {
-      expect(service.list()[0].status).toBe("failed");
-      expect(service.list()[0].error).toContain("SSH key/passwordless login required");
-      expect(service.list()[0].errorCode).toBe("ssh_batchmode_failed");
+      expect(spawnProcess).toHaveBeenCalledTimes(1);
     });
+    expect(runCommand).toHaveBeenCalledWith("rsync");
+    expect(runCommand).not.toHaveBeenCalledWith("ssh");
+  });
+
+  it("uploads directories to the selected parent instead of nesting basename twice", async () => {
+    const { service } = createService({ localPathKind: "directory" });
+    await service.enqueueUpload({ ...baseUpload, localSources: ["/tmp/xyz"], remoteDestinationDir: "/path1/path2" });
+
+    const task = service.list()[0];
+    expect(task.destination).toBe("/path1/path2/xyz");
+    expect(task.remotePath).toBe("/path1/path2");
   });
 
   it("fails task when rsync is missing", async () => {

@@ -6,6 +6,8 @@ export const IPC_CHANNELS = {
     getHomePath: "local:getHomePath",
     rename: "local:rename",
     delete: "local:delete",
+    mkdir: "local:mkdir",
+    createTextFile: "local:createTextFile",
     getInfo: "local:getInfo"
   },
   remote: {
@@ -17,6 +19,7 @@ export const IPC_CHANNELS = {
     delete: "remote:delete",
     getInfo: "remote:getInfo",
     mkdir: "remote:mkdir",
+    createTextFile: "remote:createTextFile",
     chmod: "remote:chmod",
     duplicate: "remote:duplicate",
     directorySizeStart: "remote:directorySizeStart",
@@ -24,7 +27,17 @@ export const IPC_CHANNELS = {
     directorySizeUpdate: "remote:directorySizeUpdate",
     previewOpen: "remote:previewOpen",
     previewClearForTab: "remote:previewClearForTab",
-    previewClearForConnection: "remote:previewClearForConnection"
+    previewClearForConnection: "remote:previewClearForConnection",
+    editOpen: "remote:editOpen",
+    editList: "remote:editList",
+    editSyncNow: "remote:editSyncNow",
+    editRevealLocal: "remote:editRevealLocal",
+    editRedownload: "remote:editRedownload",
+    editForceUpload: "remote:editForceUpload",
+    editDownloadConflictCopy: "remote:editDownloadConflictCopy",
+    editCopyConflictPaths: "remote:editCopyConflictPaths",
+    editClose: "remote:editClose",
+    editUpdate: "remote:editUpdate"
   },
   transfer: {
     checkUploadConflicts: "transfer:checkUploadConflicts",

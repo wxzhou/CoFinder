@@ -9,6 +9,8 @@ const api: IpcApi = {
     getHomePath: () => ipcRenderer.invoke("local:getHomePath"),
     rename: (request) => ipcRenderer.invoke("local:rename", request),
     delete: (request) => ipcRenderer.invoke("local:delete", request),
+    mkdir: (request) => ipcRenderer.invoke("local:mkdir", request),
+    createTextFile: (request) => ipcRenderer.invoke("local:createTextFile", request),
     getInfo: (request) => ipcRenderer.invoke("local:getInfo", request)
   },
   remote: {
@@ -20,6 +22,7 @@ const api: IpcApi = {
     delete: (request) => ipcRenderer.invoke("remote:delete", request),
     getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request),
     mkdir: (request) => ipcRenderer.invoke("remote:mkdir", request),
+    createTextFile: (request) => ipcRenderer.invoke("remote:createTextFile", request),
     chmod: (request) => ipcRenderer.invoke("remote:chmod", request),
     duplicate: (request) => ipcRenderer.invoke("remote:duplicate", request),
     directorySizeStart: (request) => ipcRenderer.invoke("remote:directorySizeStart", request),
@@ -32,7 +35,21 @@ const api: IpcApi = {
     },
     previewOpen: (request) => ipcRenderer.invoke("remote:previewOpen", request),
     previewClearForTab: (request) => ipcRenderer.invoke("remote:previewClearForTab", request),
-    previewClearForConnection: (request) => ipcRenderer.invoke("remote:previewClearForConnection", request)
+    previewClearForConnection: (request) => ipcRenderer.invoke("remote:previewClearForConnection", request),
+    editOpen: (request) => ipcRenderer.invoke("remote:editOpen", request),
+    editList: () => ipcRenderer.invoke("remote:editList"),
+    editSyncNow: (request) => ipcRenderer.invoke("remote:editSyncNow", request),
+    editRevealLocal: (request) => ipcRenderer.invoke("remote:editRevealLocal", request),
+    editRedownload: (request) => ipcRenderer.invoke("remote:editRedownload", request),
+    editForceUpload: (request) => ipcRenderer.invoke("remote:editForceUpload", request),
+    editDownloadConflictCopy: (request) => ipcRenderer.invoke("remote:editDownloadConflictCopy", request),
+    editCopyConflictPaths: (request) => ipcRenderer.invoke("remote:editCopyConflictPaths", request),
+    editClose: (request) => ipcRenderer.invoke("remote:editClose", request),
+    onEditUpdate: (handler) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => handler(payload as Parameters<typeof handler>[0]);
+      ipcRenderer.on("remote:editUpdate", wrapped);
+      return () => ipcRenderer.off("remote:editUpdate", wrapped);
+    }
   },
   transfer: {
     checkUploadConflicts: (request) => ipcRenderer.invoke("transfer:checkUploadConflicts", request),
@@ -86,7 +103,12 @@ const api: IpcApi = {
     openLogFolder: () => ipcRenderer.invoke("system:openLogFolder"),
     openLogFile: () => ipcRenderer.invoke("system:openLogFile"),
     copyDiagnostics: () => ipcRenderer.invoke("system:copyDiagnostics"),
-    checkForUpdates: () => ipcRenderer.invoke("system:checkForUpdates")
+    checkForUpdates: () => ipcRenderer.invoke("system:checkForUpdates"),
+    onOpenPreferences: (handler) => {
+      const wrapped = () => handler();
+      ipcRenderer.on("system:openPreferences", wrapped);
+      return () => ipcRenderer.off("system:openPreferences", wrapped);
+    }
   }
 };
 

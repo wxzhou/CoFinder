@@ -93,8 +93,43 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.
 - **Packaged file load:** launch `release/mac-arm64/CoFinder.app` or the dmg-installed app and confirm the V12 shell renders from `file://` without a blank page.
 - **Release identity:** confirm About/version surfaces `1.0.0`, artifact filenames use `CoFinder-1.0.0-arm64`, and docs/changelog refer to V2.0/v1.0.0 consistently.
+
+## V2.1 feedback stabilization
+
+- **Transfer startup:** upload and download a small file; tasks should move from running to active transfer without an unexplained fixed delay.
+- **Folder target:** upload a local folder `xyz` into a remote target and confirm the result is `target/xyz`, not `target/xyz/xyz`.
+- **Unicode paths:** upload/download files and folders with Chinese characters in local and remote paths.
+- **Create/delete:** create local and remote folders, create local and remote text files, and delete local and remote folders inside isolated test roots.
+- **Remote preview:** open a remote `.bed` or tab-delimited text file and a common image; binary unsupported files should show a clear unsupported message.
+- **Inspector:** `Cmd+I`, context-menu Show Inspector, and toolbar Inspector should reveal the Inspector without opening a modal; directory selections should show file/folder child counts.
+- **Navigation/layout:** verify Home, Copy Current Path (`Cmd+Option+C`), active-pane indicator, macOS CoFinder > Preferences, restore-last-path behavior, and persisted sidebar resizing.
 - **Scope cuts:** confirm there is no UI implying remote edit auto-sync, full auto-update install, App Store distribution, or cross-platform support.
 - **Security closeout:** repeat profile/credential/settings/log/diagnostics checks and confirm no plaintext secrets are exposed.
+
+## V2.3 navigation feedback fixes
+
+- **Text editor preference:** open Preferences and confirm Text editor is a visible selector with System default, TextEdit, TextMate, and Custom. Select TextMate, save, relaunch if practical, and confirm the value persists.
+- **Copy current path shortcut:** focus local and remote panes in turn and press `Cmd+Option+C`; paste into a scratch field and confirm the active pane current path is copied. Confirm `Cmd+Shift+C` still copies selected full paths.
+- **Breadcrumb path entry:** in a V12 local pane, confirm no separate full path address field appears next to breadcrumb. Click empty breadcrumb space or double-click the breadcrumb, type a valid local path, press Enter, and confirm navigation.
+- **Remote breadcrumb path entry:** connect to the isolated remote test root, press `Cmd+L`, type another allowed remote path, press Enter, and confirm navigation. Press Escape from edit mode and confirm breadcrumb mode returns without navigation.
+- **Breadcrumb copy path:** click the breadcrumb Copy Path icon for local and remote panes and confirm the clipboard contains the pane current path.
+- **Navigation row:** confirm Filter names, Recent, History, and Clear Recent remain available and do not squeeze the breadcrumb path display.
+
+## V2.5 remote text edit MVP
+
+- **Edit entry point:** connect to the isolated remote test root, select exactly one text file with content such as BED/tab-delimited text, then use the remote pane Edit action or right-click `Edit`. Confirm the configured text editor opens an app-managed edit-cache copy.
+- **Edit save upload:** modify and save that local edit-cache copy in the editor. Confirm CoFinder reports the upload, the remote pane refreshes when viewing the file's parent folder, and reopening/downloading the remote file shows the saved content.
+- **Edit conflict:** open a remote text file for Edit, change the remote file from another shell/session before saving the local edit, then save locally. Confirm CoFinder reports a conflict, does not overwrite the remote file, and keeps the local edit copy available.
+- **Edit status UI:** while an edit session is active, confirm the Remote edits panel lists the remote path and state. Test Reveal, Save Back Now, Stop Monitoring, and Discard Local Copy. For a conflict/failed session, also test Re-download, Force upload after the confirmation prompt, Remote Copy, and Copy Paths.
+- **Open remains read-only:** use right-click `Open` or double-click on the same remote text file and confirm it still follows the read-only remote preview path, separate from Edit.
+- **Unsupported edit:** select a remote directory, a multi-selection, and a binary file in turn; confirm Edit is disabled where possible or shows a clear unsupported message without starting an edit session.
+
+## V2.7 V12 UI regression
+
+- **Task filters:** expand the transfer drawer and switch All / Running / Failed / Done. Confirm filtering does not clear unresolved failed tasks.
+- **Empty panes:** open empty local and remote directories and confirm the empty state is visible and not mistaken for a broken list.
+- **Inspector density:** open Inspector on local and remote single selections and confirm metadata remains scannable without auto-opening on ordinary single click.
+- **Layout checklist:** run `docs/dev/v12-layout-regression-checks.md` before release candidates.
 
 ## V1.3 interaction efficiency and remote preview
 
@@ -104,7 +139,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Local favorites:** add current local folder; reorder/remove it; verify hover-only up/down arrow buttons and full path subtitle; restore default locations; confirm clicks affect local pane only.
 - **Remote favorites:** connect using a saved profile; add current remote path; reorder/remove it; verify hover-only up/down arrow buttons and full path subtitle; click a remote favorite and confirm only the remote pane navigates.
 - **Remote preview:** double-click a remote text file with no obvious text extension, or right-click it and choose `Open`; repeat to confirm cached reopen. Update the remote file and confirm CoFinder re-downloads before opening. Repeat with a PNG/JPEG/GIF/WebP image. Try a binary file and confirm an unsupported message.
-- **Remote Quick Look separation:** press Space on a remote file and confirm it does **not** open the cached preview path; Space remains reserved for future remote Quick Look behavior.
+- **Remote Quick Look:** press Space on a single selected remote text/image file and confirm the read-only remote preview opens. Right-click the same file and choose `Quick Look`; confirm this uses the same read-only preview path and remains separate from `Edit`.
 - **Read-only cache:** after a remote preview opens, attempt to save edits in the local viewer and confirm the cached file behaves as read-only. If you force-edit the cached file outside the app, open the same remote file again and confirm CoFinder re-downloads the remote version instead of showing the local edit.
 - **Preview cleanup:** cache files live under the macOS temp directory in `remote-preview/<tab-hash>/` (for example `find "$(getconf DARWIN_USER_TEMP_DIR)remote-preview" -type f`). Open a remote preview, disconnect or close the tab, and confirm the cache entry is cleared.
 

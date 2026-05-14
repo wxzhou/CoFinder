@@ -20,7 +20,10 @@ declare module "ssh2-sftp-client" {
     connect(config: SftpConnectOptions): Promise<void>;
     end(): Promise<void>;
     list(path: string): Promise<SftpListItem[]>;
-    stat(path: string): Promise<{ type: string }>;
+    stat(path: string): Promise<{ type: string; size?: number; modifyTime?: number }>;
     realPath(path: string): Promise<string>;
+    get(path: string, localPath?: string): Promise<Buffer | unknown>;
+    fastGet(path: string, localPath: string): Promise<unknown>;
+    put(input: Buffer | string, remotePath: string): Promise<unknown>;
   }
 }

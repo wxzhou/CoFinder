@@ -2,7 +2,7 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-**`package.json` version:** `1.0.0`. **Latest shipped release:** **v1.0.0**.
+**`package.json` version:** `1.8.0`. **Latest completed development release:** **v1.8.0**.
 
 ## Versioning
 
@@ -26,6 +26,14 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.4** sh
 | V1.8 | no standalone tag | Included in v1.0.0 |
 | V1.9 | no standalone tag | Included in v1.0.0 |
 | V2.0 | v1.0.0 | Shipped |
+| V2.1 | v1.1.0 | Shipped |
+| V2.2 | v1.2.0 | Shipped |
+| V2.3 | v1.3.0 | Shipped |
+| V2.4 | v1.4.0 | Complete on dev |
+| V2.5 | v1.5.0 | Complete on dev |
+| V2.6 | v1.6.0 | Complete on dev |
+| V2.7 | v1.7.0 | Complete on dev |
+| V2.8 | v1.8.0 | Complete on dev |
 
 ## V1 Status
 
@@ -66,11 +74,59 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 ### Not Supported in v1.0.0
 
 - Remote edit auto-sync workflow
-- Full Quick Look for remote files
+- Broad remote Quick Look beyond text/images
 - Full-disk or content search; V1.7 filtering only narrows the current visible listing by file/folder name.
 - Full remote ACL editor; V1.8 only supports basic octal chmod.
 - Remote duplicate for directories or files larger than 50 MB.
 - Full i18n
+
+### Implemented in V2.1 / v1.1.0
+
+V2.1 is a v1.0 feedback stabilization release. It fixes transfer startup latency, Unicode path transfer support, folder upload target semantics, remote folder deletion, New Folder reliability, `.bed` text preview opening, Inspector/Get Info consolidation, restore-last-path behavior, Home/Copy Current Path navigation, active-pane visibility, macOS Preferences menu integration, and resizable sidebar.
+
+Detailed scope lives in `docs/dev/V2.1_PLAN.md`.
+
+### Implemented in V2.2 / v1.2.0
+
+V2.2 is a v1.1 feedback fix release. It improves delete feedback and duplicate-submit guarding, replaces New Folder prompts with an in-app dialog, adds a default text editor preference for remote text preview, prevents single-click Inspector auto-reveal, documents the Copy Current Path shortcut, and fixes local/remote Terminal Here context semantics including robust SSH path preservation.
+
+Detailed scope lives in `docs/dev/V2.2_PLAN.md`.
+
+### Implemented in V2.3 / v1.3.0
+
+V2.3 is a v1.2 feedback polish release. It makes the text-editor preference an explicit selector, fixes `Cmd+Option+C` Copy Current Path reliability on macOS, and merges the V12 breadcrumb/address bar flow: breadcrumbs are the default path surface, with full path entry available from breadcrumb empty click, breadcrumb double-click, or `Cmd+L`.
+
+Detailed scope lives in `docs/dev/V2.3_PLAN.md`.
+
+### Implemented in V2.4 / v1.4.0
+
+V2.4 reduces V12 toolbar ambiguity by moving pane-owned commands into local and remote pane action strips, removes unavailable view-mode toolbar controls, and lightens folder icons toward Finder-style blue.
+
+Detailed scope lives in `docs/dev/V2.4_PLAN.md`.
+
+### Implemented in V2.5 / v1.5.0
+
+V2.5 adds a separate **Edit Remote File** workflow for sniffed text files. The workflow downloads a remote text file into an app-managed edit cache, opens it with the configured text editor, watches local saves, and uploads changes back only after confirming the remote file still matches the edit-session baseline. Conflicts preserve the local edit copy and expose recovery actions for re-download, explicit force-upload, reveal, or close/discard. Existing **Open** remains read-only preview behavior.
+
+Detailed scope lives in `docs/dev/V2.5_PLAN.md`.
+
+### Implemented in V2.6 / v1.6.0
+
+V2.6 hardens remote edit sessions with richer session status, explicit Save Back Now / Stop Monitoring / Discard actions, deleted-cache handling, bounded transient retry, safer conflict-copy recovery, and an isolated fake-SFTP edit-session test harness.
+
+Detailed scope lives in `docs/dev/V2.6_PLAN.md`.
+
+### Implemented in V2.7 / v1.7.0
+
+V2.7 refines the V12 UI with tighter control states, empty pane states, transfer task filters, denser Inspector metadata, an explicit Column View deferral decision, and a layout regression checklist.
+
+Detailed scope lives in `docs/dev/V2.7_PLAN.md`.
+
+### Implemented in V2.8 / v1.8.0
+
+V2.8 chooses and implements the Remote Quick Look track: Space and the remote context-menu Quick Look command now open the existing read-only remote preview flow for sniffed text/images, while Edit remains the separate write-capable workflow.
+
+Detailed scope lives in `docs/dev/V2.8_PLAN.md`.
 
 ### Included in v1.0.0: V1.9 Reliability
 
@@ -100,7 +156,7 @@ Regression for the default shell: run the **V1.2** subsection in `docs/smoke-tes
 | --- | --- | --- |
 | Browse / sort / filter | Yes | Yes |
 | Rename / delete / Get Info | Yes | Yes |
-| New folder | Deferred | Yes |
+| New folder | Yes | Yes |
 | Permissions | Read/display | Basic octal chmod |
 | Duplicate | Deferred | Files up to 50 MB |
 | Terminal here | Terminal.app | SSH Terminal.app, password not injected |
@@ -191,7 +247,7 @@ Build artifacts are generated under `release/`.
 - Development milestones are committed on `dev`; a version becomes shipped after the matching git tag and release artifacts are published.
 - Current update policy is manual: users install dmg/zip artifacts from GitHub Releases or local release output. In-app auto-install is not enabled yet.
 - Public distribution needs an Apple Developer ID certificate and notarization. Local personal builds may be unsigned, but unsigned artifacts should be described honestly in release notes.
-- `v1.0.0` is tagged. Current local release artifacts are `release/CoFinder-1.0.0-arm64.dmg` and `release/CoFinder-1.0.0-arm64.zip`.
+- `v1.8.0` is the current development release target. Build artifacts use `release/CoFinder-1.8.0-arm64.dmg` and `release/CoFinder-1.8.0-arm64.zip` when `npm run dist` is executed.
 
 **App icons:** `assets/icon/icon.icns` is used for the packaged `.app` / `.dmg` / `.zip` (see `electron-builder.yml`). `assets/icon/icon.png` is copied into `Resources` for `BrowserWindow` (`src/main/main.ts`). To regenerate both from the archived source PNG on macOS: `./scripts/gen-mac-app-icons.sh` (uses `sips` + `iconutil`, no extra npm deps).
 

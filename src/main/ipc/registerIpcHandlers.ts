@@ -34,6 +34,8 @@ import { ProfileRepository, defaultCredentialsPath, defaultProfilesPath } from "
 import { SafeStorageCredentialProvider } from "../services/SafeStorageCredentialProvider";
 import { QuickLookService } from "../services/QuickLookService";
 import { RemotePreviewService } from "../services/RemotePreviewService";
+import { RemoteEditService } from "../services/RemoteEditService";
+import { buildSshTerminalCommand } from "./sshTerminalCommand";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -65,6 +67,11 @@ const diagnosticsService = new DiagnosticsService({
 });
 const quickLookService = new QuickLookService();
 const remotePreviewService = new RemotePreviewService(connectionManager, app.getPath("temp"));
+const remoteEditService = new RemoteEditService(connectionManager, app.getPath("temp"), (session) => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(IPC_CHANNELS.remote.editUpdate, { session });
+  }
+});
 
 const localSidebarFavoritesRepository = new LocalSidebarFavoritesRepository(defaultLocalSidebarFavoritesPath(userData), () => ({
   home: app.getPath("home"),
@@ -161,6 +168,29 @@ export function registerIpcHandlers(): void {
       return ok({ deleted });
     } catch (error) {
       return toIpcError(error, "LOCAL_DELETE_FAILED", "Failed to delete local paths.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.local.mkdir, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:mkdir request.");
+      const parentPath = validateLocalPathInput(body.parentPath, "LOCAL_INVALID_INPUT", "parentPath");
+      const name = requiredString(body.name, "name", "LOCAL_INVALID_INPUT", undefined, { maxLength: 255 });
+      const createdPath = await localFileService.makeDirectory(parentPath, name);
+      return ok({ created: true as const, path: createdPath });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_MKDIR_FAILED", "Failed to create local directory.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.local.createTextFile, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:createTextFile request.");
+      const parentPath = validateLocalPathInput(body.parentPath, "LOCAL_INVALID_INPUT", "parentPath");
+      const createdPath = await localFileService.createTextFile(parentPath, optionalString(body.name));
+      return ok({ created: true as const, path: createdPath });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_CREATE_FILE_FAILED", "Failed to create local text file.");
     }
   });
 
@@ -306,6 +336,18 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.remote.createTextFile, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:createTextFile request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const parentPath = normalizeRemotePathInput(body.parentPath, "REMOTE_INVALID_INPUT", "parentPath");
+      const createdPath = await remoteFileService.createTextFile(connectionId, parentPath, optionalString(body.name));
+      return ok({ created: true as const, path: createdPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_CREATE_FILE_FAILED", "Failed to create remote text file.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.remote.chmod, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:chmod request.");
@@ -398,7 +440,11 @@ export function registerIpcHandlers(): void {
       const tabId = requiredId(body.tabId, "tabId", "REMOTE_INVALID_INPUT");
       const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
       const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
-      return ok(await remotePreviewService.openPreview({ tabId, connectionId, remotePath: targetPath }));
+      const settings = await settingsService.get();
+      return ok(await remotePreviewService.openPreview(
+        { tabId, connectionId, remotePath: targetPath },
+        { textEditor: settings.general.defaultTextEditor }
+      ));
     } catch (error) {
       return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to preview remote file.");
     }
@@ -421,6 +467,113 @@ export function registerIpcHandlers(): void {
       return ok({ cleared: await remotePreviewService.clearForConnection(connectionId) });
     } catch (error) {
       return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to clear remote preview cache.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editOpen, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editOpen request.");
+      const tabId = requiredId(body.tabId, "tabId", "REMOTE_INVALID_INPUT");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const settings = await settingsService.get();
+      return ok({
+        session: await remoteEditService.openTextEditSession(
+          { tabId, connectionId, remotePath: targetPath },
+          { textEditor: settings.general.defaultTextEditor }
+        )
+      });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to edit remote file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editList, async () => {
+    try {
+      return ok({ sessions: remoteEditService.listSessions() });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to list remote edit sessions.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editSyncNow, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editSyncNow request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      return ok({ session: await remoteEditService.syncSession(sessionId) });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to save remote edit now.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editRevealLocal, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editRevealLocal request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      const session = remoteEditService.getSession(sessionId);
+      if (!session) throw new AppError("REMOTE_NOT_FOUND", "Remote edit session no longer exists.");
+      shell.showItemInFolder(session.localPath);
+      return ok({ revealed: true as const, localPath: session.localPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to reveal local edit copy.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editRedownload, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editRedownload request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      return ok({ session: await remoteEditService.redownloadSession(sessionId) });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to re-download remote edit file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editForceUpload, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editForceUpload request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      return ok({ session: await remoteEditService.forceUploadSession(sessionId) });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to upload remote edit file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editDownloadConflictCopy, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editDownloadConflictCopy request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      const result = await remoteEditService.downloadConflictRemoteCopy(sessionId);
+      return ok(result);
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to download remote conflict copy.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editCopyConflictPaths, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editCopyConflictPaths request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      const session = remoteEditService.getSession(sessionId);
+      if (!session) throw new AppError("REMOTE_NOT_FOUND", "Remote edit session no longer exists.");
+      const lines = [`Local edit: ${session.localPath}`];
+      if (session.conflictRemoteCopyPath) lines.push(`Remote copy: ${session.conflictRemoteCopyPath}`);
+      const text = lines.join("\n");
+      clipboard.writeText(text);
+      return ok({ copied: true as const, text });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to copy remote edit conflict paths.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editClose, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editClose request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      await remoteEditService.closeSession(sessionId, { discardLocal: optionalBoolean(body.discardLocal) ?? true });
+      return ok({ closed: true as const });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to close remote edit session.");
     }
   });
 
@@ -824,16 +977,6 @@ async function runDetached(command: string, args: string[]): Promise<void> {
   });
 }
 
-function buildSshTerminalCommand(username: string, host: string, port: number, remotePath?: string): string {
-  const base = `ssh -p ${port} ${username}@${host}`;
-  if (!remotePath) return base;
-  return `${base} -t ${shellSingleQuote(`cd ${remotePath} && exec "$SHELL" -l`)}`;
-}
-
-function shellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 export async function shutdownMainProcessResources(): Promise<void> {
   transferOff?.();
   transferOff = null;
@@ -846,6 +989,7 @@ export async function shutdownMainProcessResources(): Promise<void> {
   isRegistered = false;
   await transferQueueService.shutdown();
   await remotePreviewService.clearAll();
+  remoteEditService.closeAll();
   await connectionManager.disconnectAll();
 }
 

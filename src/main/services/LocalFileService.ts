@@ -117,12 +117,38 @@ export class LocalFileService {
     return deleted;
   }
 
+  async makeDirectory(parentPath: string, name: string): Promise<string> {
+    const parent = normalizeLocalPath(parentPath);
+    const childName = validateNewChildName(name);
+    const targetPath = normalizeLocalPath(path.join(parent, childName));
+    try {
+      await fs.mkdir(targetPath);
+      return targetPath;
+    } catch (error) {
+      throw this.mapCreateError(error, targetPath);
+    }
+  }
+
+  async createTextFile(parentPath: string, name?: string): Promise<string> {
+    const parent = normalizeLocalPath(parentPath);
+    const targetPath = name?.trim()
+      ? normalizeLocalPath(path.join(parent, validateNewChildName(name)))
+      : await nextAvailableLocalTextFile(parent);
+    try {
+      await fs.writeFile(targetPath, "", { encoding: "utf8", flag: "wx" });
+      return targetPath;
+    } catch (error) {
+      throw this.mapCreateError(error, targetPath);
+    }
+  }
+
   async getPathInfo(targetPath: string, options?: { includeDirectorySize?: boolean }): Promise<PathInfo> {
     const normalizedPath = normalizeLocalPath(targetPath);
     try {
       const stats = await fs.lstat(normalizedPath);
       const type = stats.isDirectory() ? "directory" : stats.isFile() ? "file" : stats.isSymbolicLink() ? "symlink" : "unknown";
       const size = type === "directory" && options?.includeDirectorySize !== false ? await this.getDirectorySize(normalizedPath) : stats.size;
+      const counts = type === "directory" ? await directoryChildCounts(normalizedPath) : {};
       return {
         name: path.basename(normalizedPath),
         fullPath: normalizedPath,
@@ -131,7 +157,8 @@ export class LocalFileService {
         mtime: stats.mtime.toISOString(),
         permissions: modeToRwx(stats.mode),
         owner: typeof (stats as { uid?: unknown }).uid === "number" ? String((stats as { uid: number }).uid) : undefined,
-        group: typeof (stats as { gid?: unknown }).gid === "number" ? String((stats as { gid: number }).gid) : undefined
+        group: typeof (stats as { gid?: unknown }).gid === "number" ? String((stats as { gid: number }).gid) : undefined,
+        ...counts
       };
     } catch (error) {
       throw this.mapInfoError(error, normalizedPath);
@@ -175,6 +202,16 @@ export class LocalFileService {
     return new LocalFileServiceError("DELETE_FAILED", `Failed to delete path: ${requestedPath}`);
   }
 
+  private mapCreateError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Parent path not found: ${path.dirname(requestedPath)}`);
+    if (code === "EACCES" || code === "EPERM") {
+      return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    }
+    if (code === "EEXIST") return new LocalFileServiceError("UNKNOWN", "A file or folder with the same name already exists.");
+    return new LocalFileServiceError("UNKNOWN", `Failed to create path: ${requestedPath}`);
+  }
+
   private mapInfoError(error: unknown, requestedPath: string): LocalFileServiceError {
     const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
     if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
@@ -198,6 +235,38 @@ export class LocalFileService {
     }
     return total;
   }
+}
+
+function validateNewChildName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === "." || trimmed === ".." || trimmed.includes("/") || trimmed.includes("\\") || /[\u0000\r\n]/.test(trimmed)) {
+    throw new LocalFileServiceError("UNKNOWN", "Name is invalid.");
+  }
+  return trimmed;
+}
+
+async function nextAvailableLocalTextFile(parentPath: string): Promise<string> {
+  for (let i = 1; i < 1000; i += 1) {
+    const name = i === 1 ? "Untitled.txt" : `Untitled ${i}.txt`;
+    const candidate = normalizeLocalPath(path.join(parentPath, name));
+    try {
+      await fs.access(candidate);
+    } catch {
+      return candidate;
+    }
+  }
+  throw new LocalFileServiceError("UNKNOWN", "Could not find an available text file name.");
+}
+
+async function directoryChildCounts(dirPath: string): Promise<{ fileCount: number; folderCount: number }> {
+  const entries = await fs.readdir(dirPath, { withFileTypes: true });
+  let fileCount = 0;
+  let folderCount = 0;
+  for (const entry of entries) {
+    if (entry.isDirectory()) folderCount += 1;
+    else fileCount += 1;
+  }
+  return { fileCount, folderCount };
 }
 
 function unique(items: string[]): string[] {

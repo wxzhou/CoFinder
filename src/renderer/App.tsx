@@ -11,6 +11,7 @@ import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
 import { V12Toolbar } from "./v12/V12Toolbar";
+import { V12PaneActionStrip } from "./v12/V12PaneActionStrip";
 import { V12TransferDrawer } from "./v12/V12TransferDrawer";
 import { V12PaneInspector } from "./v12/V12PaneInspector";
 import { pathToSegments } from "./v12/pane/pathSegments";
@@ -37,6 +38,7 @@ import {
   type SelectionState
 } from "./selection";
 import type { LocalFavoriteListItem } from "../shared/localFavorites";
+import type { RemoteEditSession } from "../shared/remoteEdit";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -44,7 +46,7 @@ import type {
   PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
-  RemoteDirectorySizeUpdatePayload,
+  RemoteEditUpdatePayload,
   TransferConflict,
   TransferConflictPolicy,
   TransferUpdatePayload
@@ -96,6 +98,8 @@ type ContextMenuState = {
   tabId: string;
   x: number;
   y: number;
+  scope: "row" | "background";
+  terminalPath: string;
 };
 
 type InlineRenameState = {
@@ -115,12 +119,14 @@ type DeleteConfirmState = {
   names: string[];
 };
 
-type InfoDialogState = {
-  pane: "local" | "remote";
-  info: PathInfo;
-  isSizeLoading: boolean;
-  sizeJobId?: string;
-  sizeCapped?: boolean;
+type DeleteBusyByTab = Record<string, Partial<Record<ActivePane, string>>>;
+
+type CreateFolderDialogState = {
+  pane: ActivePane;
+  tabId: string;
+  name: string;
+  error: string;
+  busy: boolean;
 };
 
 type ActivePane = "local" | "remote";
@@ -174,9 +180,6 @@ const COFINDER_LOCAL_RECENTS_KEY = "cofinder.recent.localPaths.v1";
 const COFINDER_REMOTE_RECENTS_KEY = "cofinder.recent.remotePathsByProfile.v1";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
-/** After a row `click` with `detail === 1`, wait this long before showing inspector so a double-click rarely mounts the column. Cmd+A bypasses. If already revealed, no delay and no hide. */
-const V12_INSPECTOR_CLICK_GAP_MS = 350;
-
 const DEFAULT_RENDERER_SETTINGS: AppSettings = {
   schemaVersion: 2,
   general: {
@@ -184,7 +187,8 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     restoreLastSession: false,
     confirmBeforeDelete: true,
     showHiddenFiles: false,
-    firstRunOnboardingDismissed: false
+    firstRunOnboardingDismissed: false,
+    defaultTextEditor: "system"
   },
   transfer: {
     defaultConflictPolicy: "prompt",
@@ -195,7 +199,8 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     rowDensity: "comfortable",
     defaultInspectorVisible: false,
     defaultPaneRatio: 0.5,
-    sidebarVisible: true
+    sidebarVisible: true,
+    sidebarWidth: 260
   }
 };
 
@@ -246,6 +251,7 @@ export function App(props: AppProps = {}) {
   const [queuePanelState, setQueuePanelState] = useState<QueuePanelState>("hidden");
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
+  const [remoteEditSessions, setRemoteEditSessions] = useState<RemoteEditSession[]>([]);
   const [queueError, setQueueError] = useState<string>("");
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_RENDERER_SETTINGS);
   const [preferences, setPreferences] = useState<PreferencesState>({
@@ -262,8 +268,9 @@ export function App(props: AppProps = {}) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
-  const [infoDialog, setInfoDialog] = useState<InfoDialogState | null>(null);
-  const infoRequestTokenRef = useRef(0);
+  const [createFolderDialog, setCreateFolderDialog] = useState<CreateFolderDialogState | null>(null);
+  const [deleteBusyByTab, setDeleteBusyByTab] = useState<DeleteBusyByTab>({});
+  const deleteInFlightKeysRef = useRef(new Set<string>());
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
@@ -281,6 +288,7 @@ export function App(props: AppProps = {}) {
   const prevActiveTabIdForV12InspRef = useRef(activeTabId);
   const [v12LocalInspectorReveal, setV12LocalInspectorReveal] = useState(false);
   const [v12RemoteInspectorReveal, setV12RemoteInspectorReveal] = useState(false);
+  const [pathEditPane, setPathEditPane] = useState<ActivePane | null>(null);
   type V12InspPaneState = { status: "idle" | "loading" | "ready" | "error"; info: PathInfo | null; error: string };
   const [v12LocalInsp, setV12LocalInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
   const [v12RemoteInsp, setV12RemoteInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
@@ -300,30 +308,11 @@ export function App(props: AppProps = {}) {
       v12RemoteInspRevealTimerRef.current = null;
     }
   };
-  const scheduleV12LocalInspRevealFromRowClick = (): void => {
-    cancelV12LocalInspRevealTimer();
-    if (v12LocalInspectorReveal) {
-      return;
-    }
-    v12LocalInspRevealTimerRef.current = setTimeout(() => {
-      v12LocalInspRevealTimerRef.current = null;
-      setV12LocalInspectorReveal(true);
-    }, V12_INSPECTOR_CLICK_GAP_MS);
-  };
-  const scheduleV12RemoteInspRevealFromRowClick = (): void => {
-    cancelV12RemoteInspRevealTimer();
-    if (v12RemoteInspectorReveal) {
-      return;
-    }
-    v12RemoteInspRevealTimerRef.current = setTimeout(() => {
-      v12RemoteInspRevealTimerRef.current = null;
-      setV12RemoteInspectorReveal(true);
-    }, V12_INSPECTOR_CLICK_GAP_MS);
-  };
-
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const localPane = activeTab.localPane;
   const remotePane = activeTab.remotePane;
+  const localDeleteBusy = deleteBusyByTab[activeTab.id]?.local ?? "";
+  const remoteDeleteBusy = deleteBusyByTab[activeTab.id]?.remote ?? "";
   const remoteConnected = remotePane.connectionStatus === "connected" && !!remotePane.connectionId;
   const activeTabRemoteDisconnected = useMemo(
     () => !(remotePane.connectionStatus === "connected" && remotePane.connectionId),
@@ -339,8 +328,8 @@ export function App(props: AppProps = {}) {
       setPreferences((prev) => ({ ...prev, draft: settings }));
       setOnboardingOpen(!settings.general.firstRunOnboardingDismissed);
       setV12PaneRatio(settings.appearance.defaultPaneRatio);
-      setV12LocalInspectorReveal(settings.appearance.defaultInspectorVisible);
-      setV12RemoteInspectorReveal(settings.appearance.defaultInspectorVisible);
+      setV12LocalInspectorReveal(false);
+      setV12RemoteInspectorReveal(false);
       const restoredLocalPath = settings.general.restoreLastSession ? readLastLocalPath() : "";
       await initializeLocalHome(tabState.firstTabId, restoredLocalPath || settings.general.defaultLocalPath);
     })();
@@ -457,29 +446,27 @@ export function App(props: AppProps = {}) {
   }, []);
 
   useEffect(() => {
-    const off = window.cofinder.remote.onDirectorySizeUpdate((payload: RemoteDirectorySizeUpdatePayload) => {
-      setInfoDialog((prev) => {
-        if (!prev || prev.sizeJobId !== payload.jobId) return prev;
-        if (payload.status === "success") {
-          return {
-            ...prev,
-            isSizeLoading: false,
-            sizeCapped: payload.capped,
-            info: { ...prev.info, size: payload.size ?? prev.info.size }
-          };
-        }
-        if (payload.status === "failed") {
-          return { ...prev, isSizeLoading: false };
-        }
-        if (payload.status === "canceled") {
-          return { ...prev, isSizeLoading: false, sizeJobId: undefined };
-        }
-        return prev;
+    const off = window.cofinder.remote.onEditUpdate((payload: RemoteEditUpdatePayload) => {
+      const { session } = payload;
+      setRemoteEditSessions((prev) => {
+        const without = prev.filter((item) => item.id !== session.id);
+        return [session, ...without].sort((a, b) => b.updatedAt - a.updatedAt);
       });
-      if (payload.status === "failed" && payload.error) setQueueError(payload.error);
+      if (session.state === "uploaded") {
+        setQueueError(`Uploaded edits to ${session.remotePath}`);
+        const tab = tabs.find((item) => item.id === session.tabId);
+        if (tab?.remotePane.connectionId === session.connectionId && getParentPath(session.remotePath) === tab.remotePane.currentPath) {
+          void listRemotePath(session.connectionId, tab.remotePane.currentPath, "replace", session.tabId);
+        }
+      } else if (session.state === "conflict" || session.state === "failed") {
+        setQueueError(session.error || `Remote edit ${session.state}: ${session.remotePath}`);
+      }
     });
+    void loadRemoteEditSessions();
     return off;
-  }, []);
+  }, [tabs]);
+
+  useEffect(() => window.cofinder.system.onOpenPreferences(openPreferences), [appSettings]);
 
   useEffect(() => {
     if (!marquee) return;
@@ -541,19 +528,7 @@ export function App(props: AppProps = {}) {
         if (contextMenu) return;
         if (isEditableTarget(document.activeElement)) return;
         if (activePane === "remote") {
-          setTabs((prev) =>
-            prev.map((item) =>
-              item.id === activeTab.id
-                ? {
-                    ...item,
-                    remotePane: {
-                      ...item.remotePane,
-                      error: "Remote Quick Look is not implemented yet. Double-click a remote file or use Open for read-only preview."
-                    }
-                  }
-                : item
-            )
-          );
+          void quickLookSelection(activeTab.id, "remote");
           event.preventDefault();
           event.stopPropagation();
           return;
@@ -576,7 +551,6 @@ export function App(props: AppProps = {}) {
           );
           if (uiShell === "v12") {
             cancelV12LocalInspRevealTimer();
-            setV12LocalInspectorReveal(true);
           }
           event.preventDefault();
           event.stopPropagation();
@@ -590,7 +564,6 @@ export function App(props: AppProps = {}) {
           );
           if (uiShell === "v12") {
             cancelV12RemoteInspRevealTimer();
-            setV12RemoteInspectorReveal(true);
           }
           event.preventDefault();
           event.stopPropagation();
@@ -599,8 +572,14 @@ export function App(props: AppProps = {}) {
       }
 
       const cmd = event.metaKey || event.ctrlKey;
-      if (!cmd && event.key !== "F2" && event.key !== "Delete" && event.key !== "Backspace") return;
       if (contextMenu) return;
+      if (cmd && event.key.toLowerCase() === "l") {
+        beginPathEdit(activePane);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (!cmd && event.key !== "F2" && event.key !== "Delete" && event.key !== "Backspace") return;
       if (isEditableTarget(document.activeElement)) return;
 
       const key = event.key.toLowerCase();
@@ -608,6 +587,7 @@ export function App(props: AppProps = {}) {
         event.preventDefault();
         event.stopPropagation();
       };
+      const isKeyC = key === "c" || event.code === "KeyC";
       if (event.key === "F2") {
         openInlineRename(activeTab.id, activePane);
         prevent();
@@ -617,7 +597,10 @@ export function App(props: AppProps = {}) {
       } else if (cmd && key === "i") {
         void openInfoDialog(activeTab.id, activePane);
         prevent();
-      } else if (cmd && event.shiftKey && key === "c") {
+      } else if (cmd && event.altKey && isKeyC) {
+        void copyCurrentPath(activePane);
+        prevent();
+      } else if (cmd && event.shiftKey && isKeyC) {
         void copySelection(activeTab.id, activePane, "path");
         prevent();
       } else if (cmd && key === "r") {
@@ -671,6 +654,88 @@ export function App(props: AppProps = {}) {
     setTransferTasks(res.data);
   }
 
+  async function loadRemoteEditSessions(): Promise<void> {
+    const res = await window.cofinder.remote.editList();
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions(res.data.sessions);
+  }
+
+  async function revealRemoteEditCopy(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editRevealLocal({ sessionId });
+    if (!res.ok) setQueueError(res.error.message);
+  }
+
+  async function redownloadRemoteEdit(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editRedownload({ sessionId });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
+  }
+
+  async function saveRemoteEditNow(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editSyncNow({ sessionId });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
+  }
+
+  async function forceUploadRemoteEdit(sessionId: string): Promise<void> {
+    const session = remoteEditSessions.find((item) => item.id === sessionId);
+    if (session && !window.confirm(`Upload local edits to ${session.remotePath} and overwrite the current remote file?`)) return;
+    const res = await window.cofinder.remote.editForceUpload({ sessionId });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
+  }
+
+  async function downloadRemoteConflictCopy(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editDownloadConflictCopy({ sessionId });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
+    setQueueError(`Downloaded remote conflict copy to ${res.data.remoteCopyPath}`);
+  }
+
+  async function copyRemoteEditConflictPaths(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editCopyConflictPaths({ sessionId });
+    if (!res.ok) setQueueError(res.error.message);
+    else setQueueError("Copied remote edit conflict paths.");
+  }
+
+  async function stopRemoteEditMonitoring(sessionId: string): Promise<void> {
+    const session = remoteEditSessions.find((item) => item.id === sessionId);
+    const risky = session?.state === "dirty" || session?.state === "failed" || session?.state === "conflict";
+    if (risky && !window.confirm(`Stop monitoring ${session.remotePath}? The local edit copy will be kept but no longer uploaded.`)) return;
+    const res = await window.cofinder.remote.editClose({ sessionId, discardLocal: false });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => prev.filter((item) => item.id !== sessionId));
+  }
+
+  async function discardRemoteEditCopy(sessionId: string): Promise<void> {
+    const session = remoteEditSessions.find((item) => item.id === sessionId);
+    if (session && !window.confirm(`Discard the local edit copy for ${session.remotePath}?`)) return;
+    const res = await window.cofinder.remote.editClose({ sessionId, discardLocal: true });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => prev.filter((item) => item.id !== sessionId));
+  }
+
   async function clearCompletedTransfers(): Promise<void> {
     const res = await window.cofinder.transfer.clearCompleted();
     if (!res.ok) {
@@ -713,6 +778,32 @@ export function App(props: AppProps = {}) {
     setV12PaneRatio(res.data.appearance.defaultPaneRatio);
   }
 
+  function beginSidebarResize(event: ReactMouseEvent<HTMLDivElement>): void {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = appSettings.appearance.sidebarWidth;
+    let nextWidth = startWidth;
+    const clamp = (value: number) => Math.max(180, Math.min(420, value));
+    const onMove = (move: MouseEvent) => {
+      nextWidth = clamp(startWidth + move.clientX - startX);
+      setAppSettings((prev) => ({ ...prev, appearance: { ...prev.appearance, sidebarWidth: nextWidth } }));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+      void window.cofinder.settings.set({ appearance: { sidebarWidth: nextWidth } }).then((res) => {
+        if (res.ok) {
+          setAppSettings(res.data);
+          setPreferences((prev) => ({ ...prev, draft: res.data }));
+        } else {
+          setQueueError(res.error.message);
+        }
+      });
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
   async function dismissOnboarding(): Promise<void> {
     const next = {
       ...appSettings,
@@ -753,7 +844,7 @@ export function App(props: AppProps = {}) {
     tabId: string,
     targetPath: string,
     mode: "push" | "replace" | "back" | "forward" = "push"
-  ): Promise<void> {
+  ): Promise<boolean> {
     const previousPath = tabs.find((tab) => tab.id === tabId)?.localPane.currentPath ?? "";
     const response = await window.cofinder.local.listDirectory({ path: targetPath });
     if (!response.ok) {
@@ -771,7 +862,7 @@ export function App(props: AppProps = {}) {
               }
         )
       );
-      return;
+      return false;
     }
     setTabs((prev) =>
       prev.map((tab) => {
@@ -793,6 +884,7 @@ export function App(props: AppProps = {}) {
       })
     );
     rememberLocalRecent(response.data.path);
+    return true;
   }
 
   const showV12FavoriteHint = useCallback((message: string) => {
@@ -999,11 +1091,9 @@ export function App(props: AppProps = {}) {
     prevActiveTabIdForV12InspRef.current = activeTabId;
     cancelV12LocalInspRevealTimer();
     cancelV12RemoteInspRevealTimer();
-    const tab = tabs.find((t) => t.id === activeTabId) ?? activeTab;
-    const rc = tab.remotePane.connectionStatus === "connected" && !!tab.remotePane.connectionId;
-    setV12LocalInspectorReveal(tab.localPane.selectedFullPaths.length > 0);
-    setV12RemoteInspectorReveal(rc && tab.remotePane.selectedFullPaths.length > 0);
-  }, [activeTabId, uiShell, tabs, activeTab]);
+    setV12LocalInspectorReveal(false);
+    setV12RemoteInspectorReveal(false);
+  }, [activeTabId, uiShell]);
 
   useEffect(() => {
     if (uiShell !== "v12") return;
@@ -1030,13 +1120,6 @@ export function App(props: AppProps = {}) {
       }
       const base = r.data.info;
       setV12LocalInsp({ status: "ready", info: base, error: "" });
-      if (base.type === "directory") {
-        const r2 = await window.cofinder.local.getInfo({ path, includeDirectorySize: true });
-        if (token !== v12LocalInspTokenRef.current) return;
-        if (r2.ok) {
-          setV12LocalInsp({ status: "ready", info: { ...base, size: r2.data.info.size }, error: "" });
-        }
-      }
     })();
   }, [uiShell, remoteConnected, activeTab.id, localPane.selectedFullPaths, v12LocalInspectorReveal]);
 
@@ -1065,13 +1148,6 @@ export function App(props: AppProps = {}) {
       }
       const base = r.data.info;
       setV12RemoteInsp({ status: "ready", info: base, error: "" });
-      if (base.type === "directory") {
-        const r2 = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: true });
-        if (token !== v12RemoteInspTokenRef.current) return;
-        if (r2.ok) {
-          setV12RemoteInsp({ status: "ready", info: { ...base, size: r2.data.info.size }, error: "" });
-        }
-      }
     })();
   }, [uiShell, remotePane.connectionId, remotePane.selectedFullPaths, activeTab.id, v12RemoteInspectorReveal]);
 
@@ -1142,6 +1218,16 @@ export function App(props: AppProps = {}) {
       return queueStats.failedCount > 0 ? `${queueStats.failedCount} failed task(s)` : "No active transfers";
     }
     return `${queueStats.activeCount} active, ${queueStats.queuedCount} queued`;
+  }
+
+  function basenameRemotePath(input: string): string {
+    const parts = input.split("/").filter(Boolean);
+    return parts.at(-1) ?? input;
+  }
+
+  function formatRemoteEditUploadTime(session: RemoteEditSession): string {
+    if (!session.lastUploadedAt) return "Not uploaded yet";
+    return `Uploaded ${new Date(session.lastUploadedAt).toLocaleTimeString()}`;
   }
 
   function emptyProfileDraft(): ProfileUpsertPayload {
@@ -1366,7 +1452,9 @@ export function App(props: AppProps = {}) {
     }
 
     const { connectionId, homePath } = connectResult.data;
-    const initialPath = attempt.defaultRemotePathTrimmed || homePath || "/";
+    const restoredRemotePath =
+      appSettings.general.restoreLastSession && profileId ? remoteRecentPathsByProfile[profileId]?.[0]?.path : "";
+    const initialPath = restoredRemotePath || attempt.defaultRemotePathTrimmed || homePath || "/";
 
     await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, attempt.aliasForTitle, profileId ?? null, {
       host: attempt.host.trim(),
@@ -2006,7 +2094,7 @@ export function App(props: AppProps = {}) {
         cancelV12LocalInspRevealTimer();
         setV12LocalInspectorReveal(false);
       } else {
-        scheduleV12LocalInspRevealFromRowClick();
+        cancelV12LocalInspRevealTimer();
       }
     }
   }
@@ -2043,7 +2131,7 @@ export function App(props: AppProps = {}) {
         cancelV12RemoteInspRevealTimer();
         setV12RemoteInspectorReveal(false);
       } else {
-        scheduleV12RemoteInspRevealFromRowClick();
+        cancelV12RemoteInspRevealTimer();
       }
     }
   }
@@ -2083,10 +2171,11 @@ export function App(props: AppProps = {}) {
   function openContextMenu(
     tabId: string,
     pane: "local" | "remote",
-    entryPath: string,
+    entry: LocalFileEntry | RemoteFileEntry,
     event: { clientX: number; clientY: number }
   ): void {
     setActivePane(pane);
+    const entryPath = entry.fullPath;
     setTabs((prev) =>
       prev.map((tab) => {
         if (tab.id !== tabId) return tab;
@@ -2112,7 +2201,28 @@ export function App(props: AppProps = {}) {
         };
       })
     );
-    setContextMenu({ pane, tabId, x: event.clientX, y: event.clientY });
+    setContextMenu({
+      pane,
+      tabId,
+      x: event.clientX,
+      y: event.clientY,
+      scope: "row",
+      terminalPath: entry.type === "directory" ? entry.fullPath : getParentPath(entry.fullPath)
+    });
+  }
+
+  function openBackgroundContextMenu(tabId: string, pane: "local" | "remote", event: { clientX: number; clientY: number }): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    setActivePane(pane);
+    setContextMenu({
+      pane,
+      tabId,
+      x: event.clientX,
+      y: event.clientY,
+      scope: "background",
+      terminalPath: pane === "local" ? tab.localPane.currentPath : tab.remotePane.currentPath
+    });
   }
 
   function shouldStartInlineRenameFromClick(
@@ -2142,6 +2252,52 @@ export function App(props: AppProps = {}) {
     if (!text) return;
     const result = await window.cofinder.system.copyText({ text });
     if (!result.ok) setQueueError(result.error.message);
+  }
+
+  async function copyCurrentPath(pane: ActivePane = activePane): Promise<void> {
+    const pathToCopy = pane === "local" ? localPane.currentPath : remotePane.currentPath;
+    if (!pathToCopy || (pane === "remote" && !remotePane.connectionId)) return;
+    const result = await window.cofinder.system.copyText({ text: pathToCopy });
+    if (!result.ok) setQueueError(result.error.message);
+  }
+
+  function beginPathEdit(pane: ActivePane): void {
+    if (pane === "remote" && !remotePane.connectionId) return;
+    setActivePane(pane);
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id !== activeTab.id
+          ? item
+          : pane === "local"
+            ? { ...item, localPane: { ...item.localPane, pathInput: item.localPane.currentPath } }
+            : { ...item, remotePane: { ...item.remotePane, pathInput: item.remotePane.currentPath } }
+      )
+    );
+    setPathEditPane(pane);
+  }
+
+  function cancelPathEdit(pane: ActivePane): void {
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id !== activeTab.id
+          ? item
+          : pane === "local"
+            ? { ...item, localPane: { ...item.localPane, pathInput: item.localPane.currentPath } }
+            : { ...item, remotePane: { ...item.remotePane, pathInput: item.remotePane.currentPath } }
+      )
+    );
+    setPathEditPane((current) => (current === pane ? null : current));
+  }
+
+  async function submitPathEdit(pane: ActivePane): Promise<void> {
+    if (pane === "local") {
+      const ok = await navigateLocal(activeTab.id, localPane.pathInput);
+      if (ok) setPathEditPane(null);
+      return;
+    }
+    if (!remotePane.connectionId) return;
+    const ok = await listRemotePath(remotePane.connectionId, remotePane.pathInput, "push", activeTab.id);
+    if (ok) setPathEditPane(null);
   }
 
   async function renameLocalSelection(tabId: string, targetPath: string, nextName: string): Promise<void> {
@@ -2314,134 +2470,214 @@ export function App(props: AppProps = {}) {
 
   async function submitDeleteConfirm(): Promise<void> {
     if (!deleteConfirm) return;
-    await performDelete(deleteConfirm);
+    const target = deleteConfirm;
+    setDeleteConfirm(null);
+    await performDelete(target);
   }
 
   async function performDelete(target: DeleteConfirmState): Promise<void> {
+    const deleteKey = deleteOperationKey(target);
+    if (deleteInFlightKeysRef.current.has(deleteKey)) return;
+    deleteInFlightKeysRef.current.add(deleteKey);
+    setDeleteBusy(target.tabId, target.pane, `Deleting ${target.paths.length} ${target.paths.length === 1 ? "item" : "items"}...`);
     if (target.pane === "local") {
       const tab = tabs.find((item) => item.id === target.tabId);
-      if (!tab) return;
-      const result = await window.cofinder.local.delete({ paths: target.paths });
+      if (!tab) {
+        finishDeleteOperation(deleteKey, target.tabId, target.pane);
+        return;
+      }
+      try {
+        const result = await window.cofinder.local.delete({ paths: target.paths });
+        if (!result.ok) {
+          setTabs((prev) =>
+            prev.map((item) =>
+              item.id === target.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+            )
+          );
+          return;
+        }
+        await navigateLocal(target.tabId, tab.localPane.currentPath, "replace");
+      } finally {
+        finishDeleteOperation(deleteKey, target.tabId, target.pane);
+      }
+      return;
+    }
+
+    if (!target.connectionId) {
+      finishDeleteOperation(deleteKey, target.tabId, target.pane);
+      return;
+    }
+    const tab = tabs.find((item) => item.id === target.tabId);
+    if (!tab) {
+      finishDeleteOperation(deleteKey, target.tabId, target.pane);
+      return;
+    }
+    try {
+      const result = await window.cofinder.remote.delete({
+        connectionId: target.connectionId,
+        paths: target.paths
+      });
       if (!result.ok) {
         setTabs((prev) =>
           prev.map((item) =>
-            item.id === target.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+            item.id === target.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
           )
         );
         return;
       }
-      await navigateLocal(target.tabId, tab.localPane.currentPath, "replace");
-      setDeleteConfirm(null);
-      return;
+      await listRemotePath(target.connectionId, tab.remotePane.currentPath, "replace", target.tabId);
+    } finally {
+      finishDeleteOperation(deleteKey, target.tabId, target.pane);
     }
+  }
 
-    if (!target.connectionId) return;
-    const tab = tabs.find((item) => item.id === target.tabId);
-    if (!tab) return;
-    const result = await window.cofinder.remote.delete({
-      connectionId: target.connectionId,
-      paths: target.paths
+  function setDeleteBusy(tabId: string, pane: ActivePane, message: string): void {
+    setDeleteBusyByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        ...(prev[tabId] ?? {}),
+        [pane]: message
+      }
+    }));
+  }
+
+  function clearDeleteBusy(tabId: string, pane: ActivePane): void {
+    setDeleteBusyByTab((prev) => {
+      const current = prev[tabId];
+      if (!current?.[pane]) return prev;
+      const nextPane = { ...current };
+      delete nextPane[pane];
+      const next = { ...prev };
+      if (Object.keys(nextPane).length === 0) delete next[tabId];
+      else next[tabId] = nextPane;
+      return next;
     });
-    if (!result.ok) {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === target.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
-        )
-      );
-      return;
-    }
-    await listRemotePath(target.connectionId, tab.remotePane.currentPath, "replace", target.tabId);
-    setDeleteConfirm(null);
+  }
+
+  function finishDeleteOperation(key: string, tabId: string, pane: ActivePane): void {
+    deleteInFlightKeysRef.current.delete(key);
+    clearDeleteBusy(tabId, pane);
+  }
+
+  function deleteOperationKey(target: DeleteConfirmState): string {
+    return `${target.pane}\u0000${target.tabId}\u0000${target.connectionId ?? ""}\u0000${target.paths.slice().sort().join("\u0000")}`;
   }
 
   async function openInfoDialog(tabId: string, pane: "local" | "remote"): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const token = ++infoRequestTokenRef.current;
     if (pane === "local") {
-      const targetPath = tab.localPane.selectedFullPaths[0];
-      if (!targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
-      const result = await window.cofinder.local.getInfo({ path: targetPath, includeDirectorySize: false });
-      if (!result.ok) {
-        setTabs((prev) =>
-          prev.map((item) =>
-            item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
-          )
-        );
-        return;
-      }
-      const shouldLoadSize = result.data.info.type === "directory";
-      setInfoDialog({
-        pane: "local",
-        info: result.data.info,
-        isSizeLoading: shouldLoadSize
-      });
-      if (shouldLoadSize) {
-        void (async () => {
-          const sizeRes = await window.cofinder.local.getInfo({ path: targetPath, includeDirectorySize: true });
-          if (!sizeRes.ok) return;
-          setInfoDialog((prev) => {
-            if (!prev || infoRequestTokenRef.current !== token) return prev;
-            return {
-              ...prev,
-              info: { ...prev.info, size: sizeRes.data.info.size },
-              isSizeLoading: false
-            };
-          });
-        })();
-      }
+      if (tab.localPane.selectedFullPaths.length !== 1) return;
+      setActivePane("local");
+      cancelV12LocalInspRevealTimer();
+      setV12LocalInspectorReveal(true);
       return;
     }
 
-    const targetPath = tab.remotePane.selectedFullPaths[0];
-    if (!targetPath || tab.remotePane.selectedFullPaths.length !== 1 || !tab.remotePane.connectionId) return;
-    const result = await window.cofinder.remote.getInfo({
-      connectionId: tab.remotePane.connectionId,
-      path: targetPath,
-      includeDirectorySize: false
-    });
-    if (!result.ok) {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
-        )
-      );
-      return;
-    }
-    const shouldLoadSize = result.data.info.type === "directory";
-    setInfoDialog({
-      pane: "remote",
-      info: result.data.info,
-      isSizeLoading: shouldLoadSize
-    });
-    if (shouldLoadSize) {
-      const connectionId = tab.remotePane.connectionId;
-      void (async () => {
-        const sizeRes = await window.cofinder.remote.directorySizeStart({
-          connectionId,
-          path: targetPath
-        });
-        if (!sizeRes.ok) return;
-        setInfoDialog((prev) => {
-          if (!prev || infoRequestTokenRef.current !== token) return prev;
-          return {
-            ...prev,
-            sizeJobId: sizeRes.data.jobId
-          };
-        });
-      })();
-    }
+    if (tab.remotePane.selectedFullPaths.length !== 1 || !tab.remotePane.connectionId) return;
+    setActivePane("remote");
+    cancelV12RemoteInspRevealTimer();
+    setV12RemoteInspectorReveal(true);
   }
 
   async function createRemoteDirectory(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
-    if (!tab?.remotePane.connectionId) return;
-    const name = window.prompt("New remote folder name");
-    if (!name?.trim()) return;
+    if (!tab?.remotePane.connectionId) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Connect to a remote server first." } } : item
+        )
+      );
+      return;
+    }
+    setCreateFolderDialog({ pane: "remote", tabId, name: "New Folder", error: "", busy: false });
+  }
+
+  async function createLocalDirectory(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.localPane.currentPath) return;
+    setCreateFolderDialog({ pane: "local", tabId, name: "New Folder", error: "", busy: false });
+  }
+
+  async function submitCreateFolderDialog(): Promise<void> {
+    if (!createFolderDialog || createFolderDialog.busy) return;
+    const draft = createFolderDialog;
+    const name = draft.name.trim();
+    if (!name) {
+      setCreateFolderDialog((prev) => (prev ? { ...prev, error: "Folder name is required." } : prev));
+      return;
+    }
+    setCreateFolderDialog((prev) => (prev ? { ...prev, error: "", busy: true } : prev));
+    if (draft.pane === "local") {
+      await performCreateLocalDirectory(draft.tabId, name);
+      return;
+    }
+    await performCreateRemoteDirectory(draft.tabId, name);
+  }
+
+  async function performCreateRemoteDirectory(tabId: string, name: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId) {
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: "Connect to a remote server first." } : prev));
+      return;
+    }
     const result = await window.cofinder.remote.mkdir({
       connectionId: tab.remotePane.connectionId,
       parentPath: tab.remotePane.currentPath,
       name
+    });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+    setCreateFolderDialog(null);
+  }
+
+  async function performCreateLocalDirectory(tabId: string, name: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.localPane.currentPath) {
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: "Select a local folder first." } : prev));
+      return;
+    }
+    const result = await window.cofinder.local.mkdir({
+      parentPath: tab.localPane.currentPath,
+      name
+    });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
+      return;
+    }
+    await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+    setCreateFolderDialog(null);
+  }
+
+  async function createTextFile(tabId: string, pane: ActivePane): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "local") {
+      if (!tab.localPane.currentPath) return;
+      const result = await window.cofinder.local.createTextFile({ parentPath: tab.localPane.currentPath });
+      if (!result.ok) {
+        setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+        return;
+      }
+      await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+      return;
+    }
+    if (!tab.remotePane.connectionId) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Connect to a remote server first." } } : item
+        )
+      );
+      return;
+    }
+    const result = await window.cofinder.remote.createTextFile({
+      connectionId: tab.remotePane.connectionId,
+      parentPath: tab.remotePane.currentPath
     });
     if (!result.ok) {
       setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
@@ -2484,11 +2720,11 @@ export function App(props: AppProps = {}) {
     );
   }
 
-  async function openTerminalHere(tabId: string, pane: "local" | "remote"): Promise<void> {
+  async function openTerminalHere(tabId: string, pane: "local" | "remote", targetPath?: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (pane === "local") {
-      const result = await window.cofinder.system.openTerminal({ path: tab.localPane.currentPath });
+      const result = await window.cofinder.system.openTerminal({ path: targetPath || tab.localPane.currentPath });
       if (!result.ok) setQueueError(result.error.message);
       return;
     }
@@ -2497,7 +2733,7 @@ export function App(props: AppProps = {}) {
       host: tab.remotePane.host,
       username: tab.remotePane.username,
       port: tab.remotePane.port,
-      remotePath: tab.remotePane.currentPath
+      remotePath: targetPath || tab.remotePane.currentPath
     });
     if (!result.ok) setQueueError(result.error.message);
   }
@@ -2506,19 +2742,7 @@ export function App(props: AppProps = {}) {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (pane === "remote") {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId
-            ? {
-                ...item,
-                remotePane: {
-                  ...item.remotePane,
-                  error: "Remote Quick Look is not implemented yet. Double-click a remote file or use Open for read-only preview."
-                }
-              }
-            : item
-        )
-      );
+      await previewRemoteSelection(tabId);
       return;
     }
     const selected = tab.localPane.selectedFullPaths;
@@ -2713,6 +2937,14 @@ export function App(props: AppProps = {}) {
             void listRemotePath(remotePane.connectionId, getParentPath(remotePane.currentPath), "push", activeTab.id);
           }
         }}
+        onHome={() => {
+          if (activePane === "local") {
+            if (localHomePath) void navigateLocal(activeTab.id, localHomePath, "push");
+            else void initializeLocalHome(activeTab.id);
+          } else if (remotePane.connectionId) {
+            void listRemotePath(remotePane.connectionId, remotePane.homePath || "/", "push", activeTab.id);
+          }
+        }}
         onRefresh={() => {
           if (activePane === "local") {
             if (localPane.currentPath) void navigateLocal(activeTab.id, localPane.currentPath, "replace");
@@ -2720,6 +2952,7 @@ export function App(props: AppProps = {}) {
             void listRemotePath(remotePane.connectionId, remotePane.currentPath, "replace", activeTab.id);
           }
         }}
+        onCopyCurrentPath={() => void copyCurrentPath(activePane)}
         backDisabled={
           activePane === "local"
             ? localPane.history.backStack.length === 0
@@ -2731,7 +2964,9 @@ export function App(props: AppProps = {}) {
             : remotePane.history.forwardStack.length === 0 || !remotePane.connectionId
         }
         upDisabled={activePane === "local" ? false : !remotePane.connectionId}
+        homeDisabled={activePane === "local" ? !localHomePath : !remotePane.connectionId}
         refreshDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
+        copyCurrentPathDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
         onConnectAction={() => {
           if (remoteConnected) void disconnectRemote(activeTab.id);
           else openSiteManagerForTab(activeTab.id);
@@ -2739,26 +2974,6 @@ export function App(props: AppProps = {}) {
         connectActionDisabled={remotePane.connectionStatus === "connecting"}
         connectActionTitle={remoteConnected ? "Disconnect from server" : "Connect to server…"}
         connectActionAriaLabel={remoteConnected ? "Disconnect" : "Connect"}
-        onUpload={() => void enqueueUpload(activeTab.id)}
-        onDownload={() => void enqueueDownload(activeTab.id)}
-        onNewFolder={() => void createRemoteDirectory(activeTab.id)}
-        uploadDisabled={localPane.selectedFullPaths.length === 0 || !remotePane.connectionId}
-        downloadDisabled={
-          remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId
-        }
-        newFolderDisabled={!remotePane.connectionId}
-        onDelete={() => openDeleteConfirm(activeTab.id, activePane)}
-        deleteDisabled={
-          activePane === "local"
-            ? localPane.selectedFullPaths.length === 0
-            : remotePane.selectedFullPaths.length === 0
-        }
-        onGetInfo={() => void openInfoDialog(activeTab.id, activePane)}
-        getInfoDisabled={
-          activePane === "local"
-            ? localPane.selectedFullPaths.length !== 1
-            : remotePane.selectedFullPaths.length !== 1
-        }
         onInspectorToggle={() => {
           if (activePane === "local") {
             cancelV12LocalInspRevealTimer();
@@ -2919,6 +3134,72 @@ export function App(props: AppProps = {}) {
     />
   );
 
+  const remoteEditStatusPanel =
+    remoteEditSessions.length > 0 ? (
+      <section className="remote-edit-panel" aria-label="Remote edit sessions">
+        <div className="remote-edit-head">
+          <strong>Remote edits</strong>
+          <span>
+            {remoteEditSessions.length} active ·{" "}
+            {remoteEditSessions.filter((session) => session.state === "failed" || session.state === "conflict").length} need attention
+          </span>
+        </div>
+        <div className="remote-edit-list">
+          {remoteEditSessions.map((session) => (
+            <div key={session.id} className={`remote-edit-row state-${session.state}`}>
+              <span className={`remote-edit-state state-${session.state}`}>{session.state}</span>
+              <span className="remote-edit-path" title={session.remotePath}>
+                {basenameRemotePath(session.remotePath)}
+              </span>
+              <span className="remote-edit-local" title={session.localPath}>
+                {formatRemoteEditUploadTime(session)}
+              </span>
+              {session.error ? (
+                <span className="remote-edit-error" title={session.error}>
+                  {session.error}
+                </span>
+              ) : null}
+              <span className="remote-edit-actions">
+                <button type="button" className="toolbar-button" onClick={() => void revealRemoteEditCopy(session.id)}>
+                  Reveal
+                </button>
+                <button
+                  type="button"
+                  className="toolbar-button"
+                  disabled={session.state === "uploading"}
+                  onClick={() => void saveRemoteEditNow(session.id)}
+                >
+                  Save Back Now
+                </button>
+                {session.state === "conflict" || session.state === "failed" ? (
+                  <>
+                    <button type="button" className="toolbar-button" onClick={() => void redownloadRemoteEdit(session.id)}>
+                      Re-download
+                    </button>
+                    <button type="button" className="toolbar-button" onClick={() => void forceUploadRemoteEdit(session.id)}>
+                      Force upload
+                    </button>
+                    <button type="button" className="toolbar-button" onClick={() => void downloadRemoteConflictCopy(session.id)}>
+                      Remote Copy
+                    </button>
+                    <button type="button" className="toolbar-button" onClick={() => void copyRemoteEditConflictPaths(session.id)}>
+                      Copy Paths
+                    </button>
+                  </>
+                ) : null}
+                <button type="button" className="toolbar-button" onClick={() => void stopRemoteEditMonitoring(session.id)}>
+                  Stop
+                </button>
+                <button type="button" className="toolbar-button" onClick={() => void discardRemoteEditCopy(session.id)}>
+                  Discard
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+    ) : null;
+
   async function resolveTransferConflicts(
     direction: "upload" | "download",
     request: EnqueueUploadRequest | EnqueueDownloadRequest
@@ -2982,6 +3263,26 @@ export function App(props: AppProps = {}) {
     await previewRemotePath(tabId, target);
   }
 
+  async function editRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const target = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !target || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const res = await window.cofinder.remote.editOpen({
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      path: target
+    });
+    if (!res.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: res.error.message } } : item
+        )
+      );
+      return;
+    }
+    setQueueError(`Editing ${target}`);
+  }
+
   async function previewRemotePath(tabId: string, remotePath: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId) return;
@@ -3028,32 +3329,34 @@ export function App(props: AppProps = {}) {
   }
 
   const localNavTools = (
-    <div className="nav-efficiency-bar">
-      <form
-        className="path-form path-form--inline"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void navigateLocal(activeTab.id, localPane.pathInput);
-        }}
-      >
-        <input
-          value={localPane.pathInput}
-          list="cofinder-local-path-suggestions"
-          onChange={(event) =>
-            setTabs((prev) =>
-              prev.map((tab) =>
-                tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: event.target.value } } : tab
+    <div className={`nav-efficiency-bar ${uiShell === "v12" ? "nav-efficiency-bar--no-path" : ""}`}>
+      {uiShell === "v12" ? null : (
+        <form
+          className="path-form path-form--inline"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void navigateLocal(activeTab.id, localPane.pathInput);
+          }}
+        >
+          <input
+            value={localPane.pathInput}
+            list="cofinder-local-path-suggestions"
+            onChange={(event) =>
+              setTabs((prev) =>
+                prev.map((tab) =>
+                  tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: event.target.value } } : tab
+                )
               )
-            )
-          }
-          aria-label="Local path"
-        />
-        <datalist id="cofinder-local-path-suggestions">
-          {localPathSuggestions.map((path) => (
-            <option key={path} value={path} />
-          ))}
-        </datalist>
-      </form>
+            }
+            aria-label="Local path"
+          />
+          <datalist id="cofinder-local-path-suggestions">
+            {localPathSuggestions.map((path) => (
+              <option key={path} value={path} />
+            ))}
+          </datalist>
+        </form>
+      )}
       <input
         className="pane-filter-input"
         value={localPane.filterText}
@@ -3105,33 +3408,35 @@ export function App(props: AppProps = {}) {
   );
 
   const remoteNavTools = (
-    <div className="nav-efficiency-bar">
-      <form
-        className="path-form path-form--inline"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.pathInput, "push", activeTab.id);
-        }}
-      >
-        <input
-          value={remotePane.pathInput}
-          list="cofinder-remote-path-suggestions"
-          disabled={!remotePane.connectionId}
-          onChange={(event) =>
-            setTabs((prev) =>
-              prev.map((tab) =>
-                tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: event.target.value } } : tab
+    <div className={`nav-efficiency-bar ${uiShell === "v12" ? "nav-efficiency-bar--no-path" : ""}`}>
+      {uiShell === "v12" ? null : (
+        <form
+          className="path-form path-form--inline"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, remotePane.pathInput, "push", activeTab.id);
+          }}
+        >
+          <input
+            value={remotePane.pathInput}
+            list="cofinder-remote-path-suggestions"
+            disabled={!remotePane.connectionId}
+            onChange={(event) =>
+              setTabs((prev) =>
+                prev.map((tab) =>
+                  tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: event.target.value } } : tab
+                )
               )
-            )
-          }
-          aria-label="Remote path"
-        />
-        <datalist id="cofinder-remote-path-suggestions">
-          {remotePathSuggestions.map((path) => (
-            <option key={path} value={path} />
-          ))}
-        </datalist>
-      </form>
+            }
+            aria-label="Remote path"
+          />
+          <datalist id="cofinder-remote-path-suggestions">
+            {remotePathSuggestions.map((path) => (
+              <option key={path} value={path} />
+            ))}
+          </datalist>
+        </form>
+      )}
       <input
         className="pane-filter-input"
         value={remotePane.filterText}
@@ -3190,6 +3495,110 @@ export function App(props: AppProps = {}) {
     </div>
   );
 
+  const localPaneActionStrip =
+    uiShell === "v12" ? (
+      <V12PaneActionStrip
+        label="Local pane actions"
+        actions={[
+          {
+            label: "Upload",
+            title: "Upload local selection to remote pane",
+            icon: "arrow-up-tray",
+            disabled: localPane.selectedFullPaths.length === 0 || !remotePane.connectionId,
+            onClick: () => void enqueueUpload(activeTab.id)
+          },
+          {
+            label: "New local folder",
+            title: "New local folder",
+            icon: "folder-badge-plus",
+            disabled: !localPane.currentPath,
+            onClick: () => void createLocalDirectory(activeTab.id)
+          },
+          {
+            label: "New local text file",
+            title: "New local text file",
+            icon: "doc-badge-plus",
+            disabled: !localPane.currentPath,
+            onClick: () => void createTextFile(activeTab.id, "local")
+          },
+          {
+            label: "Delete local selection",
+            title: "Delete local selection",
+            icon: "trash",
+            disabled: localPane.selectedFullPaths.length === 0,
+            danger: true,
+            onClick: () => openDeleteConfirm(activeTab.id, "local")
+          },
+          {
+            label: "Open Terminal Here",
+            title: "Open Terminal here in local current folder",
+            icon: "terminal",
+            disabled: !localPane.currentPath,
+            onClick: () => void openTerminalHere(activeTab.id, "local", localPane.currentPath)
+          }
+        ]}
+      />
+    ) : null;
+
+  const remotePaneActionStrip =
+    uiShell === "v12" ? (
+      <V12PaneActionStrip
+        label="Remote pane actions"
+        actions={[
+          {
+            label: "Download",
+            title: "Download remote selection to local pane",
+            icon: "arrow-down-tray",
+            disabled: remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId,
+            onClick: () => void enqueueDownload(activeTab.id)
+          },
+          {
+            label: "Edit remote file",
+            title: "Edit selected remote text file",
+            icon: "pencil",
+            disabled: remotePane.selectedFullPaths.length !== 1 || !remotePane.connectionId,
+            onClick: () => void editRemoteSelection(activeTab.id)
+          },
+          {
+            label: "New remote folder",
+            title: "New remote folder",
+            icon: "folder-badge-plus",
+            disabled: !remotePane.connectionId,
+            onClick: () => void createRemoteDirectory(activeTab.id)
+          },
+          {
+            label: "New remote text file",
+            title: "New remote text file",
+            icon: "doc-badge-plus",
+            disabled: !remotePane.connectionId,
+            onClick: () => void createTextFile(activeTab.id, "remote")
+          },
+          {
+            label: "Delete remote selection",
+            title: "Delete remote selection",
+            icon: "trash",
+            disabled: remotePane.selectedFullPaths.length === 0 || !remotePane.connectionId,
+            danger: true,
+            onClick: () => openDeleteConfirm(activeTab.id, "remote")
+          },
+          {
+            label: "Open SSH Terminal Here",
+            title: "Open SSH Terminal here in remote current folder",
+            icon: "terminal",
+            disabled: !remotePane.connectionId,
+            onClick: () => void openTerminalHere(activeTab.id, "remote", remotePane.currentPath)
+          },
+          {
+            label: "Disconnect",
+            title: "Disconnect remote pane",
+            icon: "plug",
+            disabled: !remotePane.connectionId,
+            onClick: () => void disconnectRemote(activeTab.id)
+          }
+        ]}
+      />
+    ) : null;
+
   const localPaneEl = (
     <section
       className={localPaneSectionClass}
@@ -3206,17 +3615,31 @@ export function App(props: AppProps = {}) {
               currentPath={localPane.currentPath || "/"}
               pathRootLabel="Macintosh HD"
               onNavigate={(path) => void navigateLocal(activeTab.id, path)}
+              editingPath={pathEditPane === "local"}
+              pathInput={localPane.pathInput}
+              onBeginPathInput={() => beginPathEdit("local")}
+              onPathInputChange={(value) =>
+                setTabs((prev) =>
+                  prev.map((tab) => (tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, pathInput: value } } : tab))
+                )
+              }
+              onSubmitPathInput={() => void submitPathEdit("local")}
+              onCancelPathInput={() => cancelPathEdit("local")}
+              onCopyPath={() => void copyCurrentPath("local")}
             />
+            {localPaneActionStrip}
             {localNavTools}
           </div>
           <div className="v12m-pane-body">
             <div className="v12m-pane-split">
               <div className="v12m-pane-main v12m-pane-main--stack">
+                {localDeleteBusy ? <div className="cfv12p-busy">{localDeleteBusy}</div> : null}
                 {localPane.error ? <div className="cfv12p-error">{localPane.error}</div> : null}
                 <V12VisualFileList
                   pane="local"
                   isPaneActive={activePane === "local"}
                   entries={sortedEntries}
+                  emptyMessage={localPane.error ? "Local folder could not be loaded." : "This local folder is empty."}
                   sortKey={localPane.sortKey}
                   sortDirection={localPane.sortDirection}
                   selectedFullPaths={localPane.selectedFullPaths}
@@ -3246,7 +3669,8 @@ export function App(props: AppProps = {}) {
                   }}
                   onRowContextMenu={(entry, event) => {
                     event.preventDefault();
-                    openContextMenu(activeTab.id, "local", entry.fullPath, event);
+                    event.stopPropagation();
+                    openContextMenu(activeTab.id, "local", entry, event);
                   }}
                   onRowDoubleClick={(entry) => {
                     if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -3254,6 +3678,10 @@ export function App(props: AppProps = {}) {
                   }}
                   onBackgroundMouseDown={(event) => {
                     beginMarqueeSelection("local", event);
+                  }}
+                  onBackgroundContextMenu={(event) => {
+                    event.preventDefault();
+                    openBackgroundContextMenu(activeTab.id, "local", event);
                   }}
                   onBackgroundDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
                   onBackgroundDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
@@ -3313,7 +3741,6 @@ export function App(props: AppProps = {}) {
                     if (!result.ok) setQueueError(result.error.message);
                   }}
                   onCopyPaths={() => void copySelection(activeTab.id, "local", "path")}
-                  onGetInfo={() => void openInfoDialog(activeTab.id, "local")}
                 />
               ) : null}
             </div>
@@ -3390,6 +3817,22 @@ export function App(props: AppProps = {}) {
             >
               Upload
             </button>
+            <button
+              type="button"
+              className="toolbar-button"
+              disabled={!localPane.currentPath}
+              onClick={() => void createLocalDirectory(activeTab.id)}
+            >
+              New Folder
+            </button>
+            <button
+              type="button"
+              className="toolbar-button"
+              disabled={!localPane.currentPath}
+              onClick={() => void createTextFile(activeTab.id, "local")}
+            >
+              New Text File
+            </button>
             <button type="button" className="toolbar-button" onClick={() => void openTerminalHere(activeTab.id, "local")}>
               Terminal
             </button>
@@ -3397,6 +3840,7 @@ export function App(props: AppProps = {}) {
 
           {localNavTools}
 
+          {localDeleteBusy ? <div className="busy-banner">{localDeleteBusy}</div> : null}
           {localPane.error ? <div className="error-banner">{localPane.error}</div> : null}
 
           <div
@@ -3407,6 +3851,10 @@ export function App(props: AppProps = {}) {
             onDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
             onDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
             onDragLeave={handleTransferDragLeave}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              openBackgroundContextMenu(activeTab.id, "local", event);
+            }}
           >
             <table className="file-table">
               <colgroup>
@@ -3467,7 +3915,8 @@ export function App(props: AppProps = {}) {
                     }}
                     onContextMenu={(event) => {
                       event.preventDefault();
-                      openContextMenu(activeTab.id, "local", entry.fullPath, event);
+                      event.stopPropagation();
+                      openContextMenu(activeTab.id, "local", entry, event);
                     }}
                     onDoubleClick={() => {
                       if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -3546,7 +3995,10 @@ export function App(props: AppProps = {}) {
                 pathRootLabel="/"
                 badge={remoteBadgeV12}
                 onNavigate={() => {}}
+                pathInputDisabled
+                onCopyPath={() => void copyCurrentPath("remote")}
               />
+              {remotePaneActionStrip}
               {remoteNavTools}
             </div>
             <div className="v12m-pane-body">
@@ -3586,22 +4038,41 @@ export function App(props: AppProps = {}) {
                 pathRootLabel="/"
                 badge={remoteBadgeV12}
                 onNavigate={(path) => void listRemotePath(remotePane.connectionId!, path, "push", activeTab.id)}
+                editingPath={pathEditPane === "remote"}
+                pathInput={remotePane.pathInput}
+                pathInputDisabled={!remotePane.connectionId}
+                onBeginPathInput={() => beginPathEdit("remote")}
+                onPathInputChange={(value) =>
+                  setTabs((prev) =>
+                    prev.map((tab) =>
+                      tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, pathInput: value } } : tab
+                    )
+                  )
+                }
+                onSubmitPathInput={() => void submitPathEdit("remote")}
+                onCancelPathInput={() => cancelPathEdit("remote")}
+                onCopyPath={() => void copyCurrentPath("remote")}
                 trailing={
                   <button type="button" className="v12m-insp-linkbtn" onClick={() => void disconnectRemote(activeTab.id)}>
                     Disconnect
                   </button>
                 }
               />
+              {remotePaneActionStrip}
               {remoteNavTools}
             </div>
             <div className="v12m-pane-body">
               <div className="v12m-pane-split">
                 <div className="v12m-pane-main v12m-pane-main--stack">
+                  {remoteDeleteBusy ? <div className="cfv12p-busy">{remoteDeleteBusy}</div> : null}
                   {remotePane.error ? <div className="cfv12p-error">{remotePane.error}</div> : null}
                   <V12VisualFileList
                     pane="remote"
                     isPaneActive={activePane === "remote"}
                     entries={sortedRemoteEntries}
+                    emptyMessage={
+                      remotePane.error ? "Remote folder could not be loaded." : "This remote folder is empty."
+                    }
                     sortKey={remotePane.sortKey}
                     sortDirection={remotePane.sortDirection}
                     selectedFullPaths={remotePane.selectedFullPaths}
@@ -3631,7 +4102,8 @@ export function App(props: AppProps = {}) {
                     }}
                     onRowContextMenu={(entry, event) => {
                       event.preventDefault();
-                      openContextMenu(activeTab.id, "remote", entry.fullPath, event);
+                      event.stopPropagation();
+                      openContextMenu(activeTab.id, "remote", entry, event);
                     }}
                     onRowDoubleClick={(entry) => {
                       if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -3639,6 +4111,10 @@ export function App(props: AppProps = {}) {
                     }}
                     onBackgroundMouseDown={(event) => {
                       beginMarqueeSelection("remote", event);
+                    }}
+                    onBackgroundContextMenu={(event) => {
+                      event.preventDefault();
+                      openBackgroundContextMenu(activeTab.id, "remote", event);
                     }}
                     onBackgroundDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
                     onBackgroundDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
@@ -3692,7 +4168,6 @@ export function App(props: AppProps = {}) {
                     formatTime={formatTime}
                     hostLabel={`${remotePane.username}@${remotePane.host}:${remotePane.port}`}
                     onCopyPaths={() => void copySelection(activeTab.id, "remote", "path")}
-                    onGetInfo={() => void openInfoDialog(activeTab.id, "remote")}
                   />
                 ) : null}
               </div>
@@ -3786,6 +4261,9 @@ export function App(props: AppProps = {}) {
                 <button type="button" className="toolbar-button" onClick={() => void createRemoteDirectory(activeTab.id)}>
                   New Folder
                 </button>
+                <button type="button" className="toolbar-button" onClick={() => void createTextFile(activeTab.id, "remote")}>
+                  New Text File
+                </button>
                 <button type="button" className="toolbar-button" onClick={() => void openTerminalHere(activeTab.id, "remote")}>
                   SSH Terminal
                 </button>
@@ -3796,6 +4274,7 @@ export function App(props: AppProps = {}) {
 
               {remoteNavTools}
 
+              {remoteDeleteBusy ? <div className="busy-banner">{remoteDeleteBusy}</div> : null}
               {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
 
               <div
@@ -3806,6 +4285,10 @@ export function App(props: AppProps = {}) {
                 onDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
                 onDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
                 onDragLeave={handleTransferDragLeave}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  openBackgroundContextMenu(activeTab.id, "remote", event);
+                }}
               >
                 <table className="file-table">
                   <colgroup>
@@ -3866,7 +4349,8 @@ export function App(props: AppProps = {}) {
                         }}
                         onContextMenu={(event) => {
                           event.preventDefault();
-                          openContextMenu(activeTab.id, "remote", entry.fullPath, event);
+                          event.stopPropagation();
+                          openContextMenu(activeTab.id, "remote", entry, event);
                         }}
                         onDoubleClick={() => {
                           if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -3971,7 +4455,12 @@ export function App(props: AppProps = {}) {
           banner={null}
           toolbar={v12Toolbar!}
           devHint={import.meta.env.DEV ? <V12ProdDevHint /> : null}
-          drawer={queueV12Drawer}
+          drawer={
+            <>
+              {remoteEditStatusPanel}
+              {queueV12Drawer}
+            </>
+          }
           localPane={localPaneEl}
           splitter={
             <div
@@ -3986,38 +4475,54 @@ export function App(props: AppProps = {}) {
           remotePane={remotePaneEl}
           sidebar={
             appSettings.appearance.sidebarVisible ? (
-              <V12LocalFavoritesSidebar
-              favorites={v12LocalFavorites}
-              currentLocalPath={localPane.currentPath || "/"}
-              hint={v12FavoriteHint}
-              remoteFavorites={activeProfile?.remoteFavorites ?? []}
-              remoteConnected={remoteConnected}
-              currentRemotePath={remotePane.currentPath || "/"}
-              onSelectFavorite={(path) => {
-                setActivePane("local");
-                clearLocalSelection(activeTab.id);
-                cancelV12LocalInspRevealTimer();
-                setV12LocalInspectorReveal(false);
-                void navigateLocal(activeTab.id, path, "push");
-              }}
-              onAddCurrentPath={() => void handleV12AddLocalFavorite()}
-              onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
-              onReorderFavorite={(id, direction) => void handleV12ReorderLocalFavorite(id, direction)}
-              onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
-              onSelectRemoteFavorite={(path) => {
-                setActivePane("remote");
-                clearRemoteSelection(activeTab.id);
-                if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
-              }}
-              onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
-              onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
-              onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
-            />
+              <>
+                <div className="cfv12-sidebar-wrap" style={{ width: `${appSettings.appearance.sidebarWidth}px` }}>
+                  <V12LocalFavoritesSidebar
+                    favorites={v12LocalFavorites}
+                    currentLocalPath={localPane.currentPath || "/"}
+                    hint={v12FavoriteHint}
+                    remoteFavorites={activeProfile?.remoteFavorites ?? []}
+                    remoteConnected={remoteConnected}
+                    currentRemotePath={remotePane.currentPath || "/"}
+                    onSelectFavorite={(path) => {
+                      setActivePane("local");
+                      clearLocalSelection(activeTab.id);
+                      cancelV12LocalInspRevealTimer();
+                      setV12LocalInspectorReveal(false);
+                      void navigateLocal(activeTab.id, path, "push");
+                    }}
+                    onAddCurrentPath={() => void handleV12AddLocalFavorite()}
+                    onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
+                    onReorderFavorite={(id, direction) => void handleV12ReorderLocalFavorite(id, direction)}
+                    onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
+                    onSelectRemoteFavorite={(path) => {
+                      setActivePane("remote");
+                      clearRemoteSelection(activeTab.id);
+                      if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
+                    }}
+                    onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
+                    onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
+                    onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
+                  />
+                </div>
+                <div
+                  className="cfv12-sidebar-resizer"
+                  role="separator"
+                  aria-orientation="vertical"
+                  title="Drag to resize sidebar"
+                  onMouseDown={beginSidebarResize}
+                />
+              </>
             ) : null
           }
         />
       )}
-      {uiShell === "v11" ? queueV11Section : null}
+      {uiShell === "v11" ? (
+        <>
+          {remoteEditStatusPanel}
+          {queueV11Section}
+        </>
+      ) : null}
       {marqueeOverlay}
       {preferences.open ? (
         <div className="preferences-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setPreferences((p) => ({ ...p, open: false }))}>
@@ -4042,6 +4547,41 @@ export function App(props: AppProps = {}) {
                   }
                   placeholder="Use macOS Home"
                 />
+              </label>
+              <label>
+                Text editor
+                <select
+                  value={["system", "TextEdit", "TextMate"].includes(preferences.draft.general.defaultTextEditor) ? preferences.draft.general.defaultTextEditor : "custom"}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: {
+                        ...p.draft,
+                        general: {
+                          ...p.draft.general,
+                          defaultTextEditor: e.target.value === "custom" ? "" : e.target.value
+                        }
+                      }
+                    }))
+                  }
+                >
+                  <option value="system">System default</option>
+                  <option value="TextEdit">TextEdit</option>
+                  <option value="TextMate">TextMate</option>
+                  <option value="custom">Custom...</option>
+                </select>
+                {["system", "TextEdit", "TextMate"].includes(preferences.draft.general.defaultTextEditor) ? null : (
+                  <input
+                    value={preferences.draft.general.defaultTextEditor}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: { ...p.draft, general: { ...p.draft.general, defaultTextEditor: e.target.value } }
+                      }))
+                    }
+                    placeholder="App name or /Applications/TextMate.app"
+                  />
+                )}
               </label>
               <label>
                 Conflict policy
@@ -4115,7 +4655,7 @@ export function App(props: AppProps = {}) {
                 />
               </label>
               {[
-                ["Restore last session", "restoreLastSession"],
+                ["Restore last local path and remote profile paths", "restoreLastSession"],
                 ["Confirm before delete", "confirmBeforeDelete"],
                 ["Show hidden files", "showHiddenFiles"]
               ].map(([label, key]) => (
@@ -4151,7 +4691,6 @@ export function App(props: AppProps = {}) {
                 </label>
               ))}
               {[
-                ["Show inspector by default", "defaultInspectorVisible"],
                 ["Show sidebar", "sidebarVisible"]
               ].map(([label, key]) => (
                 <label key={key} className="preferences-check">
@@ -4171,7 +4710,7 @@ export function App(props: AppProps = {}) {
             </div>
             <div className="preferences-shortcuts">
               <strong>Shortcuts</strong>
-              <p>F2 rename · Delete remove · Cmd+I info · Cmd+Shift+C copy path · Cmd+R refresh · Cmd+U upload · Cmd+D download · Cmd+K Site Manager</p>
+              <p>F2 rename · Delete remove · Cmd+I info · Cmd+Shift+C copy selected path · Cmd+Option+C copy current path · Cmd+R refresh · Cmd+U upload · Cmd+D download · Cmd+K Site Manager</p>
             </div>
             <div className="preferences-shortcuts">
               <strong>Diagnostics</strong>
@@ -4265,7 +4804,7 @@ export function App(props: AppProps = {}) {
                   setContextMenu(null);
                 }}
               >
-                Get Info
+                Show Inspector
                 <span className="context-shortcut">⌘I</span>
               </button>
               <button
@@ -4294,6 +4833,26 @@ export function App(props: AppProps = {}) {
                 }}
               >
                 Open
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await createLocalDirectory(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                New Folder
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                onClick={async () => {
+                  await createTextFile(contextMenu.tabId, "local");
+                  setContextMenu(null);
+                }}
+              >
+                New Text File
               </button>
               <button
                 type="button"
@@ -4351,7 +4910,7 @@ export function App(props: AppProps = {}) {
                 type="button"
                 className="context-item"
                 onClick={async () => {
-                  await openTerminalHere(contextMenu.tabId, "local");
+                  await openTerminalHere(contextMenu.tabId, "local", contextMenu.terminalPath);
                   setContextMenu(null);
                 }}
               >
@@ -4387,6 +4946,29 @@ export function App(props: AppProps = {}) {
               <button
                 type="button"
                 className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await quickLookSelection(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Quick Look
+                <span className="context-shortcut">Space</span>
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await editRemoteSelection(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 disabled={
                   (tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) === 0 ||
                   !(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.currentPath ?? "")
@@ -4412,6 +4994,16 @@ export function App(props: AppProps = {}) {
               <button
                 type="button"
                 className="context-item"
+                onClick={async () => {
+                  await createTextFile(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                New Text File
+              </button>
+              <button
+                type="button"
+                className="context-item"
                 disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) === 0}
                 onClick={() => {
                   openDeleteConfirm(contextMenu.tabId, "remote");
@@ -4430,7 +5022,7 @@ export function App(props: AppProps = {}) {
                   setContextMenu(null);
                 }}
               >
-                Get Info
+                Show Inspector
                 <span className="context-shortcut">⌘I</span>
               </button>
               <button
@@ -4492,7 +5084,7 @@ export function App(props: AppProps = {}) {
                 type="button"
                 className="context-item"
                 onClick={async () => {
-                  await openTerminalHere(contextMenu.tabId, "remote");
+                  await openTerminalHere(contextMenu.tabId, "remote", contextMenu.terminalPath);
                   setContextMenu(null);
                 }}
               >
@@ -4541,60 +5133,42 @@ export function App(props: AppProps = {}) {
           </div>
         </div>
       ) : null}
-      {infoDialog ? (
-        <div className="info-dialog-overlay" role="presentation" onMouseDown={(e) => e.target === e.currentTarget && setInfoDialog(null)}>
-          <div className="info-dialog" role="dialog" aria-modal="true" aria-labelledby="info-dialog-title">
-            <h3 id="info-dialog-title">Get Info ({infoDialog.pane})</h3>
-            <dl className="info-grid">
-              <dt>Name</dt>
-              <dd>{infoDialog.info.name}</dd>
-              <dt>Path</dt>
-              <dd className="info-path">{infoDialog.info.fullPath}</dd>
-              <dt>Type</dt>
-              <dd>{infoDialog.info.type}</dd>
-              <dt>Size</dt>
-              <dd>
-                {infoDialog.isSizeLoading ? (
-                  <span className="info-size-loading">
-                    <span className="info-spinner" aria-hidden="true" />
-                    Calculating...
-                    {infoDialog.sizeJobId ? (
-                      <button
-                        type="button"
-                        className="toolbar-button"
-                        onClick={() => {
-                          if (infoDialog.sizeJobId) void window.cofinder.remote.directorySizeCancel({ jobId: infoDialog.sizeJobId });
-                        }}
-                      >
-                        Cancel
-                      </button>
-                    ) : null}
-                  </span>
-                ) : (
-                  `${formatSize(infoDialog.info.size)}${infoDialog.sizeCapped ? " (partial)" : ""}`
-                )}
-              </dd>
-              <dt>Modified</dt>
-              <dd>{formatTime(infoDialog.info.mtime)}</dd>
-              <dt>Permissions</dt>
-              <dd>{infoDialog.info.permissions ?? "-"}</dd>
-              <dt>Owner</dt>
-              <dd>{infoDialog.info.owner ?? "-"}</dd>
-              <dt>Group</dt>
-              <dd>{infoDialog.info.group ?? "-"}</dd>
-            </dl>
-            <div className="info-actions">
-              {infoDialog.pane === "remote" && infoDialog.info.type !== "unknown" ? (
-                <button
-                  type="button"
-                  className="toolbar-button"
-                  onClick={() => void chmodRemoteSelection(activeTab.id)}
-                >
-                  Chmod
-                </button>
-              ) : null}
-              <button type="button" className="toolbar-button" onClick={() => setInfoDialog(null)}>
-                Close
+      {createFolderDialog ? (
+        <div
+          className="delete-confirm-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !createFolderDialog.busy) setCreateFolderDialog(null);
+          }}
+        >
+          <div className="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="create-folder-title">
+            <h3 id="create-folder-title">New Folder</h3>
+            <p>Create a folder in {createFolderDialog.pane === "local" ? "local" : "remote"} current path.</p>
+            <label className="create-folder-field">
+              Folder name
+              <input
+                autoFocus
+                value={createFolderDialog.name}
+                disabled={createFolderDialog.busy}
+                onChange={(event) => setCreateFolderDialog((prev) => (prev ? { ...prev, name: event.target.value, error: "" } : prev))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitCreateFolderDialog();
+                  } else if (event.key === "Escape" && !createFolderDialog.busy) {
+                    event.preventDefault();
+                    setCreateFolderDialog(null);
+                  }
+                }}
+              />
+            </label>
+            {createFolderDialog.error ? <div className="error-banner">{createFolderDialog.error}</div> : null}
+            <div className="delete-confirm-actions">
+              <button type="button" className="toolbar-button" disabled={createFolderDialog.busy} onClick={() => setCreateFolderDialog(null)}>
+                Cancel
+              </button>
+              <button type="button" className="toolbar-button is-active" disabled={createFolderDialog.busy} onClick={() => void submitCreateFolderDialog()}>
+                {createFolderDialog.busy ? "Creating..." : "Create"}
               </button>
             </div>
           </div>

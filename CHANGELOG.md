@@ -4,11 +4,99 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v1.0.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.0.0**.
+No user-facing changes since **v1.8.0**.
+
+## v1.8.0 — Product milestone V2.8
+
+V2.8 chooses the Remote Quick Look track from the advanced navigation/preview plan.
+
+- Space on a single selected remote file now opens the read-only remote preview flow for sniffed text/images.
+- Remote context menus now expose Quick Look separately from Open and Edit.
+- Remote Quick Look continues to use read-only preview cache semantics and does not upload viewer edits.
+- Column View and recursive remote search remain deferred with explicit rationale.
+
+## v1.7.0 — Product milestone V2.7
+
+V2.7 refines the V12 interface and task surfaces.
+
+- Tightened V12 control focus, hover, and disabled states.
+- Added explicit empty folder states for local and remote panes.
+- Added transfer drawer filters for All, Running, Failed, and Done.
+- Made Inspector metadata denser and easier to scan.
+- Documented the decision to defer real Column View until it can be implemented fully.
+- Added a V12 layout regression checklist for release-candidate visual review.
+
+## v1.6.0 — Product milestone V2.6
+
+V2.6 hardens the remote text edit workflow for daily use.
+
+- Remote edit sessions show local cache path context and last upload status.
+- Added explicit Save Back Now, Stop Monitoring, and Discard Local Copy actions.
+- Deleted local edit-cache files are marked as failed with a clear message.
+- Transient upload failures get bounded safe retries without bypassing conflict checks.
+- Conflict recovery can download the newer remote copy beside the local edit and copy both paths for manual comparison.
+- Added an isolated fake-SFTP edit-session harness covering happy path, conflict, disconnect, and shutdown-safe cleanup behavior.
+
+## v1.5.0 — Product milestone V2.5
+
+V2.5 introduces the first write-capable remote text edit workflow.
+
+- Added **Edit Remote File** as a separate command from read-only Open for sniffed remote text files.
+- Edit sessions download into a separate app-managed cache and open with the configured text editor.
+- Local saves are watched and uploaded back to the same remote path after remote baseline checks.
+- Remote changes made after the edit session begins trigger a conflict instead of a silent overwrite.
+- The Remote edits panel shows active edit sessions, status, failures/conflicts, and recovery actions to reveal the local copy, re-download, force upload after confirmation, or close/discard.
+- Existing remote Open preview remains read-only and separate from Edit.
+
+## v1.4.0 — Product milestone V2.4
+
+V2.4 focuses V12 command ownership and visual polish.
+
+- Added pane-scoped local and remote action strips so pane-owned commands can be invoked directly from that pane.
+- Removed unavailable Column View/List View toolbar controls from the global toolbar.
+- Lightened shared folder icons toward Finder-style blue.
+- Kept global/session commands in the top toolbar.
+
+## v1.3.0 — Product milestone V2.3
+
+V2.3 is a navigation and preference polish release driven by v1.2.0 hands-on feedback.
+
+- Preferences now uses an explicit text-editor selector with System default, TextEdit, TextMate, and Custom options.
+- `Cmd+Option+C` now detects the physical C key, making Copy Current Path reliable on macOS while preserving `Cmd+Shift+C` for selected paths.
+- V12 panes no longer show a separate full path address field beside breadcrumbs.
+- Breadcrumbs switch to full path entry via empty breadcrumb click, breadcrumb double-click, or `Cmd+L`; Enter navigates and Escape/blur returns to breadcrumb mode.
+- Breadcrumb chrome includes a Copy Path icon button while Filter names, Recent, History, and Clear Recent remain in the navigation row.
+
+## v1.2.0 — Product milestone V2.2
+
+V2.2 is a corrective release driven by v1.1.0 hands-on feedback.
+
+- Delete confirmations now close immediately after confirmation, duplicate delete submissions are guarded, and local/remote panes show a busy banner while delete work is running.
+- New Folder uses an in-app dialog for both local and remote panes, avoiding unreliable hidden system prompts and surfacing validation/service errors.
+- Preferences now includes a default text editor setting for remote text preview, with system default, TextEdit, TextMate, or custom app/path support and a safe fallback.
+- Ordinary row single-click no longer reveals Inspector or squeezes the file list; Inspector remains available through the toolbar, context menu, and `Cmd+I`.
+- Copy Current Path exposes the `Cmd+Option+C` shortcut in the toolbar tooltip and Preferences shortcut reference.
+- Open Terminal Here / Open SSH Terminal Here now works from pane background context menus. Row context menus open inside folders or in a file's parent folder.
+- SSH terminal launch now quotes remote paths robustly and opens a non-login interactive shell after `cd`, so remote startup files do not override the requested directory.
+
+## v1.1.0 — Product milestone V2.1
+
+V2.1 is a stabilization release driven by v1.0.0 hands-on feedback.
+
+- Transfers start promptly by removing the extra SSH preflight delay while keeping rsync BatchMode safeguards.
+- Folder uploads now target the selected remote directory once, avoiding duplicated `/folder/folder` nesting.
+- Unicode local and remote transfer paths, including Chinese characters, are accepted while shell-dangerous/control characters remain blocked.
+- Remote folder deletion handles SFTP directory stat variants correctly.
+- Local and remote New Folder actions are pane-aware, return visible errors, and the app adds New Text File for both panes with unique default names.
+- Remote preview text sniffing now handles `.bed`, tab-delimited text, and UTF-8 content by content rather than extension; text previews open with the macOS text editor path.
+- Inspector is the single info surface: the old Get Info modal is removed, core metadata moved into Inspector, and directory child file/folder counts are shown.
+- Selecting a row no longer auto-opens Inspector and squeezes the file list; explicit Inspector toggle or `Cmd+I` reveals it.
+- Navigation polish adds active-pane Home, Copy Current Path, `Cmd+Option+C`, stronger active-pane styling, and per-profile remote last-path restore when restore-last-session is enabled.
+- macOS application menu now exposes Preferences, and the V12 sidebar can be resized with persisted width.
 
 ## v1.0.0 — Product milestone V2.0
 

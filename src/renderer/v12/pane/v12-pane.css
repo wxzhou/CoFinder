@@ -173,6 +173,17 @@
   color: #8b1a10;
 }
 
+.cfv12p-busy {
+  flex-shrink: 0;
+  margin: 6px 10px 0;
+  padding: 6px 8px;
+  font-size: 11px;
+  border-radius: 6px;
+  border: 1px solid rgba(10, 132, 255, 0.22);
+  background: rgba(10, 132, 255, 0.07);
+  color: #16508f;
+}
+
 /* List — no outer focus box; grid rows like mockup */
 .cfv12p-list-head {
   display: grid;

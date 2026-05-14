@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import type { TransferTask } from "../../shared/types/models";
 import { formatTransferTaskMetaLine } from "./v12TransferRowSummary";
 
@@ -22,6 +22,19 @@ export type V12TransferDrawerProps = {
 
 export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
   const expanded = props.state === "expanded" || props.state === "autoHidePending";
+  const [filter, setFilter] = useState<"all" | "running" | "failed" | "done">("all");
+  const filteredTasks = props.tasks.filter((task) => {
+    if (filter === "running") return task.status === "running" || task.status === "pending";
+    if (filter === "failed") return task.status === "failed";
+    if (filter === "done") return task.status === "success" || task.status === "canceled" || task.status === "stopped";
+    return true;
+  });
+  const counts = {
+    all: props.tasks.length,
+    running: props.tasks.filter((task) => task.status === "running" || task.status === "pending").length,
+    failed: props.tasks.filter((task) => task.status === "failed").length,
+    done: props.tasks.filter((task) => task.status === "success" || task.status === "canceled" || task.status === "stopped").length
+  };
 
   return (
     <div className={`v12m-drawer ${expanded ? "is-open" : "is-collapsed"}`}>
@@ -79,11 +92,23 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
               </div>
             </div>
             {props.error ? <div className="cfv12p-error v12m-tq-err">{props.error}</div> : null}
+            <div className="v12m-tq-filters" role="tablist" aria-label="Transfer task filters">
+              {(["all", "running", "failed", "done"] as const).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={`v12m-tq-chip${filter === item ? " is-on" : ""}`}
+                  onClick={() => setFilter(item)}
+                >
+                  {item} {counts[item]}
+                </button>
+              ))}
+            </div>
             <div className="v12m-tq-list">
-              {props.tasks.length === 0 ? (
+              {filteredTasks.length === 0 ? (
                 <div className="v12m-tq-empty">No transfer tasks.</div>
               ) : (
-                props.tasks.map((task) => (
+                filteredTasks.map((task) => (
                   <div
                     key={task.id}
                     className={`v12m-tq-row${task.status === "running" ? " v12m-tq-row--running" : ""}`}
