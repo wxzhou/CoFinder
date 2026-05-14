@@ -114,6 +114,8 @@ type DeleteConfirmState = {
   names: string[];
 };
 
+type DeleteBusyByTab = Record<string, Partial<Record<ActivePane, string>>>;
+
 type ActivePane = "local" | "remote";
 
 type TransferDragPayload = {
@@ -251,6 +253,8 @@ export function App(props: AppProps = {}) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
+  const [deleteBusyByTab, setDeleteBusyByTab] = useState<DeleteBusyByTab>({});
+  const deleteInFlightKeysRef = useRef(new Set<string>());
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
@@ -297,6 +301,8 @@ export function App(props: AppProps = {}) {
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
   const localPane = activeTab.localPane;
   const remotePane = activeTab.remotePane;
+  const localDeleteBusy = deleteBusyByTab[activeTab.id]?.local ?? "";
+  const remoteDeleteBusy = deleteBusyByTab[activeTab.id]?.remote ?? "";
   const remoteConnected = remotePane.connectionStatus === "connected" && !!remotePane.connectionId;
   const activeTabRemoteDisconnected = useMemo(
     () => !(remotePane.connectionStatus === "connected" && remotePane.connectionId),
@@ -2290,44 +2296,97 @@ export function App(props: AppProps = {}) {
 
   async function submitDeleteConfirm(): Promise<void> {
     if (!deleteConfirm) return;
-    await performDelete(deleteConfirm);
+    const target = deleteConfirm;
+    setDeleteConfirm(null);
+    await performDelete(target);
   }
 
   async function performDelete(target: DeleteConfirmState): Promise<void> {
+    const deleteKey = deleteOperationKey(target);
+    if (deleteInFlightKeysRef.current.has(deleteKey)) return;
+    deleteInFlightKeysRef.current.add(deleteKey);
+    setDeleteBusy(target.tabId, target.pane, `Deleting ${target.paths.length} ${target.paths.length === 1 ? "item" : "items"}...`);
     if (target.pane === "local") {
       const tab = tabs.find((item) => item.id === target.tabId);
-      if (!tab) return;
-      const result = await window.cofinder.local.delete({ paths: target.paths });
+      if (!tab) {
+        finishDeleteOperation(deleteKey, target.tabId, target.pane);
+        return;
+      }
+      try {
+        const result = await window.cofinder.local.delete({ paths: target.paths });
+        if (!result.ok) {
+          setTabs((prev) =>
+            prev.map((item) =>
+              item.id === target.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+            )
+          );
+          return;
+        }
+        await navigateLocal(target.tabId, tab.localPane.currentPath, "replace");
+      } finally {
+        finishDeleteOperation(deleteKey, target.tabId, target.pane);
+      }
+      return;
+    }
+
+    if (!target.connectionId) {
+      finishDeleteOperation(deleteKey, target.tabId, target.pane);
+      return;
+    }
+    const tab = tabs.find((item) => item.id === target.tabId);
+    if (!tab) {
+      finishDeleteOperation(deleteKey, target.tabId, target.pane);
+      return;
+    }
+    try {
+      const result = await window.cofinder.remote.delete({
+        connectionId: target.connectionId,
+        paths: target.paths
+      });
       if (!result.ok) {
         setTabs((prev) =>
           prev.map((item) =>
-            item.id === target.tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item
+            item.id === target.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
           )
         );
         return;
       }
-      await navigateLocal(target.tabId, tab.localPane.currentPath, "replace");
-      setDeleteConfirm(null);
-      return;
+      await listRemotePath(target.connectionId, tab.remotePane.currentPath, "replace", target.tabId);
+    } finally {
+      finishDeleteOperation(deleteKey, target.tabId, target.pane);
     }
+  }
 
-    if (!target.connectionId) return;
-    const tab = tabs.find((item) => item.id === target.tabId);
-    if (!tab) return;
-    const result = await window.cofinder.remote.delete({
-      connectionId: target.connectionId,
-      paths: target.paths
+  function setDeleteBusy(tabId: string, pane: ActivePane, message: string): void {
+    setDeleteBusyByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        ...(prev[tabId] ?? {}),
+        [pane]: message
+      }
+    }));
+  }
+
+  function clearDeleteBusy(tabId: string, pane: ActivePane): void {
+    setDeleteBusyByTab((prev) => {
+      const current = prev[tabId];
+      if (!current?.[pane]) return prev;
+      const nextPane = { ...current };
+      delete nextPane[pane];
+      const next = { ...prev };
+      if (Object.keys(nextPane).length === 0) delete next[tabId];
+      else next[tabId] = nextPane;
+      return next;
     });
-    if (!result.ok) {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === target.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
-        )
-      );
-      return;
-    }
-    await listRemotePath(target.connectionId, tab.remotePane.currentPath, "replace", target.tabId);
-    setDeleteConfirm(null);
+  }
+
+  function finishDeleteOperation(key: string, tabId: string, pane: ActivePane): void {
+    deleteInFlightKeysRef.current.delete(key);
+    clearDeleteBusy(tabId, pane);
+  }
+
+  function deleteOperationKey(target: DeleteConfirmState): string {
+    return `${target.pane}\u0000${target.tabId}\u0000${target.connectionId ?? ""}\u0000${target.paths.slice().sort().join("\u0000")}`;
   }
 
   async function openInfoDialog(tabId: string, pane: "local" | "remote"): Promise<void> {
@@ -3188,6 +3247,7 @@ export function App(props: AppProps = {}) {
           <div className="v12m-pane-body">
             <div className="v12m-pane-split">
               <div className="v12m-pane-main v12m-pane-main--stack">
+                {localDeleteBusy ? <div className="cfv12p-busy">{localDeleteBusy}</div> : null}
                 {localPane.error ? <div className="cfv12p-error">{localPane.error}</div> : null}
                 <V12VisualFileList
                   pane="local"
@@ -3388,6 +3448,7 @@ export function App(props: AppProps = {}) {
 
           {localNavTools}
 
+          {localDeleteBusy ? <div className="busy-banner">{localDeleteBusy}</div> : null}
           {localPane.error ? <div className="error-banner">{localPane.error}</div> : null}
 
           <div
@@ -3588,6 +3649,7 @@ export function App(props: AppProps = {}) {
             <div className="v12m-pane-body">
               <div className="v12m-pane-split">
                 <div className="v12m-pane-main v12m-pane-main--stack">
+                  {remoteDeleteBusy ? <div className="cfv12p-busy">{remoteDeleteBusy}</div> : null}
                   {remotePane.error ? <div className="cfv12p-error">{remotePane.error}</div> : null}
                   <V12VisualFileList
                     pane="remote"
@@ -3789,6 +3851,7 @@ export function App(props: AppProps = {}) {
 
               {remoteNavTools}
 
+              {remoteDeleteBusy ? <div className="busy-banner">{remoteDeleteBusy}</div> : null}
               {remotePane.error ? <div className="error-banner">{remotePane.error}</div> : null}
 
               <div

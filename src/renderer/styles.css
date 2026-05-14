@@ -274,6 +274,15 @@ body,
   font-size: 12px;
 }
 
+.busy-banner {
+  border: 1px solid #c9d8f2;
+  background: #f3f7ff;
+  color: #1f4f8f;
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
 .table-wrap {
   flex: 1;
   min-height: 0;
