@@ -40,6 +40,7 @@ export type V12VisualFileListProps<T extends FileEntry> = {
   sortMark: (direction: SortDirection) => string;
   /** Human-readable kind column (mock uses “Folder” / “Document”). */
   formatKind: (entry: T) => string;
+  emptyMessage?: string;
 };
 
 function rowSelClass(selected: boolean, paneActive: boolean): string {
@@ -77,6 +78,7 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
         onDrop={props.onBackgroundDrop}
         onDragLeave={props.onDragLeave}
       >
+        {props.entries.length === 0 ? <div className="v12m-list-empty">{props.emptyMessage ?? "This folder is empty."}</div> : null}
         {props.entries.map((entry) => {
           const selected = props.selectedFullPaths.includes(entry.fullPath);
           const sel = rowSelClass(selected, props.isPaneActive);

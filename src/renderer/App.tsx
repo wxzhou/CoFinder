@@ -3663,6 +3663,7 @@ export function App(props: AppProps = {}) {
                   pane="local"
                   isPaneActive={activePane === "local"}
                   entries={sortedEntries}
+                  emptyMessage={localPane.error ? "Local folder could not be loaded." : "This local folder is empty."}
                   sortKey={localPane.sortKey}
                   sortDirection={localPane.sortDirection}
                   selectedFullPaths={localPane.selectedFullPaths}
@@ -4093,6 +4094,9 @@ export function App(props: AppProps = {}) {
                     pane="remote"
                     isPaneActive={activePane === "remote"}
                     entries={sortedRemoteEntries}
+                    emptyMessage={
+                      remotePane.error ? "Remote folder could not be loaded." : "This remote folder is empty."
+                    }
                     sortKey={remotePane.sortKey}
                     sortDirection={remotePane.sortDirection}
                     selectedFullPaths={remotePane.selectedFullPaths}
