@@ -25,6 +25,10 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.2 | v1.2.0 | Shipped |
 | V2.3 | v1.3.0 | Shipped |
 | V2.4 | v1.4.0 | Planned |
+| V2.5 | v1.5.0 | Planned |
+| V2.6 | v1.6.0 | Planned |
+| V2.7 | v1.7.0 | Planned |
+| V2.8 | v1.8.0 | Planned |
 
 ## Shipped phases (summary)
 
@@ -58,6 +62,10 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.2 | v1.2.0 | v1.1 Feedback Fixes — shipped |
 | V2.3 | v1.3.0 | v1.2 Navigation Feedback Fixes — shipped |
 | V2.4 | v1.4.0 | Pane-Scoped Toolbar and Finder Visual Polish — planned |
+| V2.5 | v1.5.0 | Remote Text Edit Auto-Sync MVP — planned |
+| V2.6 | v1.6.0 | Remote Edit Reliability and Session Management — planned |
+| V2.7 | v1.7.0 | V12 UI Refinement and Task-Center Polish — planned |
+| V2.8 | v1.8.0 | Advanced Remote Navigation and Preview Decisions — planned |
 
 ## Latest Shipped Phase
 
@@ -113,12 +121,62 @@ V2.4 should address the clearest V12 UI workflow debt before larger remote-edit 
 
 See **`docs/dev/V2.4_PLAN.md`** for the detailed triage and acceptance checks.
 
+## Planned Longer-Term Phases
+
+### V2.5 / v1.5.0 — Remote Text Edit Auto-Sync MVP
+
+V2.5 should introduce the first write-capable remote edit workflow, but with tight scope:
+
+- Add a separate **Edit Remote File** command for sniffed text files only.
+- Keep existing **Open** read-only preview semantics unchanged.
+- Download to an edit cache, open in the configured text editor, monitor local saves, and upload back after conflict checks.
+- Prevent silent overwrites when the remote file changed after the edit session started.
+- Preserve local edited copies on upload failure or conflict.
+
+See **`docs/dev/V2.5_PLAN.md`**.
+
+### V2.6 / v1.6.0 — Remote Edit Reliability and Session Management
+
+V2.6 should harden V2.5 into a trustworthy daily workflow:
+
+- Add an edit sessions panel/drawer.
+- Provide Save Back Now, Re-download Remote, Reveal Local Copy, Stop Monitoring, and Discard actions.
+- Handle atomic-save editor behavior, deleted local edit copies, upload retries, and conflict recovery.
+- Add stronger integration tests around real and mocked SFTP edit paths.
+
+See **`docs/dev/V2.6_PLAN.md`**.
+
+### V2.7 / v1.7.0 — V12 UI Refinement and Task-Center Polish
+
+V2.7 should consolidate UI quality after the toolbar and edit-session changes:
+
+- Align spacing, icon sizing, disabled states, and selection colors across V12.
+- Improve empty/loading/error states.
+- Evolve the transfer drawer into a clearer task center that can also surface edit-session failures.
+- Refine Inspector without reintroducing auto-open behavior.
+- Add screenshot/layout regression checks where stable.
+- Make a deliberate decision about whether real Column View deserves a future implementation milestone.
+
+See **`docs/dev/V2.7_PLAN.md`**.
+
+### V2.8 / v1.8.0 — Advanced Remote Navigation and Preview Decisions
+
+V2.8 should choose one advanced track rather than attempting all of them:
+
+- Real Column View;
+- Remote Quick Look;
+- Navigation/search upgrade.
+
+Default recommendation is Remote Quick Look first, Column View second, and bounded search only if real usage demands it.
+
+See **`docs/dev/V2.8_PLAN.md`**.
+
 ## Explicitly out of scope or not on the main line (today)
 
 These remain **unsupported**, **deferred**, or **non-goals** across current plans unless a future milestone explicitly adopts them:
 
-- **Remote edit auto-sync**
-- **Full Remote Quick Look**. A limited read-only remote preview cache for text/images exists from **V1.3**; it is not a full macOS Quick Look equivalent and does not support editing/sync.
+- **Binary/document remote edit auto-sync**. V2.5/V2.6 plan text-file-only remote edit workflows first.
+- **Full Remote Quick Look**. A limited read-only remote preview cache for text/images exists from **V1.3**; V2.8 may choose a broader remote Quick Look track, but it remains deferred until then.
 - **Indexed/full-text search** (V1.7 only filters current listings and suggests already-known paths)
 - **Full ACL editor / remote shell file-manager mode** (V1.8 ships curated remote operations only)
 - **Full i18n** (no localized product shell in near phases)
@@ -128,4 +186,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.3 / v1.3.0 is the current stable personal release. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.3 / v1.3.0 is the current stable personal release. Planned phases through V2.8 are intentionally scoped and may narrow further before implementation. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
