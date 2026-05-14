@@ -24,6 +24,8 @@ export class RemoteEditService {
   private readonly sessions = new Map<string, RemoteEditSession>();
   private readonly watchers = new Map<string, FSWatcher>();
   private readonly debounceTimers = new Map<string, NodeJS.Timeout>();
+  private readonly retryTimers = new Map<string, NodeJS.Timeout>();
+  private readonly retryCounts = new Map<string, number>();
   private readonly uploads = new Map<string, Promise<RemoteEditSession>>();
   private readonly pendingUploads = new Set<string>();
 
@@ -103,7 +105,9 @@ export class RemoteEditService {
       .catch((error) => {
         const message = error instanceof RemotePreviewError ? error.message : error instanceof Error ? error.message : "Remote edit upload failed.";
         try {
-          return this.replaceSession(sessionId, { state: "failed", error: message });
+          const failed = this.replaceSession(sessionId, { state: "failed", error: message });
+          if (isTransientUploadError(error)) this.scheduleRetry(sessionId);
+          return failed;
         } catch {
           throw error;
         }
@@ -120,8 +124,11 @@ export class RemoteEditService {
 
   closeAll(): void {
     for (const timer of this.debounceTimers.values()) clearTimeout(timer);
+    for (const timer of this.retryTimers.values()) clearTimeout(timer);
     for (const watcher of this.watchers.values()) watcher.close();
     this.debounceTimers.clear();
+    this.retryTimers.clear();
+    this.retryCounts.clear();
     this.watchers.clear();
     this.uploads.clear();
     this.pendingUploads.clear();
@@ -160,12 +167,14 @@ export class RemoteEditService {
       return this.replaceSession(sessionId, { state: "failed", error: "Remote edit upload is unavailable for this connection." });
     }
     const localStat = await fs.stat(session.localPath).catch((error) => {
+      if (isMissingLocalPathError(error)) throw new RemotePreviewError("REMOTE_NOT_FOUND", "Local edit copy is missing.");
       throw mapRemoteEditError(error, "Failed to inspect local edit copy.");
     });
     this.replaceSession(sessionId, { state: "uploading", error: "" });
     await client.put(session.localPath, session.remotePath).catch((error) => {
       throw mapRemoteEditError(error, "Failed to upload edited remote file.");
     });
+    this.retryCounts.delete(sessionId);
     const nextRemoteStat = await client.stat(session.remotePath).catch(() => ({ size: localStat.size, modifyTime: Date.now() }));
     return this.replaceSession(sessionId, {
       state: "uploaded",
@@ -180,8 +189,12 @@ export class RemoteEditService {
   async closeSession(sessionId: string, options: { discardLocal?: boolean } = {}): Promise<void> {
     const session = this.requireSession(sessionId);
     const timer = this.debounceTimers.get(sessionId);
+    const retryTimer = this.retryTimers.get(sessionId);
     if (timer) clearTimeout(timer);
+    if (retryTimer) clearTimeout(retryTimer);
     this.debounceTimers.delete(sessionId);
+    this.retryTimers.delete(sessionId);
+    this.retryCounts.delete(sessionId);
     this.pendingUploads.delete(sessionId);
     this.watchers.get(sessionId)?.close();
     this.watchers.delete(sessionId);
@@ -224,10 +237,23 @@ export class RemoteEditService {
     this.debounceTimers.set(sessionId, timer);
   }
 
+  private scheduleRetry(sessionId: string): void {
+    if (this.retryTimers.has(sessionId)) return;
+    const count = this.retryCounts.get(sessionId) ?? 0;
+    if (count >= 2) return;
+    this.retryCounts.set(sessionId, count + 1);
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(sessionId);
+      void this.syncSession(sessionId).catch(() => {});
+    }, 1000 * (count + 1));
+    this.retryTimers.set(sessionId, timer);
+  }
+
   private async syncSessionNow(sessionId: string): Promise<RemoteEditSession> {
     const session = this.findSessionById(sessionId);
     if (!session) throw new RemotePreviewError("REMOTE_NOT_FOUND", "Remote edit session no longer exists.");
     const localStat = await fs.stat(session.localPath).catch((error) => {
+      if (isMissingLocalPathError(error)) throw new RemotePreviewError("REMOTE_NOT_FOUND", "Local edit copy is missing.");
       throw mapRemoteEditError(error, "Failed to inspect local edit copy.");
     });
     const shouldRetry = session.state === "dirty" || session.state === "failed" || session.state === "conflict";
@@ -264,6 +290,7 @@ export class RemoteEditService {
     await client.put(session.localPath, session.remotePath).catch((error) => {
       throw mapRemoteEditError(error, "Failed to upload edited remote file.");
     });
+    this.retryCounts.delete(sessionId);
     const nextRemoteStat = await client.stat(session.remotePath).catch(() => ({ size: localStat.size, modifyTime: Date.now() }));
     return this.replaceSession(sessionId, {
       state: "uploaded",
@@ -355,4 +382,13 @@ function mapRemoteEditError(error: unknown, fallback: string): RemotePreviewErro
     return new RemotePreviewError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
   }
   return new RemotePreviewError("REMOTE_PREVIEW_FAILED", fallback, message);
+}
+
+function isMissingLocalPathError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+function isTransientUploadError(error: unknown): boolean {
+  const detail = error instanceof RemotePreviewError ? error.detail ?? error.message : error instanceof Error ? error.message : String(error);
+  return /ECONNRESET|ETIMEDOUT|timed out|connection.*lost|temporar/i.test(detail);
 }

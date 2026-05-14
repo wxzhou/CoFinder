@@ -247,4 +247,33 @@ describe("RemoteEditService", () => {
     service.closeAll();
     await fs.rm(dir, { recursive: true, force: true });
   });
+
+  it("marks a session failed when the local edit copy is deleted", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 12, modifyTime: 1000 })),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, "remote text\n", "utf8");
+      }),
+      put: vi.fn(async () => undefined)
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+    const session = await service.openTextEditSession({ tabId: "tab", connectionId: "c1", remotePath: "/note.txt" });
+    await fs.unlink(session.localPath);
+
+    const failed = await service.syncSession(session.id);
+
+    expect(failed.state).toBe("failed");
+    expect(failed.error).toBe("Local edit copy is missing.");
+    expect(client.put).not.toHaveBeenCalled();
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
 });
