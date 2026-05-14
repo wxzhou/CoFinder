@@ -2,7 +2,7 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-**`package.json` version:** `1.8.0`. **Latest completed development release:** **v1.8.0**.
+**`package.json` version:** `1.8.1`. **Latest completed development release:** **v1.8.1**.
 
 ## Versioning
 
@@ -34,6 +34,7 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.4** sh
 | V2.6 | v1.6.0 | Complete on dev |
 | V2.7 | v1.7.0 | Complete on dev |
 | V2.8 | v1.8.0 | Complete on dev |
+| V2.8.1 | v1.8.1 | Complete on dev |
 
 ## V1 Status
 
@@ -127,6 +128,12 @@ Detailed scope lives in `docs/dev/V2.7_PLAN.md`.
 V2.8 chooses and implements the Remote Quick Look track: Space and the remote context-menu Quick Look command now open the existing read-only remote preview flow for sniffed text/images, while Edit remains the separate write-capable workflow.
 
 Detailed scope lives in `docs/dev/V2.8_PLAN.md`.
+
+### Implemented in V2.8.1 / v1.8.1
+
+V2.8.1 cleans up the V12 toolbar layout: the top global toolbar is removed, local and remote panes each own a single-row toolbar, pane breadcrumb rows keep their own Copy Path button, Preferences lives in the sidebar footer, and remote connection status sits beside the remote pane title.
+
+Detailed scope lives in `docs/dev/V2.8.1_PLAN.md`.
 
 ### Included in v1.0.0: V1.9 Reliability
 
@@ -247,7 +254,7 @@ Build artifacts are generated under `release/`.
 - Development milestones are committed on `dev`; a version becomes shipped after the matching git tag and release artifacts are published.
 - Current update policy is manual: users install dmg/zip artifacts from GitHub Releases or local release output. In-app auto-install is not enabled yet.
 - Public distribution needs an Apple Developer ID certificate and notarization. Local personal builds may be unsigned, but unsigned artifacts should be described honestly in release notes.
-- `v1.8.0` is the current development release target. Build artifacts use `release/CoFinder-1.8.0-arm64.dmg` and `release/CoFinder-1.8.0-arm64.zip` when `npm run dist` is executed.
+- `v1.8.1` is the current development release target. Build artifacts use `release/CoFinder-1.8.1-arm64.dmg` and `release/CoFinder-1.8.1-arm64.zip` when `npm run dist` is executed.
 
 **App icons:** `assets/icon/icon.icns` is used for the packaged `.app` / `.dmg` / `.zip` (see `electron-builder.yml`). `assets/icon/icon.png` is copied into `Resources` for `BrowserWindow` (`src/main/main.ts`). To regenerate both from the archived source PNG on macOS: `./scripts/gen-mac-app-icons.sh` (uses `sips` + `iconutil`, no extra npm deps).
 

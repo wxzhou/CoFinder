@@ -4,11 +4,21 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.8.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.1.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.8.0**.
+No user-facing changes since **v1.8.1**.
+
+## v1.8.1 — Product milestone V2.8.1
+
+V2.8.1 is a V12 layout cleanup release.
+
+- Removed the redundant global toolbar from the V12 shell.
+- Added pane-scoped one-row toolbars for local and remote actions, filters, Recent, History, and Clear Recent.
+- Kept Copy Path on each pane breadcrumb row so the command is explicit to that pane.
+- Moved Preferences to the V12 sidebar footer.
+- Removed the extra remote header Disconnect link and placed connection status beside the remote pane title.
 
 ## v1.8.0 — Product milestone V2.8
 

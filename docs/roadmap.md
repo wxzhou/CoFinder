@@ -29,6 +29,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.6 | v1.6.0 | Complete on dev |
 | V2.7 | v1.7.0 | Complete on dev |
 | V2.8 | v1.8.0 | Complete on dev |
+| V2.8.1 | v1.8.1 | Complete on dev |
 
 ## Shipped phases (summary)
 
@@ -66,6 +67,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.6 | v1.6.0 | Remote Edit Reliability and Session Management — complete on dev |
 | V2.7 | v1.7.0 | V12 UI Refinement and Task-Center Polish — complete on dev |
 | V2.8 | v1.8.0 | Remote Quick Look — complete on dev |
+| V2.8.1 | v1.8.1 | Pane-Scoped Toolbar Cleanup — complete on dev |
 
 ## Latest Completed Phase
 
@@ -113,12 +115,24 @@ V2.8 chooses Track B from the advanced navigation/preview decision:
 
 See **`docs/dev/V2.8_PLAN.md`** and **`docs/dev/V2.8_DECISION.md`**.
 
+### V2.8.1 / v1.8.1 — Pane-Scoped Toolbar Cleanup
+
+V2.8.1 is a V12 patch release for command placement:
+
+- Removed the active-pane-dependent global toolbar.
+- Moved navigation, inspector, operation, filter, Recent, History, and Clear Recent controls into one toolbar row per pane.
+- Kept Copy Path on each pane breadcrumb row.
+- Moved Preferences to the sidebar footer.
+- Moved remote connection status next to the remote pane title and removed the duplicate header Disconnect link.
+
+See **`docs/dev/V2.8.1_PLAN.md`**.
+
 ### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
 
 V2.4 addresses V12 command ownership and visible polish before larger remote-edit work:
 
 - Pane-scoped action strips for local/remote operations.
-- Top toolbar kept for global/session navigation commands.
+- Top toolbar kept for global/session navigation commands. Superseded in V2.8.1 by fully pane-scoped toolbar rows.
 - Removed unavailable view-mode toolbar controls.
 - Folder icon palette tuned lighter and closer to Finder.
 
@@ -179,4 +193,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.8 / v1.8.0 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.8.1 / v1.8.1 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

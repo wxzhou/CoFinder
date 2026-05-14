@@ -8,8 +8,8 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 
 **Legacy classic UI:** use **`?ui=v11`**, **`?legacy=1`**, **`COFINDER_LEGACY_UI=1`**, or a build with **`VITE_COFINDER_LEGACY_UI=1`** — then run overlapping **V1.1 baseline** checks below for parity.
 
-- **Layout:** sidebar, toolbar, tab strip, dual panes, bottom transfer drawer render without overlap; inactive pane reads visually cooler than the focused pane.
-- **Toolbar:** back / forward / up / refresh follow the **focused** pane; plug opens Site Manager when disconnected and **disconnects** when connected; upload/download/delete/Get Info / inspector toggle match enabled states of the classic panes.
+- **Layout:** sidebar, tab strip, dual panes, per-pane toolbars, and bottom transfer drawer render without overlap; inactive pane reads visually cooler than the focused pane.
+- **Pane toolbars:** local and remote toolbar buttons operate on their own pane without needing active-pane preselection; Copy Path appears once per pane on the breadcrumb row.
 - **Remote (M4):** disconnected pane shows embedded connect + profile list + **Open Site Manager**; connect and failures surface in-pane; connected list matches M2 behavior.
 - **Inspector (M3):** single-click selection timing, double-click folder navigation, Cmd/Ctrl+A immediate reveal — no inspector flash regressions.
 - **Transfers (M5):** enqueue from context menu or toolbar; drawer shows live tasks, **Pin** / **Clear** / expand; cancel pending / stop running.
@@ -46,7 +46,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 ## V1.6 preferences MVP
 
-- **Open Preferences:** in default V12 UI, click the toolbar Preferences button; in legacy classic UI, use the top-bar Preferences button. Confirm the modal opens and closes cleanly.
+- **Open Preferences:** in default V12 UI, click the sidebar footer Preferences button; in legacy classic UI, use the top-bar Preferences button. Confirm the modal opens and closes cleanly.
 - **Settings round-trip:** change row density, queue auto-hide delay, default pane ratio, and default local path. Save, quit, relaunch, and confirm values persist.
 - **Default local path:** set a temporary local test directory as default, relaunch, and confirm the first local pane opens there. Reset to blank when done.
 - **Restore last local path:** enable restore last session, navigate the active local pane to another isolated test directory, quit, relaunch, and confirm the first local pane opens at that last local path. Remote connections must not auto-reconnect.
@@ -61,7 +61,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 ## V1.7 search, filter, and navigation
 
 - **Local quick filter:** open a local folder with several files/folders, type a substring in the local filter box, and confirm only matching names remain. Clear the filter and confirm the full current listing returns.
-- **Remote quick filter:** connect to the remote test root, type a substring in the remote filter box or focus the remote pane and use the V12 toolbar filter, and confirm filtering is local to the already-loaded listing with no navigation.
+- **Remote quick filter:** connect to the remote test root, type a substring in the remote pane toolbar filter, and confirm filtering is local to the already-loaded listing with no navigation.
 - **Selection safety:** select several rows, change the filter, and confirm the selection is cleared instead of leaving hidden selected rows active.
 - **Local autocomplete:** navigate to two or more local folders, type the beginning of a known recent/favorite path in the local path field, and confirm suggestions appear. Pick one and press Enter to navigate.
 - **Remote autocomplete:** navigate to two or more remote folders under the current profile, type the beginning of a visited path, and confirm suggestions appear without extra remote listing until you submit the path.
@@ -113,6 +113,16 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Breadcrumb path entry:** in a V12 local pane, confirm no separate full path address field appears next to breadcrumb. Click empty breadcrumb space or double-click the breadcrumb, type a valid local path, press Enter, and confirm navigation.
 - **Remote breadcrumb path entry:** connect to the isolated remote test root, press `Cmd+L`, type another allowed remote path, press Enter, and confirm navigation. Press Escape from edit mode and confirm breadcrumb mode returns without navigation.
 - **Breadcrumb copy path:** click the breadcrumb Copy Path icon for local and remote panes and confirm the clipboard contains the pane current path.
+
+## V2.8.1 toolbar cleanup
+
+- **No global toolbar:** confirm the V12 shell has no top global toolbar between the tab strip and dual-pane workspace.
+- **Local pane toolbar:** verify Back, Forward, Enclosing folder, Home, Refresh, Toggle Inspector, Upload, New Folder, New Text File, Delete, Open Terminal Here, Filter names, Recent, History, and Clear Recent are all on one local toolbar row and operate on the local pane.
+- **Remote pane toolbar:** after connecting, verify Back, Forward, Enclosing folder, Home, Refresh, Toggle Inspector, Download, Edit Remote Text File, New Folder, New Text File, Delete, Open SSH Terminal Here, Disconnect, Filter names, Recent, History, and Clear Recent are all on one remote toolbar row and operate on the remote pane.
+- **Copy path placement:** confirm each pane has exactly one breadcrumb-row Copy Path button and the former global Copy Current Path button is absent.
+- **Disconnect placement:** confirm remote Disconnect appears in the remote pane toolbar and not in the remote title/header corner.
+- **Remote status placement:** confirm Connected/Offline/Connecting/Error appears immediately beside the remote pane title.
+- **Preferences placement:** click Preferences in the lower-left sidebar footer and confirm the Preferences modal opens.
 - **Navigation row:** confirm Filter names, Recent, History, and Clear Recent remain available and do not squeeze the breadcrumb path display.
 
 ## V2.5 remote text edit MVP
