@@ -1143,6 +1143,28 @@ body,
   justify-content: flex-end;
 }
 
+.cfv12-root .v12m-tq-filters {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px 0;
+}
+
+.cfv12-root .v12m-tq-chip {
+  height: 24px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  background: color-mix(in srgb, #fff 80%, var(--bg-soft));
+  color: var(--text-secondary);
+  padding: 0 10px;
+  text-transform: capitalize;
+}
+
+.cfv12-root .v12m-tq-chip.is-on {
+  color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border-subtle));
+  background: color-mix(in srgb, var(--accent) 12%, #fff);
+}
+
 .cfv12-root .v12m-list-empty {
   margin: 18px 20px;
   padding: 14px 16px;
