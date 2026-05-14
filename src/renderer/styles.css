@@ -1175,6 +1175,48 @@ body,
   font-size: 13px;
 }
 
+.cfv12-root .v12m-inspector--pane {
+  background: color-mix(in srgb, #fff 88%, var(--bg-soft));
+}
+
+.cfv12-root .v12m-insp-sect {
+  margin-top: 10px;
+}
+
+.cfv12-root .v12m-insp-sect h3 {
+  margin: 0 0 6px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.cfv12-root .v12m-insp-kv {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cfv12-root .v12m-insp-kv li {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 10px;
+  padding: 4px 0;
+  border-top: 1px solid color-mix(in srgb, var(--separator) 70%, transparent);
+  font-size: 12px;
+}
+
+.cfv12-root .v12m-insp-kv li span:first-child {
+  color: var(--text-secondary);
+}
+
+.cfv12-root .v12m-insp-kv li span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .queue-debug {
   border-top: 1px solid var(--separator);
   padding: 6px var(--space-3);

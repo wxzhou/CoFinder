@@ -76,7 +76,7 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
 
       {single ? (
         <>
-          {props.infoLoading ? <p className="v12m-insp-empty">Loading…</p> : null}
+          {props.infoLoading ? <p className="v12m-insp-empty">Loading metadata...</p> : null}
           {!props.infoLoading && props.infoError ? <p className="v12m-insp-empty v12m-insp-empty--err">{props.infoError}</p> : null}
           {!props.infoLoading && !props.infoError && props.info ? (
             <>
@@ -93,7 +93,7 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                 </p>
               </div>
               <div className="v12m-insp-sect">
-                <h3>Details</h3>
+                <h3>Metadata</h3>
                 <ul className="v12m-insp-kv">
                   <li>
                     <span>Type</span>
