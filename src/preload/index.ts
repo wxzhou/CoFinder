@@ -42,6 +42,8 @@ const api: IpcApi = {
     editRevealLocal: (request) => ipcRenderer.invoke("remote:editRevealLocal", request),
     editRedownload: (request) => ipcRenderer.invoke("remote:editRedownload", request),
     editForceUpload: (request) => ipcRenderer.invoke("remote:editForceUpload", request),
+    editDownloadConflictCopy: (request) => ipcRenderer.invoke("remote:editDownloadConflictCopy", request),
+    editCopyConflictPaths: (request) => ipcRenderer.invoke("remote:editCopyConflictPaths", request),
     editClose: (request) => ipcRenderer.invoke("remote:editClose", request),
     onEditUpdate: (handler) => {
       const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => handler(payload as Parameters<typeof handler>[0]);

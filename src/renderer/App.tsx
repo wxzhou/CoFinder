@@ -709,6 +709,22 @@ export function App(props: AppProps = {}) {
     setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
   }
 
+  async function downloadRemoteConflictCopy(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editDownloadConflictCopy({ sessionId });
+    if (!res.ok) {
+      setQueueError(res.error.message);
+      return;
+    }
+    setRemoteEditSessions((prev) => [res.data.session, ...prev.filter((item) => item.id !== sessionId)]);
+    setQueueError(`Downloaded remote conflict copy to ${res.data.remoteCopyPath}`);
+  }
+
+  async function copyRemoteEditConflictPaths(sessionId: string): Promise<void> {
+    const res = await window.cofinder.remote.editCopyConflictPaths({ sessionId });
+    if (!res.ok) setQueueError(res.error.message);
+    else setQueueError("Copied remote edit conflict paths.");
+  }
+
   async function stopRemoteEditMonitoring(sessionId: string): Promise<void> {
     const session = remoteEditSessions.find((item) => item.id === sessionId);
     const risky = session?.state === "dirty" || session?.state === "failed" || session?.state === "conflict";
@@ -3186,6 +3202,12 @@ export function App(props: AppProps = {}) {
                     </button>
                     <button type="button" className="toolbar-button" onClick={() => void forceUploadRemoteEdit(session.id)}>
                       Force upload
+                    </button>
+                    <button type="button" className="toolbar-button" onClick={() => void downloadRemoteConflictCopy(session.id)}>
+                      Remote Copy
+                    </button>
+                    <button type="button" className="toolbar-button" onClick={() => void copyRemoteEditConflictPaths(session.id)}>
+                      Copy Paths
                     </button>
                   </>
                 ) : null}

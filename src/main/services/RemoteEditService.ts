@@ -186,6 +186,23 @@ export class RemoteEditService {
     });
   }
 
+  async downloadConflictRemoteCopy(sessionId: string): Promise<{ session: RemoteEditSession; remoteCopyPath: string }> {
+    const session = this.requireSession(sessionId);
+    const connection = this.connectionManager.getConnection(session.connectionId);
+    if (!connection) throw new RemotePreviewError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const client = connection.client as unknown as RemoteEditClient;
+    const parsed = path.parse(session.localPath);
+    const remoteCopyPath = path.join(parsed.dir, `${parsed.name}.remote-${Date.now()}${parsed.ext || ".txt"}`);
+    await downloadRemoteFile(client, session.remotePath, remoteCopyPath);
+    await fs.chmod(remoteCopyPath, 0o644).catch(() => {});
+    const next = this.replaceSession(sessionId, {
+      state: session.state,
+      error: session.error,
+      conflictRemoteCopyPath: remoteCopyPath
+    });
+    return { session: next, remoteCopyPath };
+  }
+
   async closeSession(sessionId: string, options: { discardLocal?: boolean } = {}): Promise<void> {
     const session = this.requireSession(sessionId);
     const timer = this.debounceTimers.get(sessionId);
@@ -314,7 +331,9 @@ export class RemoteEditService {
 
   private replaceSession(
     sessionId: string,
-    patch: Partial<Pick<RemoteEditSession, "state" | "error" | "baseline" | "lastLocalSize" | "lastLocalMtimeMs" | "lastUploadedAt">>
+    patch: Partial<
+      Pick<RemoteEditSession, "state" | "error" | "baseline" | "lastLocalSize" | "lastLocalMtimeMs" | "lastUploadedAt" | "conflictRemoteCopyPath">
+    >
   ): RemoteEditSession {
     for (const [key, session] of this.sessions) {
       if (session.id !== sessionId) continue;

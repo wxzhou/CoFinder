@@ -539,6 +539,33 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.remote.editDownloadConflictCopy, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editDownloadConflictCopy request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      const result = await remoteEditService.downloadConflictRemoteCopy(sessionId);
+      return ok(result);
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to download remote conflict copy.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editCopyConflictPaths, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editCopyConflictPaths request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      const session = remoteEditService.getSession(sessionId);
+      if (!session) throw new AppError("REMOTE_NOT_FOUND", "Remote edit session no longer exists.");
+      const lines = [`Local edit: ${session.localPath}`];
+      if (session.conflictRemoteCopyPath) lines.push(`Remote copy: ${session.conflictRemoteCopyPath}`);
+      const text = lines.join("\n");
+      clipboard.writeText(text);
+      return ok({ copied: true as const, text });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to copy remote edit conflict paths.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.remote.editClose, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editClose request.");

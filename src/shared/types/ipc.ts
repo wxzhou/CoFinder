@@ -306,6 +306,8 @@ export interface IpcApi {
     editRevealLocal: (request: { sessionId: string }) => Promise<IpcResponse<{ revealed: true; localPath: string }>>;
     editRedownload: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
     editForceUpload: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
+    editDownloadConflictCopy: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession; remoteCopyPath: string }>>;
+    editCopyConflictPaths: (request: { sessionId: string }) => Promise<IpcResponse<{ copied: true; text: string }>>;
     editClose: (request: { sessionId: string; discardLocal?: boolean }) => Promise<IpcResponse<{ closed: true }>>;
     onEditUpdate: (handler: (payload: RemoteEditUpdatePayload) => void) => () => void;
   };

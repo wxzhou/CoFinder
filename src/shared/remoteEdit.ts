@@ -15,6 +15,7 @@ export type RemoteEditSession = {
   lastLocalSize: number;
   lastLocalMtimeMs: number;
   lastUploadedAt?: number;
+  conflictRemoteCopyPath?: string;
   state: RemoteEditSessionState;
   error: string;
   updatedAt: number;

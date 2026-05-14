@@ -187,6 +187,33 @@ describe("RemoteEditService", () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
+  it("downloads a remote conflict copy beside the local edit copy", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 12, modifyTime: 1000 })),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, localPath.includes(".remote-") ? "remote newer\n" : "remote text\n", "utf8");
+      })
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+    const session = await service.openTextEditSession({ tabId: "tab", connectionId: "c1", remotePath: "/note.txt" });
+
+    const result = await service.downloadConflictRemoteCopy(session.id);
+
+    expect(result.remoteCopyPath).not.toBe(session.localPath);
+    expect(result.session.conflictRemoteCopyPath).toBe(result.remoteCopyPath);
+    expect(await fs.readFile(result.remoteCopyPath, "utf8")).toBe("remote newer\n");
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
   it("closes a session and discards the local edit copy only after an explicit call", async () => {
     const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));

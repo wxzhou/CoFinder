@@ -34,6 +34,8 @@ export const IPC_CHANNELS = {
     editRevealLocal: "remote:editRevealLocal",
     editRedownload: "remote:editRedownload",
     editForceUpload: "remote:editForceUpload",
+    editDownloadConflictCopy: "remote:editDownloadConflictCopy",
+    editCopyConflictPaths: "remote:editCopyConflictPaths",
     editClose: "remote:editClose",
     editUpdate: "remote:editUpdate"
   },
