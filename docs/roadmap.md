@@ -24,6 +24,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.1 | v1.1.0 | Shipped |
 | V2.2 | v1.2.0 | Shipped |
 | V2.3 | v1.3.0 | Shipped |
+| V2.4 | v1.4.0 | Planned |
 
 ## Shipped phases (summary)
 
@@ -56,6 +57,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.1 | v1.1.0 | v1.0 Feedback Stabilization — shipped |
 | V2.2 | v1.2.0 | v1.1 Feedback Fixes — shipped |
 | V2.3 | v1.3.0 | v1.2 Navigation Feedback Fixes — shipped |
+| V2.4 | v1.4.0 | Pane-Scoped Toolbar and Finder Visual Polish — planned |
 
 ## Latest Shipped Phase
 
@@ -100,7 +102,16 @@ See **`docs/dev/V2.1_PLAN.md`** for the detailed triage and acceptance checks.
 
 ## Planned Next Phase
 
-No V2.4 scope is defined yet. Future planning should start from new hands-on feedback against v1.3.0.
+### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
+
+V2.4 should address the clearest V12 UI workflow debt before larger remote-edit work:
+
+- Split operation ownership so local/remote pane commands can be invoked directly from that pane, without first selecting the active pane.
+- Keep the top toolbar for global/session commands and avoid two fully duplicated heavy toolbars.
+- Remove or hide Column View until real column browsing is implemented.
+- Tune shared folder icon colors and styling toward a lighter Finder-like folder palette.
+
+See **`docs/dev/V2.4_PLAN.md`** for the detailed triage and acceptance checks.
 
 ## Explicitly out of scope or not on the main line (today)
 
