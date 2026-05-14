@@ -4,11 +4,23 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v1.1.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest shipped release: v1.2.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.1.0**.
+No user-facing changes since **v1.2.0**.
+
+## v1.2.0 — Product milestone V2.2
+
+V2.2 is a corrective release driven by v1.1.0 hands-on feedback.
+
+- Delete confirmations now close immediately after confirmation, duplicate delete submissions are guarded, and local/remote panes show a busy banner while delete work is running.
+- New Folder uses an in-app dialog for both local and remote panes, avoiding unreliable hidden system prompts and surfacing validation/service errors.
+- Preferences now includes a default text editor setting for remote text preview, with system default, TextEdit, TextMate, or custom app/path support and a safe fallback.
+- Ordinary row single-click no longer reveals Inspector or squeezes the file list; Inspector remains available through the toolbar, context menu, and `Cmd+I`.
+- Copy Current Path exposes the `Cmd+Option+C` shortcut in the toolbar tooltip and Preferences shortcut reference.
+- Open Terminal Here / Open SSH Terminal Here now works from pane background context menus. Row context menus open inside folders or in a file's parent folder.
+- SSH terminal launch now quotes remote paths robustly and opens a non-login interactive shell after `cd`, so remote startup files do not override the requested directory.
 
 ## v1.1.0 — Product milestone V2.1
 

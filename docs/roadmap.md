@@ -22,7 +22,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.9 | no standalone tag | Included in v1.0.0 |
 | V2.0 | v1.0.0 | Shipped |
 | V2.1 | v1.1.0 | Shipped |
-| V2.2 | v1.2.0 | Planned |
+| V2.2 | v1.2.0 | Shipped |
 
 ## Shipped phases (summary)
 
@@ -53,9 +53,23 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V1.9 | no standalone tag | Packaging, Updates, and Reliability — included in v1.0.0 |
 | V2.0 | v1.0.0 | Stable Personal Release — shipped |
 | V2.1 | v1.1.0 | v1.0 Feedback Stabilization — shipped |
-| V2.2 | v1.2.0 | v1.1 Feedback Fixes — planned |
+| V2.2 | v1.2.0 | v1.1 Feedback Fixes — shipped |
 
 ## Latest Shipped Phase
+
+### V2.2 / v1.2.0 — v1.1 Feedback Fixes
+
+V2.2 is a corrective release for v1.1.0 hands-on feedback. It focused on operations that appeared unresponsive or surprising:
+
+- Delete confirmation closes immediately after confirmation, duplicate delete submissions are guarded, and pane busy banners show long-running delete work.
+- Local and remote New Folder use an in-app dialog instead of hidden/unreliable system prompts.
+- Preferences can choose the default text editor for remote text preview, including TextMate.
+- Inspector no longer auto-opens on ordinary single-click and squeezes the file list.
+- Copy Current Path documents the `Cmd+Option+C` shortcut in the toolbar tooltip and Preferences reference.
+- Open Terminal Here / Open SSH Terminal Here works from pane background context menus and uses intuitive folder/file parent target semantics.
+- Remote SSH terminal launch preserves the requested path even when remote startup files contain `cd ...`.
+
+See **`docs/dev/V2.2_PLAN.md`** for the detailed triage and acceptance checks.
 
 ### V2.1 / v1.1.0 — v1.0 Feedback Stabilization
 
@@ -72,19 +86,7 @@ See **`docs/dev/V2.1_PLAN.md`** for the detailed triage and acceptance checks.
 
 ## Planned Next Phase
 
-### V2.2 / v1.2.0 — v1.1 Feedback Fixes
-
-V2.2 is a corrective release for v1.1.0 hands-on feedback. It focuses on operations that appear unresponsive or surprising:
-
-- Delete confirmation should close or become busy immediately after confirmation, preventing repeated delete submissions.
-- New Folder must be re-tested and fixed for local and remote toolbar/context paths.
-- Preferences should allow a default text editor for remote text preview, including TextMate.
-- Inspector must not auto-open on ordinary single-click and squeeze the file list.
-- Copy Current Path needs a discoverable shortcut and shortcut-reference entry.
-- Open Terminal Here / Open SSH Terminal Here should work from pane background context menus and use intuitive folder/file target semantics.
-- Remote SSH terminal launch must preserve the requested path even when remote startup files contain `cd ...`.
-
-See **`docs/dev/V2.2_PLAN.md`** for the detailed triage and acceptance checks.
+No V2.3 scope is defined yet. Future planning should start from new hands-on feedback against v1.2.0.
 
 ## Explicitly out of scope or not on the main line (today)
 
@@ -101,4 +103,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.0 is the current stable personal release. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.2 / v1.2.0 is the current stable personal release. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

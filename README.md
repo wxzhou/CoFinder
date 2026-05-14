@@ -2,7 +2,7 @@
 
 CoFinder is a macOS-only Electron desktop app inspired by WinSCP. It focuses on stable dual-pane local/remote browsing plus rsync-based transfer queue workflows for personal daily use.
 
-**`package.json` version:** `1.1.0`. **Latest shipped release:** **v1.1.0**.
+**`package.json` version:** `1.2.0`. **Latest shipped release:** **v1.2.0**.
 
 ## Versioning
 
@@ -27,6 +27,7 @@ Past releases are **not** retroactively re-tagged. Product milestone **V1.4** sh
 | V1.9 | no standalone tag | Included in v1.0.0 |
 | V2.0 | v1.0.0 | Shipped |
 | V2.1 | v1.1.0 | Shipped |
+| V2.2 | v1.2.0 | Shipped |
 
 ## V1 Status
 
@@ -79,6 +80,12 @@ V2.1 is a v1.0 feedback stabilization release. It fixes transfer startup latency
 
 Detailed scope lives in `docs/dev/V2.1_PLAN.md`.
 
+### Implemented in V2.2 / v1.2.0
+
+V2.2 is a v1.1 feedback fix release. It improves delete feedback and duplicate-submit guarding, replaces New Folder prompts with an in-app dialog, adds a default text editor preference for remote text preview, prevents single-click Inspector auto-reveal, documents the Copy Current Path shortcut, and fixes local/remote Terminal Here context semantics including robust SSH path preservation.
+
+Detailed scope lives in `docs/dev/V2.2_PLAN.md`.
+
 ### Included in v1.0.0: V1.9 Reliability
 
 - Release reliability work: expanded release checklist for version bump, changelog, smoke, git tag, dmg/zip, and GitHub Release artifacts.
@@ -107,7 +114,7 @@ Detailed scope lives in `docs/dev/V2.1_PLAN.md`.
 | --- | --- | --- |
 | Browse / sort / filter | Yes | Yes |
 | Rename / delete / Get Info | Yes | Yes |
-| New folder | Deferred | Yes |
+| New folder | Yes | Yes |
 | Permissions | Read/display | Basic octal chmod |
 | Duplicate | Deferred | Files up to 50 MB |
 | Terminal here | Terminal.app | SSH Terminal.app, password not injected |
@@ -198,7 +205,7 @@ Build artifacts are generated under `release/`.
 - Development milestones are committed on `dev`; a version becomes shipped after the matching git tag and release artifacts are published.
 - Current update policy is manual: users install dmg/zip artifacts from GitHub Releases or local release output. In-app auto-install is not enabled yet.
 - Public distribution needs an Apple Developer ID certificate and notarization. Local personal builds may be unsigned, but unsigned artifacts should be described honestly in release notes.
-- `v1.1.0` is the current release target. Build artifacts use `release/CoFinder-1.1.0-arm64.dmg` and `release/CoFinder-1.1.0-arm64.zip` when `npm run dist` is executed.
+- `v1.2.0` is the current release target. Build artifacts use `release/CoFinder-1.2.0-arm64.dmg` and `release/CoFinder-1.2.0-arm64.zip` when `npm run dist` is executed.
 
 **App icons:** `assets/icon/icon.icns` is used for the packaged `.app` / `.dmg` / `.zip` (see `electron-builder.yml`). `assets/icon/icon.png` is copied into `Resources` for `BrowserWindow` (`src/main/main.ts`). To regenerate both from the archived source PNG on macOS: `./scripts/gen-mac-app-icons.sh` (uses `sips` + `iconutil`, no extra npm deps).
 
