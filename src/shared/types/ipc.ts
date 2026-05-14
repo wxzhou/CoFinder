@@ -302,6 +302,10 @@ export interface IpcApi {
     previewClearForConnection: (request: { connectionId: string }) => Promise<IpcResponse<{ cleared: number }>>;
     editOpen: (request: { tabId: string; connectionId: string; path: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
     editList: () => Promise<IpcResponse<{ sessions: RemoteEditSession[] }>>;
+    editRevealLocal: (request: { sessionId: string }) => Promise<IpcResponse<{ revealed: true; localPath: string }>>;
+    editRedownload: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
+    editForceUpload: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
+    editClose: (request: { sessionId: string; discardLocal?: boolean }) => Promise<IpcResponse<{ closed: true }>>;
     onEditUpdate: (handler: (payload: RemoteEditUpdatePayload) => void) => () => void;
   };
   transfer: {

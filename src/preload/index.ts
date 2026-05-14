@@ -38,6 +38,10 @@ const api: IpcApi = {
     previewClearForConnection: (request) => ipcRenderer.invoke("remote:previewClearForConnection", request),
     editOpen: (request) => ipcRenderer.invoke("remote:editOpen", request),
     editList: () => ipcRenderer.invoke("remote:editList"),
+    editRevealLocal: (request) => ipcRenderer.invoke("remote:editRevealLocal", request),
+    editRedownload: (request) => ipcRenderer.invoke("remote:editRedownload", request),
+    editForceUpload: (request) => ipcRenderer.invoke("remote:editForceUpload", request),
+    editClose: (request) => ipcRenderer.invoke("remote:editClose", request),
     onEditUpdate: (handler) => {
       const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => handler(payload as Parameters<typeof handler>[0]);
       ipcRenderer.on("remote:editUpdate", wrapped);

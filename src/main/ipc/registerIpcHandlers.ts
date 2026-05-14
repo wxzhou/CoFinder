@@ -496,6 +496,50 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.remote.editRevealLocal, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editRevealLocal request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      const session = remoteEditService.getSession(sessionId);
+      if (!session) throw new AppError("REMOTE_NOT_FOUND", "Remote edit session no longer exists.");
+      shell.showItemInFolder(session.localPath);
+      return ok({ revealed: true as const, localPath: session.localPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to reveal local edit copy.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editRedownload, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editRedownload request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      return ok({ session: await remoteEditService.redownloadSession(sessionId) });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to re-download remote edit file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editForceUpload, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editForceUpload request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      return ok({ session: await remoteEditService.forceUploadSession(sessionId) });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to upload remote edit file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editClose, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editClose request.");
+      const sessionId = requiredId(body.sessionId, "sessionId", "REMOTE_INVALID_INPUT");
+      await remoteEditService.closeSession(sessionId, { discardLocal: optionalBoolean(body.discardLocal) ?? true });
+      return ok({ closed: true as const });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to close remote edit session.");
+    }
+  });
+
   registerChannel(
     IPC_CHANNELS.transfer.checkUploadConflicts,
     async (_event, request: unknown): Promise<IpcResponse<TransferConflictCheckResponse>> => {

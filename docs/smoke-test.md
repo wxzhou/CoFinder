@@ -119,6 +119,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 - **Edit entry point:** connect to the isolated remote test root, select exactly one text file with content such as BED/tab-delimited text, then use the remote pane Edit action or right-click `Edit`. Confirm the configured text editor opens an app-managed edit-cache copy.
 - **Edit save upload:** modify and save that local edit-cache copy in the editor. Confirm CoFinder reports the upload, the remote pane refreshes when viewing the file's parent folder, and reopening/downloading the remote file shows the saved content.
+- **Edit conflict:** open a remote text file for Edit, change the remote file from another shell/session before saving the local edit, then save locally. Confirm CoFinder reports a conflict, does not overwrite the remote file, and keeps the local edit copy available.
 - **Open remains read-only:** use right-click `Open` or double-click on the same remote text file and confirm it still follows the read-only remote preview path, separate from Edit.
 - **Unsupported edit:** select a remote directory, a multi-selection, and a binary file in turn; confirm Edit is disabled where possible or shows a clear unsupported message without starting an edit session.
 

@@ -143,4 +143,73 @@ describe("RemoteEditService", () => {
     service.closeAll();
     await fs.rm(dir, { recursive: true, force: true });
   });
+
+  it("can re-download or explicitly force-upload a conflicted edit session", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    let remoteText = "remote text\n";
+    const client = {
+      stat: vi
+        .fn()
+        .mockResolvedValueOnce({ type: "-", size: 12, modifyTime: 1000 })
+        .mockResolvedValueOnce({ type: "-", size: 20, modifyTime: 3000 })
+        .mockResolvedValueOnce({ type: "-", size: 20, modifyTime: 3000 })
+        .mockResolvedValueOnce({ type: "-", size: 15, modifyTime: 4000 }),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, remoteText, "utf8");
+      }),
+      put: vi.fn(async (localPath: string) => {
+        remoteText = await fs.readFile(localPath, "utf8");
+      })
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+    const session = await service.openTextEditSession({ tabId: "tab", connectionId: "c1", remotePath: "/note.txt" });
+    await fs.writeFile(session.localPath, "my local edit\n", "utf8");
+    const conflict = await service.syncSession(session.id);
+    expect(conflict.state).toBe("conflict");
+
+    remoteText = "new remote version\n";
+    const clean = await service.redownloadSession(session.id);
+    expect(clean.state).toBe("clean");
+    expect(await fs.readFile(session.localPath, "utf8")).toBe("new remote version\n");
+
+    await fs.writeFile(session.localPath, "force my edit\n", "utf8");
+    const uploaded = await service.forceUploadSession(session.id);
+    expect(uploaded.state).toBe("uploaded");
+    expect(remoteText).toBe("force my edit\n");
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("closes a session and discards the local edit copy only after an explicit call", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 12, modifyTime: 1000 })),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, "remote text\n", "utf8");
+      })
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+    const session = await service.openTextEditSession({ tabId: "tab", connectionId: "c1", remotePath: "/note.txt" });
+
+    await service.closeSession(session.id, { discardLocal: true });
+
+    expect(service.listSessions()).toHaveLength(0);
+    await expect(fs.stat(session.localPath)).rejects.toMatchObject({ code: "ENOENT" });
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
 });

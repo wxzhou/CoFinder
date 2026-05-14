@@ -30,6 +30,10 @@ export const IPC_CHANNELS = {
     previewClearForConnection: "remote:previewClearForConnection",
     editOpen: "remote:editOpen",
     editList: "remote:editList",
+    editRevealLocal: "remote:editRevealLocal",
+    editRedownload: "remote:editRedownload",
+    editForceUpload: "remote:editForceUpload",
+    editClose: "remote:editClose",
     editUpdate: "remote:editUpdate"
   },
   transfer: {
