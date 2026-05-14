@@ -4,11 +4,20 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.7.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.7.0**.
+No user-facing changes since **v1.8.0**.
+
+## v1.8.0 — Product milestone V2.8
+
+V2.8 chooses the Remote Quick Look track from the advanced navigation/preview plan.
+
+- Space on a single selected remote file now opens the read-only remote preview flow for sniffed text/images.
+- Remote context menus now expose Quick Look separately from Open and Edit.
+- Remote Quick Look continues to use read-only preview cache semantics and does not upload viewer edits.
+- Column View and recursive remote search remain deferred with explicit rationale.
 
 ## v1.7.0 — Product milestone V2.7
 
