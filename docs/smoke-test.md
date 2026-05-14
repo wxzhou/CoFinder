@@ -122,8 +122,9 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Copy path placement:** confirm each pane has exactly one breadcrumb-row Copy Path button and the former global Copy Current Path button is absent.
 - **Disconnect placement:** confirm remote Disconnect appears in the remote pane toolbar and not in the remote title/header corner.
 - **Remote status placement:** confirm Connected/Offline/Connecting/Error appears immediately beside the remote pane title.
-- **Preferences placement:** click Preferences in the lower-left sidebar footer and confirm the Preferences modal opens.
-- **Navigation row:** confirm Filter names, Recent, History, and Clear Recent remain available and do not squeeze the breadcrumb path display.
+- **Preferences placement:** click the lower-left sidebar gear and confirm the Preferences modal opens.
+- **Compact history controls:** confirm Recent, History, and Clear Recent appear as icon controls with tooltips/accessible labels and still perform their original actions.
+- **Danger color:** connect to a remote profile and confirm the remote Disconnect toolbar icon is visibly red.
 
 ## V2.5 remote text edit MVP
 

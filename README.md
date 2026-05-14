@@ -131,7 +131,7 @@ Detailed scope lives in `docs/dev/V2.8_PLAN.md`.
 
 ### Implemented in V2.8.1 / v1.8.1
 
-V2.8.1 cleans up the V12 toolbar layout: the top global toolbar is removed, local and remote panes each own a single-row toolbar, pane breadcrumb rows keep their own Copy Path button, Preferences lives in the sidebar footer, and remote connection status sits beside the remote pane title.
+V2.8.1 cleans up the V12 toolbar layout: the top global toolbar is removed, local and remote panes each own a single-row toolbar, pane breadcrumb rows keep their own Copy Path button, Preferences lives as a compact sidebar gear, and pane title/meta/status information shares one line to preserve vertical space.
 
 Detailed scope lives in `docs/dev/V2.8.1_PLAN.md`.
 

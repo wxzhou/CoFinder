@@ -122,8 +122,8 @@ V2.8.1 is a V12 patch release for command placement:
 - Removed the active-pane-dependent global toolbar.
 - Moved navigation, inspector, operation, filter, Recent, History, and Clear Recent controls into one toolbar row per pane.
 - Kept Copy Path on each pane breadcrumb row.
-- Moved Preferences to the sidebar footer.
-- Moved remote connection status next to the remote pane title and removed the duplicate header Disconnect link.
+- Moved Preferences to a compact gear in the sidebar footer.
+- Moved pane meta/status beside pane titles, removed the duplicate header Disconnect link, and compacted Recent/History/Clear Recent to icon controls.
 
 See **`docs/dev/V2.8.1_PLAN.md`**.
 

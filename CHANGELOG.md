@@ -19,6 +19,7 @@ V2.8.1 is a V12 layout cleanup release.
 - Kept Copy Path on each pane breadcrumb row so the command is explicit to that pane.
 - Moved Preferences to the V12 sidebar footer.
 - Removed the extra remote header Disconnect link and placed connection status beside the remote pane title.
+- Tightened pane headers into a single title/meta/status row, changed Preferences to a gear icon, compacted Recent/History/Clear Recent to icon controls, and gave Disconnect a persistent danger color.
 
 ## v1.8.0 — Product milestone V2.8
 
