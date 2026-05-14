@@ -23,11 +23,26 @@ export function V12Icon(props: { name: "disk" | "folder" | "server" | "clock" | 
   if (name === "folder") {
     return (
       <svg {...c} className="v12m-svg-folder">
+        <defs>
+          <linearGradient id="v12-folder-tab" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#9fd0ff" />
+            <stop offset="100%" stopColor="#6eb4f3" />
+          </linearGradient>
+          <linearGradient id="v12-folder-body" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor="#87c7ff" />
+            <stop offset="100%" stopColor="#4ea3ec" />
+          </linearGradient>
+        </defs>
         <path
-          d="M3.25 5.25c0-.55.45-1 1-1h2.2l.85.85h6.45c.55 0 1 .45 1 1v8.5c0 .55-.45 1-1 1h-9.5c-.55 0-1-.45-1-1v-8.35z"
-          fill="#7eb6ec"
+          d="M3.25 5.15c0-.57.46-1.03 1.03-1.03h2.35c.28 0 .55.11.75.31l.72.72h7.62c.57 0 1.03.46 1.03 1.03v7.52c0 .57-.46 1.03-1.03 1.03H4.28c-.57 0-1.03-.46-1.03-1.03V5.15z"
+          fill="url(#v12-folder-tab)"
         />
-        <path d="M3.25 6.5h13.5v7.1c0 .55-.45 1-1 1h-11.5c-.55 0-1-.45-1-1V6.5z" fill="#4d92d9" />
+        <path
+          d="M2.9 7.1c0-.56.45-1.01 1.01-1.01h12.18c.56 0 1.01.45 1.01 1.01v7.25c0 .84-.68 1.53-1.53 1.53H4.43c-.84 0-1.53-.68-1.53-1.53V7.1z"
+          fill="url(#v12-folder-body)"
+        />
+        <path d="M3.25 7.1h13.5" stroke="rgba(255,255,255,0.42)" strokeWidth="0.7" />
+        <path d="M4.2 15.3h11.6" stroke="rgba(38,116,190,0.26)" strokeWidth="0.7" strokeLinecap="round" />
       </svg>
     );
   }
