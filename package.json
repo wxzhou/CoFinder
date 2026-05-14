@@ -1,6 +1,6 @@
 {
   "name": "cofinder",
-  "version": "1.3.0",
+  "version": "1.5.0",
   "description": "CoFinder - macOS-only remote file explorer",
   "main": "dist-electron/main/main.js",
   "private": true,

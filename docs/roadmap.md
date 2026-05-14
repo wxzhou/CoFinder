@@ -24,8 +24,8 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.1 | v1.1.0 | Shipped |
 | V2.2 | v1.2.0 | Shipped |
 | V2.3 | v1.3.0 | Shipped |
-| V2.4 | v1.4.0 | Planned |
-| V2.5 | v1.5.0 | Planned |
+| V2.4 | v1.4.0 | Complete on dev |
+| V2.5 | v1.5.0 | Complete on dev |
 | V2.6 | v1.6.0 | Planned |
 | V2.7 | v1.7.0 | Planned |
 | V2.8 | v1.8.0 | Planned |
@@ -61,13 +61,35 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.1 | v1.1.0 | v1.0 Feedback Stabilization — shipped |
 | V2.2 | v1.2.0 | v1.1 Feedback Fixes — shipped |
 | V2.3 | v1.3.0 | v1.2 Navigation Feedback Fixes — shipped |
-| V2.4 | v1.4.0 | Pane-Scoped Toolbar and Finder Visual Polish — planned |
-| V2.5 | v1.5.0 | Remote Text Edit Auto-Sync MVP — planned |
+| V2.4 | v1.4.0 | Pane-Scoped Toolbar and Finder Visual Polish — complete on dev |
+| V2.5 | v1.5.0 | Remote Text Edit Auto-Sync MVP — complete on dev |
 | V2.6 | v1.6.0 | Remote Edit Reliability and Session Management — planned |
 | V2.7 | v1.7.0 | V12 UI Refinement and Task-Center Polish — planned |
 | V2.8 | v1.8.0 | Advanced Remote Navigation and Preview Decisions — planned |
 
-## Latest Shipped Phase
+## Latest Completed Phase
+
+### V2.5 / v1.5.0 — Remote Text Edit Auto-Sync MVP
+
+V2.5 introduces the first write-capable remote edit workflow with tight text-only scope:
+
+- Separate **Edit Remote File** entry point for sniffed text files; **Open** remains read-only preview.
+- Edit cache isolation from read-only preview cache.
+- Local save watching with debounced upload and remote-baseline conflict checks.
+- Conflict/failure recovery actions and compact Remote edits status panel.
+
+See **`docs/dev/V2.5_PLAN.md`** for the detailed acceptance checks.
+
+### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
+
+V2.4 addresses V12 command ownership and visible polish before larger remote-edit work:
+
+- Pane-scoped action strips for local/remote operations.
+- Top toolbar kept for global/session navigation commands.
+- Removed unavailable view-mode toolbar controls.
+- Folder icon palette tuned lighter and closer to Finder.
+
+See **`docs/dev/V2.4_PLAN.md`** for the detailed acceptance checks.
 
 ### V2.3 / v1.3.0 — v1.2 Navigation Feedback Fixes
 
@@ -109,31 +131,6 @@ V2.1 is driven by v1.0.0 hands-on feedback. It prioritized correctness bugs befo
 See **`docs/dev/V2.1_PLAN.md`** for the detailed triage and acceptance checks.
 
 ## Planned Next Phase
-
-### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
-
-V2.4 should address the clearest V12 UI workflow debt before larger remote-edit work:
-
-- Split operation ownership so local/remote pane commands can be invoked directly from that pane, without first selecting the active pane.
-- Keep the top toolbar for global/session commands and avoid two fully duplicated heavy toolbars.
-- Remove or hide Column View until real column browsing is implemented.
-- Tune shared folder icon colors and styling toward a lighter Finder-like folder palette.
-
-See **`docs/dev/V2.4_PLAN.md`** for the detailed triage and acceptance checks.
-
-## Planned Longer-Term Phases
-
-### V2.5 / v1.5.0 — Remote Text Edit Auto-Sync MVP
-
-V2.5 should introduce the first write-capable remote edit workflow, but with tight scope:
-
-- Add a separate **Edit Remote File** command for sniffed text files only.
-- Keep existing **Open** read-only preview semantics unchanged.
-- Download to an edit cache, open in the configured text editor, monitor local saves, and upload back after conflict checks.
-- Prevent silent overwrites when the remote file changed after the edit session started.
-- Preserve local edited copies on upload failure or conflict.
-
-See **`docs/dev/V2.5_PLAN.md`**.
 
 ### V2.6 / v1.6.0 — Remote Edit Reliability and Session Management
 
@@ -186,4 +183,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.3 / v1.3.0 is the current stable personal release. Planned phases through V2.8 are intentionally scoped and may narrow further before implementation. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.5 / v1.5.0 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Planned phases through V2.8 are intentionally scoped and may narrow further before implementation. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

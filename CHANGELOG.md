@@ -4,11 +4,31 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest shipped release: v1.3.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.5.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.3.0**.
+No user-facing changes since **v1.5.0**.
+
+## v1.5.0 — Product milestone V2.5
+
+V2.5 introduces the first write-capable remote text edit workflow.
+
+- Added **Edit Remote File** as a separate command from read-only Open for sniffed remote text files.
+- Edit sessions download into a separate app-managed cache and open with the configured text editor.
+- Local saves are watched and uploaded back to the same remote path after remote baseline checks.
+- Remote changes made after the edit session begins trigger a conflict instead of a silent overwrite.
+- The Remote edits panel shows active edit sessions, status, failures/conflicts, and recovery actions to reveal the local copy, re-download, force upload after confirmation, or close/discard.
+- Existing remote Open preview remains read-only and separate from Edit.
+
+## v1.4.0 — Product milestone V2.4
+
+V2.4 focuses V12 command ownership and visual polish.
+
+- Added pane-scoped local and remote action strips so pane-owned commands can be invoked directly from that pane.
+- Removed unavailable Column View/List View toolbar controls from the global toolbar.
+- Lightened shared folder icons toward Finder-style blue.
+- Kept global/session commands in the top toolbar.
 
 ## v1.3.0 — Product milestone V2.3
 
