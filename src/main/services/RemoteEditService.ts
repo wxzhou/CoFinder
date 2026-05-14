@@ -172,7 +172,8 @@ export class RemoteEditService {
       error: "",
       baseline: remoteEditBaselineFromStat(nextRemoteStat),
       lastLocalSize: localStat.size,
-      lastLocalMtimeMs: localStat.mtimeMs
+      lastLocalMtimeMs: localStat.mtimeMs,
+      lastUploadedAt: Date.now()
     });
   }
 
@@ -268,7 +269,8 @@ export class RemoteEditService {
       error: "",
       baseline: remoteEditBaselineFromStat(nextRemoteStat),
       lastLocalSize: localStat.size,
-      lastLocalMtimeMs: localStat.mtimeMs
+      lastLocalMtimeMs: localStat.mtimeMs,
+      lastUploadedAt: Date.now()
     });
   }
 
@@ -284,7 +286,7 @@ export class RemoteEditService {
 
   private replaceSession(
     sessionId: string,
-    patch: Partial<Pick<RemoteEditSession, "state" | "error" | "baseline" | "lastLocalSize" | "lastLocalMtimeMs">>
+    patch: Partial<Pick<RemoteEditSession, "state" | "error" | "baseline" | "lastLocalSize" | "lastLocalMtimeMs" | "lastUploadedAt">>
   ): RemoteEditSession {
     for (const [key, session] of this.sessions) {
       if (session.id !== sessionId) continue;

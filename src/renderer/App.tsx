@@ -1201,6 +1201,11 @@ export function App(props: AppProps = {}) {
     return parts.at(-1) ?? input;
   }
 
+  function formatRemoteEditUploadTime(session: RemoteEditSession): string {
+    if (!session.lastUploadedAt) return "Not uploaded yet";
+    return `Uploaded ${new Date(session.lastUploadedAt).toLocaleTimeString()}`;
+  }
+
   function emptyProfileDraft(): ProfileUpsertPayload {
     return {
       alias: "",
@@ -3133,6 +3138,9 @@ export function App(props: AppProps = {}) {
               <span className={`remote-edit-state state-${session.state}`}>{session.state}</span>
               <span className="remote-edit-path" title={session.remotePath}>
                 {basenameRemotePath(session.remotePath)}
+              </span>
+              <span className="remote-edit-local" title={session.localPath}>
+                {formatRemoteEditUploadTime(session)}
               </span>
               {session.error ? (
                 <span className="remote-edit-error" title={session.error}>

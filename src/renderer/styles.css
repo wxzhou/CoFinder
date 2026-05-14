@@ -1063,7 +1063,7 @@ body,
 
 .remote-edit-row {
   display: grid;
-  grid-template-columns: 84px minmax(120px, 1fr) minmax(120px, 1.2fr) auto;
+  grid-template-columns: 84px minmax(120px, 1fr) minmax(110px, 0.7fr) minmax(120px, 1.1fr) auto;
   gap: 8px;
   align-items: center;
   padding: 6px 8px;
@@ -1110,6 +1110,7 @@ body,
 }
 
 .remote-edit-path,
+.remote-edit-local,
 .remote-edit-error {
   min-width: 0;
   overflow: hidden;
@@ -1117,6 +1118,7 @@ body,
   white-space: nowrap;
 }
 
+.remote-edit-local,
 .remote-edit-error {
   color: var(--text-secondary);
 }

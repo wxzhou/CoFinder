@@ -14,6 +14,7 @@ export type RemoteEditSession = {
   baseline: RemoteEditBaseline;
   lastLocalSize: number;
   lastLocalMtimeMs: number;
+  lastUploadedAt?: number;
   state: RemoteEditSessionState;
   error: string;
   updatedAt: number;

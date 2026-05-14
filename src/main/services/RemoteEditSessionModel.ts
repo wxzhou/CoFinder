@@ -11,7 +11,7 @@ export function remoteEditRemoteChanged(baseline: RemoteEditBaseline, remote: Re
 
 export function transitionRemoteEditSession(
   session: RemoteEditSession,
-  patch: Partial<Pick<RemoteEditSession, "state" | "error" | "baseline" | "lastLocalSize" | "lastLocalMtimeMs">>,
+  patch: Partial<Pick<RemoteEditSession, "state" | "error" | "baseline" | "lastLocalSize" | "lastLocalMtimeMs" | "lastUploadedAt">>,
   now = Date.now()
 ): RemoteEditSession {
   return {
