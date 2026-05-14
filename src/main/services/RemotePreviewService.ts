@@ -47,7 +47,7 @@ export class RemotePreviewService {
     tabId: string;
     connectionId: string;
     remotePath: string;
-  }): Promise<{ opened: true; localPath: string; kind: PreviewKind }> {
+  }, options: { textEditor?: string } = {}): Promise<{ opened: true; localPath: string; kind: PreviewKind }> {
     const connection = this.connectionManager.getConnection(request.connectionId);
     if (!connection) throw new RemotePreviewError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
     const client = connection.client as unknown as RemotePreviewClient;
@@ -71,7 +71,7 @@ export class RemotePreviewService {
       existing.modifyTime === modifyTime &&
       (await cacheFileStillMatches(existing))
     ) {
-      await openLocalPreview(existing.localPath, existing.kind);
+      await openLocalPreview(existing.localPath, existing.kind, options.textEditor);
       return { opened: true, localPath: existing.localPath, kind: existing.kind };
     }
 
@@ -99,7 +99,7 @@ export class RemotePreviewService {
       localMtimeMs: localStat.mtimeMs,
       kind
     });
-    await openLocalPreview(localPath, kind);
+    await openLocalPreview(localPath, kind, options.textEditor);
     return { opened: true, localPath, kind };
   }
 
@@ -199,14 +199,34 @@ function isLikelyText(sample: Buffer): boolean {
   }
 }
 
-async function openLocalPreview(localPath: string, kind: PreviewKind): Promise<void> {
+async function openLocalPreview(localPath: string, kind: PreviewKind, textEditor?: string): Promise<void> {
   if (process.platform === "darwin") {
-    const args = kind === "text" ? ["-t", localPath] : ["-a", "Preview", localPath];
-    await runOpenCommand(args);
+    const args = kind === "text" ? darwinTextPreviewOpenArgs(localPath, textEditor) : ["-a", "Preview", localPath];
+    try {
+      await runOpenCommand(args);
+    } catch (error) {
+      if (kind !== "text" || isSystemTextEditor(textEditor)) throw error;
+      await runOpenCommand(["-t", localPath]);
+    }
     return;
   }
   const result = await shell.openPath(localPath);
   if (result) throw new RemotePreviewError("REMOTE_PREVIEW_FAILED", "Failed to open local preview file.", result);
+}
+
+export function darwinTextPreviewOpenArgs(localPath: string, textEditor?: string): string[] {
+  const editor = normalizeTextEditor(textEditor);
+  if (isSystemTextEditor(editor)) return ["-t", localPath];
+  return ["-a", editor, localPath];
+}
+
+function normalizeTextEditor(textEditor?: string): string {
+  return (textEditor ?? "system").trim() || "system";
+}
+
+function isSystemTextEditor(textEditor?: string): boolean {
+  const editor = normalizeTextEditor(textEditor).toLowerCase();
+  return editor === "system" || editor === "default" || editor === "default text editor";
 }
 
 async function runOpenCommand(args: string[]): Promise<void> {

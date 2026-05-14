@@ -10,7 +10,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     restoreLastSession: false,
     confirmBeforeDelete: true,
     showHiddenFiles: false,
-    firstRunOnboardingDismissed: false
+    firstRunOnboardingDismissed: false,
+    defaultTextEditor: "system"
   },
   transfer: {
     defaultConflictPolicy: "prompt",
@@ -62,7 +63,8 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
       restoreLastSession: bool(general.restoreLastSession, base.general.restoreLastSession),
       confirmBeforeDelete: bool(general.confirmBeforeDelete, base.general.confirmBeforeDelete),
       showHiddenFiles: bool(general.showHiddenFiles, base.general.showHiddenFiles),
-      firstRunOnboardingDismissed: bool(general.firstRunOnboardingDismissed, base.general.firstRunOnboardingDismissed)
+      firstRunOnboardingDismissed: bool(general.firstRunOnboardingDismissed, base.general.firstRunOnboardingDismissed),
+      defaultTextEditor: normalizeTextEditor(general.defaultTextEditor, base.general.defaultTextEditor)
     },
     transfer: {
       defaultConflictPolicy:
@@ -80,6 +82,11 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
       sidebarWidth: numberInRange(appearance.sidebarWidth, base.appearance.sidebarWidth, 180, 420)
     }
   };
+}
+
+function normalizeTextEditor(value: unknown, fallback: string): string {
+  const text = string(value, fallback, 512);
+  return text || "system";
 }
 
 function mergeSettings(base: AppSettings, patch: unknown): AppSettings {

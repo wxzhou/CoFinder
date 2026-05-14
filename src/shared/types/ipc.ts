@@ -171,6 +171,7 @@ export type AppSettings = {
     confirmBeforeDelete: boolean;
     showHiddenFiles: boolean;
     firstRunOnboardingDismissed: boolean;
+    defaultTextEditor: string;
   };
   transfer: {
     defaultConflictPolicy: Exclude<TransferConflictPolicy, "cancel">;

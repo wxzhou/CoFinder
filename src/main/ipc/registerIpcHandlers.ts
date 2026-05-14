@@ -433,7 +433,11 @@ export function registerIpcHandlers(): void {
       const tabId = requiredId(body.tabId, "tabId", "REMOTE_INVALID_INPUT");
       const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
       const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
-      return ok(await remotePreviewService.openPreview({ tabId, connectionId, remotePath: targetPath }));
+      const settings = await settingsService.get();
+      return ok(await remotePreviewService.openPreview(
+        { tabId, connectionId, remotePath: targetPath },
+        { textEditor: settings.general.defaultTextEditor }
+      ));
     } catch (error) {
       return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to preview remote file.");
     }

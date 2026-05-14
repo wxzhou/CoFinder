@@ -49,8 +49,27 @@ describe("sniffPreviewKind", () => {
   });
 });
 
+describe("darwinTextPreviewOpenArgs", () => {
+  it("uses the system text editor by default", async () => {
+    const { darwinTextPreviewOpenArgs } = await import("../src/main/services/RemotePreviewService");
+    expect(darwinTextPreviewOpenArgs("/tmp/a.bed", "system")).toEqual(["-t", "/tmp/a.bed"]);
+    expect(darwinTextPreviewOpenArgs("/tmp/a.bed", "")).toEqual(["-t", "/tmp/a.bed"]);
+  });
+
+  it("uses a configured application for text preview", async () => {
+    const { darwinTextPreviewOpenArgs } = await import("../src/main/services/RemotePreviewService");
+    expect(darwinTextPreviewOpenArgs("/tmp/a.bed", "TextMate")).toEqual(["-a", "TextMate", "/tmp/a.bed"]);
+    expect(darwinTextPreviewOpenArgs("/tmp/a.bed", "/Applications/TextMate.app")).toEqual([
+      "-a",
+      "/Applications/TextMate.app",
+      "/tmp/a.bed"
+    ]);
+  });
+});
+
 describe("RemotePreviewService", () => {
   beforeEach(() => {
+    spawnMock.mockClear();
     spawnMock.mockImplementation(() => {
       const child = new EventEmitter();
       process.nextTick(() => child.emit("exit", 0));
@@ -85,6 +104,29 @@ describe("RemotePreviewService", () => {
     expect(downloadCount).toBe(2);
     expect(await fs.readFile(second.localPath, "utf8")).toBe("remote text\n");
     expect(spawnMock).toHaveBeenCalledWith("open", ["-t", expect.any(String)], { stdio: "ignore" });
+
+    await service.clearAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("opens text previews with the configured editor", async () => {
+    const { RemotePreviewService } = await import("../src/main/services/RemotePreviewService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-preview-test-"));
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 12, modifyTime: 1234 })),
+      fastGet: vi.fn(async (_remote: string, local: string) => {
+        await fs.writeFile(local, "remote text\n", "utf8");
+      })
+    };
+    const service = new RemotePreviewService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+
+    await service.openPreview({ tabId: "tab", connectionId: "c1", remotePath: "/note.bed" }, { textEditor: "TextMate" });
+    expect(spawnMock).toHaveBeenCalledWith("open", ["-a", "TextMate", expect.any(String)], { stdio: "ignore" });
 
     await service.clearAll();
     await fs.rm(dir, { recursive: true, force: true });

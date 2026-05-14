@@ -182,7 +182,8 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     restoreLastSession: false,
     confirmBeforeDelete: true,
     showHiddenFiles: false,
-    firstRunOnboardingDismissed: false
+    firstRunOnboardingDismissed: false,
+    defaultTextEditor: "system"
   },
   transfer: {
     defaultConflictPolicy: "prompt",
@@ -4152,6 +4153,25 @@ export function App(props: AppProps = {}) {
                   }
                   placeholder="Use macOS Home"
                 />
+              </label>
+              <label>
+                Text editor
+                <input
+                  value={preferences.draft.general.defaultTextEditor}
+                  list="cofinder-text-editor-options"
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: { ...p.draft, general: { ...p.draft.general, defaultTextEditor: e.target.value } }
+                    }))
+                  }
+                  placeholder="system, TextEdit, TextMate, or /Applications/TextMate.app"
+                />
+                <datalist id="cofinder-text-editor-options">
+                  <option value="system" />
+                  <option value="TextEdit" />
+                  <option value="TextMate" />
+                </datalist>
               </label>
               <label>
                 Conflict policy
