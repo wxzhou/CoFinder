@@ -47,6 +47,7 @@ describe("RemoteEditService", () => {
     expect(await fs.readFile(session.localPath, "utf8")).toContain("peak_1");
     expect(spawnMock).toHaveBeenCalledWith("open", ["-a", "TextMate", expect.any(String)], { stdio: "ignore" });
 
+    service.closeAll();
     await fs.rm(dir, { recursive: true, force: true });
   });
 
@@ -72,6 +73,74 @@ describe("RemoteEditService", () => {
     expect(service.listSessions()).toHaveLength(0);
     expect(spawnMock).not.toHaveBeenCalled();
 
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("uploads a changed local edit copy after confirming the remote baseline is unchanged", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi
+        .fn()
+        .mockResolvedValueOnce({ type: "-", size: 12, modifyTime: 1000 })
+        .mockResolvedValueOnce({ type: "-", size: 12, modifyTime: 1000 })
+        .mockResolvedValueOnce({ type: "-", size: 19, modifyTime: 2000 }),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, "remote text\n", "utf8");
+      }),
+      put: vi.fn(async () => undefined)
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+    const session = await service.openTextEditSession({ tabId: "tab", connectionId: "c1", remotePath: "/note.txt" });
+    await fs.writeFile(session.localPath, "changed remote text\n", "utf8");
+
+    const uploaded = await service.syncSession(session.id);
+
+    expect(uploaded.state).toBe("uploaded");
+    expect(uploaded.baseline).toEqual({ size: 19, modifyTime: 2000 });
+    expect(client.put).toHaveBeenCalledWith(session.localPath, "/note.txt");
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("marks conflict and preserves the local edit copy when the remote file changed first", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi.fn().mockResolvedValueOnce({ type: "-", size: 12, modifyTime: 1000 }).mockResolvedValueOnce({
+        type: "-",
+        size: 20,
+        modifyTime: 3000
+      }),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, "remote text\n", "utf8");
+      }),
+      put: vi.fn(async () => undefined)
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+    const session = await service.openTextEditSession({ tabId: "tab", connectionId: "c1", remotePath: "/note.txt" });
+    await fs.writeFile(session.localPath, "my local edit\n", "utf8");
+
+    const conflict = await service.syncSession(session.id);
+
+    expect(conflict.state).toBe("conflict");
+    expect(conflict.error).toContain("Remote file changed");
+    expect(client.put).not.toHaveBeenCalled();
+    expect(await fs.readFile(session.localPath, "utf8")).toBe("my local edit\n");
+
+    service.closeAll();
     await fs.rm(dir, { recursive: true, force: true });
   });
 });

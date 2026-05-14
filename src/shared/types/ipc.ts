@@ -236,6 +236,10 @@ export type RemoteDirectorySizeUpdatePayload = {
   error?: string;
 };
 
+export type RemoteEditUpdatePayload = {
+  session: RemoteEditSession;
+};
+
 /** Sent from Site Manager to create/update a profile; password is never persisted in profiles.json. */
 export type ProfileUpsertPayload = {
   id?: string;
@@ -298,6 +302,7 @@ export interface IpcApi {
     previewClearForConnection: (request: { connectionId: string }) => Promise<IpcResponse<{ cleared: number }>>;
     editOpen: (request: { tabId: string; connectionId: string; path: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
     editList: () => Promise<IpcResponse<{ sessions: RemoteEditSession[] }>>;
+    onEditUpdate: (handler: (payload: RemoteEditUpdatePayload) => void) => () => void;
   };
   transfer: {
     checkUploadConflicts: (request: EnqueueUploadRequest) => Promise<IpcResponse<TransferConflictCheckResponse>>;

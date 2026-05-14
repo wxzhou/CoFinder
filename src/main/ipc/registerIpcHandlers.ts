@@ -67,7 +67,11 @@ const diagnosticsService = new DiagnosticsService({
 });
 const quickLookService = new QuickLookService();
 const remotePreviewService = new RemotePreviewService(connectionManager, app.getPath("temp"));
-const remoteEditService = new RemoteEditService(connectionManager, app.getPath("temp"));
+const remoteEditService = new RemoteEditService(connectionManager, app.getPath("temp"), (session) => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.webContents.send(IPC_CHANNELS.remote.editUpdate, { session });
+  }
+});
 
 const localSidebarFavoritesRepository = new LocalSidebarFavoritesRepository(defaultLocalSidebarFavoritesPath(userData), () => ({
   home: app.getPath("home"),
@@ -904,6 +908,7 @@ export async function shutdownMainProcessResources(): Promise<void> {
   isRegistered = false;
   await transferQueueService.shutdown();
   await remotePreviewService.clearAll();
+  remoteEditService.closeAll();
   await connectionManager.disconnectAll();
 }
 

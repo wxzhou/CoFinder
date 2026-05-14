@@ -45,6 +45,7 @@ import type {
   PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
+  RemoteEditUpdatePayload,
   TransferConflict,
   TransferConflictPolicy,
   TransferUpdatePayload
@@ -441,6 +442,22 @@ export function App(props: AppProps = {}) {
     void loadTransferTasks();
     return off;
   }, []);
+
+  useEffect(() => {
+    const off = window.cofinder.remote.onEditUpdate((payload: RemoteEditUpdatePayload) => {
+      const { session } = payload;
+      if (session.state === "uploaded") {
+        setQueueError(`Uploaded edits to ${session.remotePath}`);
+        const tab = tabs.find((item) => item.id === session.tabId);
+        if (tab?.remotePane.connectionId === session.connectionId && getParentPath(session.remotePath) === tab.remotePane.currentPath) {
+          void listRemotePath(session.connectionId, tab.remotePane.currentPath, "replace", session.tabId);
+        }
+      } else if (session.state === "conflict" || session.state === "failed") {
+        setQueueError(session.error || `Remote edit ${session.state}: ${session.remotePath}`);
+      }
+    });
+    return off;
+  }, [tabs]);
 
   useEffect(() => window.cofinder.system.onOpenPreferences(openPreferences), [appSettings]);
 

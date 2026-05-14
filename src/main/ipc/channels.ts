@@ -29,7 +29,8 @@ export const IPC_CHANNELS = {
     previewClearForTab: "remote:previewClearForTab",
     previewClearForConnection: "remote:previewClearForConnection",
     editOpen: "remote:editOpen",
-    editList: "remote:editList"
+    editList: "remote:editList",
+    editUpdate: "remote:editUpdate"
   },
   transfer: {
     checkUploadConflicts: "transfer:checkUploadConflicts",

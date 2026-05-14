@@ -1,11 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { watch, type FSWatcher } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionManager } from "./ConnectionManager";
 import { RemotePreviewError, sniffPreviewKind, darwinTextPreviewOpenArgs } from "./RemotePreviewService";
 import {
+  remoteEditRemoteChanged,
   remoteEditSessionKey,
+  transitionRemoteEditSession,
   type RemoteEditSession,
   type RemoteEditBaseline
 } from "./RemoteEditSessionModel";
@@ -14,14 +17,20 @@ type RemoteEditClient = {
   stat: (remotePath: string) => Promise<{ type?: string | number; size?: number; modifyTime?: number }>;
   fastGet?: (remotePath: string, localPath: string) => Promise<unknown>;
   get?: (remotePath: string, localPath?: string) => Promise<unknown>;
+  put?: (localPath: string, remotePath: string) => Promise<unknown>;
 };
 
 export class RemoteEditService {
   private readonly sessions = new Map<string, RemoteEditSession>();
+  private readonly watchers = new Map<string, FSWatcher>();
+  private readonly debounceTimers = new Map<string, NodeJS.Timeout>();
+  private readonly uploads = new Map<string, Promise<RemoteEditSession>>();
+  private readonly pendingUploads = new Set<string>();
 
   constructor(
     private readonly connectionManager: ConnectionManager,
-    private readonly cacheRoot: string
+    private readonly cacheRoot: string,
+    private readonly onSessionChange: (session: RemoteEditSession) => void = () => {}
   ) {}
 
   listSessions(): RemoteEditSession[] {
@@ -49,6 +58,7 @@ export class RemoteEditService {
     const key = remoteEditSessionKey(request.tabId, request.connectionId, request.remotePath);
     const existing = this.sessions.get(key);
     if (existing) {
+      this.startWatcher(existing);
       await openTextEditor(existing.localPath, options.textEditor);
       return existing;
     }
@@ -77,8 +87,45 @@ export class RemoteEditService {
       updatedAt: now
     };
     this.sessions.set(key, session);
+    this.onSessionChange(session);
+    this.startWatcher(session);
     await openTextEditor(localPath, options.textEditor);
     return session;
+  }
+
+  async syncSession(sessionId: string): Promise<RemoteEditSession> {
+    const running = this.uploads.get(sessionId);
+    if (running) {
+      this.pendingUploads.add(sessionId);
+      return running;
+    }
+    const upload = this.syncSessionNow(sessionId)
+      .catch((error) => {
+        const message = error instanceof RemotePreviewError ? error.message : error instanceof Error ? error.message : "Remote edit upload failed.";
+        try {
+          return this.replaceSession(sessionId, { state: "failed", error: message });
+        } catch {
+          throw error;
+        }
+      })
+      .finally(() => {
+        this.uploads.delete(sessionId);
+        if (this.pendingUploads.delete(sessionId)) {
+          void this.syncSession(sessionId);
+        }
+      });
+    this.uploads.set(sessionId, upload);
+    return upload;
+  }
+
+  closeAll(): void {
+    for (const timer of this.debounceTimers.values()) clearTimeout(timer);
+    for (const watcher of this.watchers.values()) watcher.close();
+    this.debounceTimers.clear();
+    this.watchers.clear();
+    this.uploads.clear();
+    this.pendingUploads.clear();
+    this.sessions.clear();
   }
 
   private async allocateLocalPath(tabId: string, remotePath: string): Promise<string> {
@@ -87,6 +134,98 @@ export class RemoteEditService {
     await fs.chmod(dir, 0o755).catch(() => {});
     const base = sanitizeFileName(path.posix.basename(remotePath) || "remote-file.txt");
     return path.join(dir, `${safeHash(remotePath).slice(0, 16)}-${randomUUID().slice(0, 8)}-${base}`);
+  }
+
+  private startWatcher(session: RemoteEditSession): void {
+    if (this.watchers.has(session.id)) return;
+    const dir = path.dirname(session.localPath);
+    const basename = path.basename(session.localPath);
+    const watcher = watch(dir, (eventType, filename) => {
+      if (filename && filename.toString() !== basename) return;
+      if (eventType !== "change" && eventType !== "rename") return;
+      this.scheduleSync(session.id);
+    });
+    watcher.on("error", () => {
+      this.replaceSession(session.id, { state: "failed", error: "Failed to watch local edit copy for saves." });
+    });
+    this.watchers.set(session.id, watcher);
+  }
+
+  private scheduleSync(sessionId: string): void {
+    const existing = this.debounceTimers.get(sessionId);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => {
+      this.debounceTimers.delete(sessionId);
+      void this.syncSession(sessionId).catch(() => {});
+    }, 600);
+    this.debounceTimers.set(sessionId, timer);
+  }
+
+  private async syncSessionNow(sessionId: string): Promise<RemoteEditSession> {
+    const session = this.findSessionById(sessionId);
+    if (!session) throw new RemotePreviewError("REMOTE_NOT_FOUND", "Remote edit session no longer exists.");
+    const localStat = await fs.stat(session.localPath).catch((error) => {
+      throw mapRemoteEditError(error, "Failed to inspect local edit copy.");
+    });
+    if (localStat.size === session.lastLocalSize && localStat.mtimeMs === session.lastLocalMtimeMs) return session;
+
+    this.replaceSession(sessionId, {
+      state: "dirty",
+      error: "",
+      lastLocalSize: localStat.size,
+      lastLocalMtimeMs: localStat.mtimeMs
+    });
+
+    const connection = this.connectionManager.getConnection(session.connectionId);
+    if (!connection) {
+      return this.replaceSession(sessionId, { state: "failed", error: "Remote connection has been disconnected." });
+    }
+    const client = connection.client as unknown as RemoteEditClient;
+    if (typeof client.put !== "function") {
+      return this.replaceSession(sessionId, { state: "failed", error: "Remote edit upload is unavailable for this connection." });
+    }
+
+    const remoteStat = await client.stat(session.remotePath).catch((error) => {
+      throw mapRemoteEditError(error, "Failed to inspect remote file before upload.");
+    });
+    const remoteBaseline = remoteEditBaselineFromStat(remoteStat);
+    if (remoteEditRemoteChanged(session.baseline, remoteBaseline)) {
+      return this.replaceSession(sessionId, {
+        state: "conflict",
+        error: "Remote file changed after this edit session started. Local edits were not uploaded."
+      });
+    }
+
+    this.replaceSession(sessionId, { state: "uploading", error: "" });
+    await client.put(session.localPath, session.remotePath).catch((error) => {
+      throw mapRemoteEditError(error, "Failed to upload edited remote file.");
+    });
+    const nextRemoteStat = await client.stat(session.remotePath).catch(() => ({ size: localStat.size, modifyTime: Date.now() }));
+    return this.replaceSession(sessionId, {
+      state: "uploaded",
+      error: "",
+      baseline: remoteEditBaselineFromStat(nextRemoteStat),
+      lastLocalSize: localStat.size,
+      lastLocalMtimeMs: localStat.mtimeMs
+    });
+  }
+
+  private findSessionById(sessionId: string): RemoteEditSession | null {
+    return this.listSessions().find((session) => session.id === sessionId) ?? null;
+  }
+
+  private replaceSession(
+    sessionId: string,
+    patch: Partial<Pick<RemoteEditSession, "state" | "error" | "baseline" | "lastLocalSize" | "lastLocalMtimeMs">>
+  ): RemoteEditSession {
+    for (const [key, session] of this.sessions) {
+      if (session.id !== sessionId) continue;
+      const next = transitionRemoteEditSession(session, patch);
+      this.sessions.set(key, next);
+      this.onSessionChange(next);
+      return next;
+    }
+    throw new RemotePreviewError("REMOTE_NOT_FOUND", "Remote edit session no longer exists.");
   }
 }
 

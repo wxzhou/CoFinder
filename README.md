@@ -95,7 +95,7 @@ Detailed scope lives in `docs/dev/V2.3_PLAN.md`.
 
 ### In Development: V2.5 Remote Text Edit
 
-V2.5 adds a separate **Edit Remote File** workflow for sniffed text files. The initial entry point downloads a remote text file into an app-managed edit cache and opens it with the configured text editor, while the existing **Open** command remains read-only preview behavior.
+V2.5 adds a separate **Edit Remote File** workflow for sniffed text files. The workflow downloads a remote text file into an app-managed edit cache, opens it with the configured text editor, watches local saves, and uploads changes back only after confirming the remote file still matches the edit-session baseline. Existing **Open** remains read-only preview behavior.
 
 Detailed scope lives in `docs/dev/V2.5_PLAN.md`.
 
