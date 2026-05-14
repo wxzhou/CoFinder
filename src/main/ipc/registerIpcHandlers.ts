@@ -34,6 +34,7 @@ import { ProfileRepository, defaultCredentialsPath, defaultProfilesPath } from "
 import { SafeStorageCredentialProvider } from "../services/SafeStorageCredentialProvider";
 import { QuickLookService } from "../services/QuickLookService";
 import { RemotePreviewService } from "../services/RemotePreviewService";
+import { RemoteEditService } from "../services/RemoteEditService";
 import { buildSshTerminalCommand } from "./sshTerminalCommand";
 import type {
   EnqueueDownloadRequest,
@@ -66,6 +67,7 @@ const diagnosticsService = new DiagnosticsService({
 });
 const quickLookService = new QuickLookService();
 const remotePreviewService = new RemotePreviewService(connectionManager, app.getPath("temp"));
+const remoteEditService = new RemoteEditService(connectionManager, app.getPath("temp"));
 
 const localSidebarFavoritesRepository = new LocalSidebarFavoritesRepository(defaultLocalSidebarFavoritesPath(userData), () => ({
   home: app.getPath("home"),
@@ -461,6 +463,32 @@ export function registerIpcHandlers(): void {
       return ok({ cleared: await remotePreviewService.clearForConnection(connectionId) });
     } catch (error) {
       return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to clear remote preview cache.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editOpen, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:editOpen request.");
+      const tabId = requiredId(body.tabId, "tabId", "REMOTE_INVALID_INPUT");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const settings = await settingsService.get();
+      return ok({
+        session: await remoteEditService.openTextEditSession(
+          { tabId, connectionId, remotePath: targetPath },
+          { textEditor: settings.general.defaultTextEditor }
+        )
+      });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to edit remote file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.editList, async () => {
+    try {
+      return ok({ sessions: remoteEditService.listSessions() });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to list remote edit sessions.");
     }
   });
 

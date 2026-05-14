@@ -1,23 +1,5 @@
-export type RemoteEditSessionState = "clean" | "dirty" | "uploading" | "uploaded" | "failed" | "conflict";
-
-export type RemoteEditBaseline = {
-  size: number;
-  modifyTime: number;
-};
-
-export type RemoteEditSession = {
-  id: string;
-  tabId: string;
-  connectionId: string;
-  remotePath: string;
-  localPath: string;
-  baseline: RemoteEditBaseline;
-  lastLocalSize: number;
-  lastLocalMtimeMs: number;
-  state: RemoteEditSessionState;
-  error: string;
-  updatedAt: number;
-};
+export type { RemoteEditBaseline, RemoteEditSession, RemoteEditSessionState } from "../../shared/remoteEdit";
+import type { RemoteEditBaseline, RemoteEditSession } from "../../shared/remoteEdit";
 
 export function remoteEditSessionKey(tabId: string, connectionId: string, remotePath: string): string {
   return `${tabId}\u0000${connectionId}\u0000${remotePath}`;

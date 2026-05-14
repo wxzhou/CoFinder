@@ -27,7 +27,9 @@ export const IPC_CHANNELS = {
     directorySizeUpdate: "remote:directorySizeUpdate",
     previewOpen: "remote:previewOpen",
     previewClearForTab: "remote:previewClearForTab",
-    previewClearForConnection: "remote:previewClearForConnection"
+    previewClearForConnection: "remote:previewClearForConnection",
+    editOpen: "remote:editOpen",
+    editList: "remote:editList"
   },
   transfer: {
     checkUploadConflicts: "transfer:checkUploadConflicts",

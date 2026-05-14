@@ -115,6 +115,12 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Breadcrumb copy path:** click the breadcrumb Copy Path icon for local and remote panes and confirm the clipboard contains the pane current path.
 - **Navigation row:** confirm Filter names, Recent, History, and Clear Recent remain available and do not squeeze the breadcrumb path display.
 
+## V2.5 remote text edit MVP
+
+- **Edit entry point:** connect to the isolated remote test root, select exactly one text file with content such as BED/tab-delimited text, then use the remote pane Edit action or right-click `Edit`. Confirm the configured text editor opens an app-managed edit-cache copy.
+- **Open remains read-only:** use right-click `Open` or double-click on the same remote text file and confirm it still follows the read-only remote preview path, separate from Edit.
+- **Unsupported edit:** select a remote directory, a multi-selection, and a binary file in turn; confirm Edit is disabled where possible or shows a clear unsupported message without starting an edit session.
+
 ## V1.3 interaction efficiency and remote preview
 
 - **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.

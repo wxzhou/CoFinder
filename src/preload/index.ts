@@ -35,7 +35,9 @@ const api: IpcApi = {
     },
     previewOpen: (request) => ipcRenderer.invoke("remote:previewOpen", request),
     previewClearForTab: (request) => ipcRenderer.invoke("remote:previewClearForTab", request),
-    previewClearForConnection: (request) => ipcRenderer.invoke("remote:previewClearForConnection", request)
+    previewClearForConnection: (request) => ipcRenderer.invoke("remote:previewClearForConnection", request),
+    editOpen: (request) => ipcRenderer.invoke("remote:editOpen", request),
+    editList: () => ipcRenderer.invoke("remote:editList")
   },
   transfer: {
     checkUploadConflicts: (request) => ipcRenderer.invoke("transfer:checkUploadConflicts", request),

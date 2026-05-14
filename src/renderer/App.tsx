@@ -3105,6 +3105,26 @@ export function App(props: AppProps = {}) {
     await previewRemotePath(tabId, target);
   }
 
+  async function editRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const target = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !target || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const res = await window.cofinder.remote.editOpen({
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      path: target
+    });
+    if (!res.ok) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: res.error.message } } : item
+        )
+      );
+      return;
+    }
+    setQueueError(`Editing ${target}`);
+  }
+
   async function previewRemotePath(tabId: string, remotePath: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId) return;
@@ -3373,6 +3393,13 @@ export function App(props: AppProps = {}) {
             icon: "arrow-down-tray",
             disabled: remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId,
             onClick: () => void enqueueDownload(activeTab.id)
+          },
+          {
+            label: "Edit remote file",
+            title: "Edit selected remote text file",
+            icon: "pencil",
+            disabled: remotePane.selectedFullPaths.length !== 1 || !remotePane.connectionId,
+            onClick: () => void editRemoteSelection(activeTab.id)
           },
           {
             label: "New remote folder",
@@ -4743,6 +4770,17 @@ export function App(props: AppProps = {}) {
               >
                 Open
                 <span className="context-shortcut">double-click</span>
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await editRemoteSelection(contextMenu.tabId);
+                  setContextMenu(null);
+                }}
+              >
+                Edit
               </button>
               <button
                 type="button"
