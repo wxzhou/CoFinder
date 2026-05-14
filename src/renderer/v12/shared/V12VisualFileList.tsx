@@ -17,6 +17,7 @@ export type V12VisualFileListProps<T extends FileEntry> = {
   onRowContextMenu: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
   onRowDoubleClick: (entry: T) => void;
   onBackgroundMouseDown: (event: MouseEvent<HTMLDivElement>) => void;
+  onBackgroundContextMenu?: (event: MouseEvent<HTMLDivElement>) => void;
   onBackgroundDragOver?: (event: DragEvent<HTMLDivElement>) => void;
   onBackgroundDrop?: (event: DragEvent<HTMLDivElement>) => void;
   onDragLeave?: (event: DragEvent<HTMLDivElement>) => void;
@@ -71,6 +72,7 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
         className="v12m-list"
         role="list"
         onMouseDown={props.onBackgroundMouseDown}
+        onContextMenu={props.onBackgroundContextMenu}
         onDragOver={props.onBackgroundDragOver}
         onDrop={props.onBackgroundDrop}
         onDragLeave={props.onDragLeave}

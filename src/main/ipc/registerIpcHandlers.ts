@@ -34,6 +34,7 @@ import { ProfileRepository, defaultCredentialsPath, defaultProfilesPath } from "
 import { SafeStorageCredentialProvider } from "../services/SafeStorageCredentialProvider";
 import { QuickLookService } from "../services/QuickLookService";
 import { RemotePreviewService } from "../services/RemotePreviewService";
+import { buildSshTerminalCommand } from "./sshTerminalCommand";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -861,16 +862,6 @@ async function runDetached(command: string, args: string[]): Promise<void> {
       resolve();
     });
   });
-}
-
-function buildSshTerminalCommand(username: string, host: string, port: number, remotePath?: string): string {
-  const base = `ssh -p ${port} ${username}@${host}`;
-  if (!remotePath) return base;
-  return `${base} -t ${shellSingleQuote(`cd ${remotePath} && exec "$SHELL" -l`)}`;
-}
-
-function shellSingleQuote(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
 export async function shutdownMainProcessResources(): Promise<void> {

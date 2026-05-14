@@ -95,6 +95,8 @@ type ContextMenuState = {
   tabId: string;
   x: number;
   y: number;
+  scope: "row" | "background";
+  terminalPath: string;
 };
 
 type InlineRenameState = {
@@ -2055,10 +2057,11 @@ export function App(props: AppProps = {}) {
   function openContextMenu(
     tabId: string,
     pane: "local" | "remote",
-    entryPath: string,
+    entry: LocalFileEntry | RemoteFileEntry,
     event: { clientX: number; clientY: number }
   ): void {
     setActivePane(pane);
+    const entryPath = entry.fullPath;
     setTabs((prev) =>
       prev.map((tab) => {
         if (tab.id !== tabId) return tab;
@@ -2084,7 +2087,28 @@ export function App(props: AppProps = {}) {
         };
       })
     );
-    setContextMenu({ pane, tabId, x: event.clientX, y: event.clientY });
+    setContextMenu({
+      pane,
+      tabId,
+      x: event.clientX,
+      y: event.clientY,
+      scope: "row",
+      terminalPath: entry.type === "directory" ? entry.fullPath : getParentPath(entry.fullPath)
+    });
+  }
+
+  function openBackgroundContextMenu(tabId: string, pane: "local" | "remote", event: { clientX: number; clientY: number }): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    setActivePane(pane);
+    setContextMenu({
+      pane,
+      tabId,
+      x: event.clientX,
+      y: event.clientY,
+      scope: "background",
+      terminalPath: pane === "local" ? tab.localPane.currentPath : tab.remotePane.currentPath
+    });
   }
 
   function shouldStartInlineRenameFromClick(
@@ -2543,11 +2567,11 @@ export function App(props: AppProps = {}) {
     );
   }
 
-  async function openTerminalHere(tabId: string, pane: "local" | "remote"): Promise<void> {
+  async function openTerminalHere(tabId: string, pane: "local" | "remote", targetPath?: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (pane === "local") {
-      const result = await window.cofinder.system.openTerminal({ path: tab.localPane.currentPath });
+      const result = await window.cofinder.system.openTerminal({ path: targetPath || tab.localPane.currentPath });
       if (!result.ok) setQueueError(result.error.message);
       return;
     }
@@ -2556,7 +2580,7 @@ export function App(props: AppProps = {}) {
       host: tab.remotePane.host,
       username: tab.remotePane.username,
       port: tab.remotePane.port,
-      remotePath: tab.remotePane.currentPath
+      remotePath: targetPath || tab.remotePane.currentPath
     });
     if (!result.ok) setQueueError(result.error.message);
   }
@@ -3313,7 +3337,8 @@ export function App(props: AppProps = {}) {
                   }}
                   onRowContextMenu={(entry, event) => {
                     event.preventDefault();
-                    openContextMenu(activeTab.id, "local", entry.fullPath, event);
+                    event.stopPropagation();
+                    openContextMenu(activeTab.id, "local", entry, event);
                   }}
                   onRowDoubleClick={(entry) => {
                     if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -3321,6 +3346,10 @@ export function App(props: AppProps = {}) {
                   }}
                   onBackgroundMouseDown={(event) => {
                     beginMarqueeSelection("local", event);
+                  }}
+                  onBackgroundContextMenu={(event) => {
+                    event.preventDefault();
+                    openBackgroundContextMenu(activeTab.id, "local", event);
                   }}
                   onBackgroundDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
                   onBackgroundDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
@@ -3490,6 +3519,10 @@ export function App(props: AppProps = {}) {
             onDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
             onDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
             onDragLeave={handleTransferDragLeave}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              openBackgroundContextMenu(activeTab.id, "local", event);
+            }}
           >
             <table className="file-table">
               <colgroup>
@@ -3550,7 +3583,8 @@ export function App(props: AppProps = {}) {
                     }}
                     onContextMenu={(event) => {
                       event.preventDefault();
-                      openContextMenu(activeTab.id, "local", entry.fullPath, event);
+                      event.stopPropagation();
+                      openContextMenu(activeTab.id, "local", entry, event);
                     }}
                     onDoubleClick={() => {
                       if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -3715,7 +3749,8 @@ export function App(props: AppProps = {}) {
                     }}
                     onRowContextMenu={(entry, event) => {
                       event.preventDefault();
-                      openContextMenu(activeTab.id, "remote", entry.fullPath, event);
+                      event.stopPropagation();
+                      openContextMenu(activeTab.id, "remote", entry, event);
                     }}
                     onRowDoubleClick={(entry) => {
                       if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -3723,6 +3758,10 @@ export function App(props: AppProps = {}) {
                     }}
                     onBackgroundMouseDown={(event) => {
                       beginMarqueeSelection("remote", event);
+                    }}
+                    onBackgroundContextMenu={(event) => {
+                      event.preventDefault();
+                      openBackgroundContextMenu(activeTab.id, "remote", event);
                     }}
                     onBackgroundDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
                     onBackgroundDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
@@ -3893,6 +3932,10 @@ export function App(props: AppProps = {}) {
                 onDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
                 onDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
                 onDragLeave={handleTransferDragLeave}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  openBackgroundContextMenu(activeTab.id, "remote", event);
+                }}
               >
                 <table className="file-table">
                   <colgroup>
@@ -3953,7 +3996,8 @@ export function App(props: AppProps = {}) {
                         }}
                         onContextMenu={(event) => {
                           event.preventDefault();
-                          openContextMenu(activeTab.id, "remote", entry.fullPath, event);
+                          event.stopPropagation();
+                          openContextMenu(activeTab.id, "remote", entry, event);
                         }}
                         onDoubleClick={() => {
                           if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -4487,7 +4531,7 @@ export function App(props: AppProps = {}) {
                 type="button"
                 className="context-item"
                 onClick={async () => {
-                  await openTerminalHere(contextMenu.tabId, "local");
+                  await openTerminalHere(contextMenu.tabId, "local", contextMenu.terminalPath);
                   setContextMenu(null);
                 }}
               >
@@ -4638,7 +4682,7 @@ export function App(props: AppProps = {}) {
                 type="button"
                 className="context-item"
                 onClick={async () => {
-                  await openTerminalHere(contextMenu.tabId, "remote");
+                  await openTerminalHere(contextMenu.tabId, "remote", contextMenu.terminalPath);
                   setContextMenu(null);
                 }}
               >
