@@ -4,11 +4,22 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.5.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.6.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.5.0**.
+No user-facing changes since **v1.6.0**.
+
+## v1.6.0 — Product milestone V2.6
+
+V2.6 hardens the remote text edit workflow for daily use.
+
+- Remote edit sessions show local cache path context and last upload status.
+- Added explicit Save Back Now, Stop Monitoring, and Discard Local Copy actions.
+- Deleted local edit-cache files are marked as failed with a clear message.
+- Transient upload failures get bounded safe retries without bypassing conflict checks.
+- Conflict recovery can download the newer remote copy beside the local edit and copy both paths for manual comparison.
+- Added an isolated fake-SFTP edit-session harness covering happy path, conflict, disconnect, and shutdown-safe cleanup behavior.
 
 ## v1.5.0 — Product milestone V2.5
 

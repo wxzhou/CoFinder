@@ -26,7 +26,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.3 | v1.3.0 | Shipped |
 | V2.4 | v1.4.0 | Complete on dev |
 | V2.5 | v1.5.0 | Complete on dev |
-| V2.6 | v1.6.0 | Planned |
+| V2.6 | v1.6.0 | Complete on dev |
 | V2.7 | v1.7.0 | Planned |
 | V2.8 | v1.8.0 | Planned |
 
@@ -63,7 +63,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.3 | v1.3.0 | v1.2 Navigation Feedback Fixes — shipped |
 | V2.4 | v1.4.0 | Pane-Scoped Toolbar and Finder Visual Polish — complete on dev |
 | V2.5 | v1.5.0 | Remote Text Edit Auto-Sync MVP — complete on dev |
-| V2.6 | v1.6.0 | Remote Edit Reliability and Session Management — planned |
+| V2.6 | v1.6.0 | Remote Edit Reliability and Session Management — complete on dev |
 | V2.7 | v1.7.0 | V12 UI Refinement and Task-Center Polish — planned |
 | V2.8 | v1.8.0 | Advanced Remote Navigation and Preview Decisions — planned |
 
@@ -79,6 +79,17 @@ V2.5 introduces the first write-capable remote edit workflow with tight text-onl
 - Conflict/failure recovery actions and compact Remote edits status panel.
 
 See **`docs/dev/V2.5_PLAN.md`** for the detailed acceptance checks.
+
+### V2.6 / v1.6.0 — Remote Edit Reliability and Session Management
+
+V2.6 hardens remote editing after the MVP:
+
+- Richer edit-session detail and explicit manual actions.
+- Safer watcher behavior for atomic saves, deleted cache files, and transient upload retries.
+- Conflict-copy recovery for manual comparison without automatic merge.
+- Isolated fake-SFTP harness for repeatable edit-session regression tests.
+
+See **`docs/dev/V2.6_PLAN.md`** for the detailed acceptance checks.
 
 ### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
 
@@ -132,17 +143,6 @@ See **`docs/dev/V2.1_PLAN.md`** for the detailed triage and acceptance checks.
 
 ## Planned Next Phase
 
-### V2.6 / v1.6.0 — Remote Edit Reliability and Session Management
-
-V2.6 should harden V2.5 into a trustworthy daily workflow:
-
-- Add an edit sessions panel/drawer.
-- Provide Save Back Now, Re-download Remote, Reveal Local Copy, Stop Monitoring, and Discard actions.
-- Handle atomic-save editor behavior, deleted local edit copies, upload retries, and conflict recovery.
-- Add stronger integration tests around real and mocked SFTP edit paths.
-
-See **`docs/dev/V2.6_PLAN.md`**.
-
 ### V2.7 / v1.7.0 — V12 UI Refinement and Task-Center Polish
 
 V2.7 should consolidate UI quality after the toolbar and edit-session changes:
@@ -183,4 +183,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.5 / v1.5.0 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Planned phases through V2.8 are intentionally scoped and may narrow further before implementation. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.6 / v1.6.0 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Planned phases through V2.8 are intentionally scoped and may narrow further before implementation. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
