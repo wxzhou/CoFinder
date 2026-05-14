@@ -258,8 +258,11 @@ body,
 }
 
 .cfv12-root .v12m-sidebar-footer {
+  position: sticky;
+  bottom: 0;
   margin-top: auto;
   padding: 10px 12px 0;
+  background: var(--cfv12-bg-sidebar);
 }
 
 .cfv12-root .v12m-sidebar-preferences {
