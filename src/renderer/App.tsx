@@ -11,6 +11,7 @@ import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
 import { AppShellV12 } from "./v12/AppShellV12";
 import { V12Toolbar } from "./v12/V12Toolbar";
+import { V12PaneActionStrip } from "./v12/V12PaneActionStrip";
 import { V12TransferDrawer } from "./v12/V12TransferDrawer";
 import { V12PaneInspector } from "./v12/V12PaneInspector";
 import { pathToSegments } from "./v12/pane/pathSegments";
@@ -2881,22 +2882,6 @@ export function App(props: AppProps = {}) {
         connectActionDisabled={remotePane.connectionStatus === "connecting"}
         connectActionTitle={remoteConnected ? "Disconnect from server" : "Connect to server…"}
         connectActionAriaLabel={remoteConnected ? "Disconnect" : "Connect"}
-        onUpload={() => void enqueueUpload(activeTab.id)}
-        onDownload={() => void enqueueDownload(activeTab.id)}
-        onNewFolder={() => void (activePane === "local" ? createLocalDirectory(activeTab.id) : createRemoteDirectory(activeTab.id))}
-        onNewTextFile={() => void createTextFile(activeTab.id, activePane)}
-        uploadDisabled={localPane.selectedFullPaths.length === 0 || !remotePane.connectionId}
-        downloadDisabled={
-          remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId
-        }
-        newFolderDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
-        newTextFileDisabled={activePane === "local" ? !localPane.currentPath : !remotePane.connectionId}
-        onDelete={() => openDeleteConfirm(activeTab.id, activePane)}
-        deleteDisabled={
-          activePane === "local"
-            ? localPane.selectedFullPaths.length === 0
-            : remotePane.selectedFullPaths.length === 0
-        }
         onInspectorToggle={() => {
           if (activePane === "local") {
             cancelV12LocalInspRevealTimer();
@@ -3332,6 +3317,103 @@ export function App(props: AppProps = {}) {
     </div>
   );
 
+  const localPaneActionStrip =
+    uiShell === "v12" ? (
+      <V12PaneActionStrip
+        label="Local pane actions"
+        actions={[
+          {
+            label: "Upload",
+            title: "Upload local selection to remote pane",
+            icon: "arrow-up-tray",
+            disabled: localPane.selectedFullPaths.length === 0 || !remotePane.connectionId,
+            onClick: () => void enqueueUpload(activeTab.id)
+          },
+          {
+            label: "New local folder",
+            title: "New local folder",
+            icon: "folder-badge-plus",
+            disabled: !localPane.currentPath,
+            onClick: () => void createLocalDirectory(activeTab.id)
+          },
+          {
+            label: "New local text file",
+            title: "New local text file",
+            icon: "doc-badge-plus",
+            disabled: !localPane.currentPath,
+            onClick: () => void createTextFile(activeTab.id, "local")
+          },
+          {
+            label: "Delete local selection",
+            title: "Delete local selection",
+            icon: "trash",
+            disabled: localPane.selectedFullPaths.length === 0,
+            danger: true,
+            onClick: () => openDeleteConfirm(activeTab.id, "local")
+          },
+          {
+            label: "Open Terminal Here",
+            title: "Open Terminal here in local current folder",
+            icon: "terminal",
+            disabled: !localPane.currentPath,
+            onClick: () => void openTerminalHere(activeTab.id, "local", localPane.currentPath)
+          }
+        ]}
+      />
+    ) : null;
+
+  const remotePaneActionStrip =
+    uiShell === "v12" ? (
+      <V12PaneActionStrip
+        label="Remote pane actions"
+        actions={[
+          {
+            label: "Download",
+            title: "Download remote selection to local pane",
+            icon: "arrow-down-tray",
+            disabled: remotePane.selectedFullPaths.length === 0 || !localPane.currentPath || !remotePane.connectionId,
+            onClick: () => void enqueueDownload(activeTab.id)
+          },
+          {
+            label: "New remote folder",
+            title: "New remote folder",
+            icon: "folder-badge-plus",
+            disabled: !remotePane.connectionId,
+            onClick: () => void createRemoteDirectory(activeTab.id)
+          },
+          {
+            label: "New remote text file",
+            title: "New remote text file",
+            icon: "doc-badge-plus",
+            disabled: !remotePane.connectionId,
+            onClick: () => void createTextFile(activeTab.id, "remote")
+          },
+          {
+            label: "Delete remote selection",
+            title: "Delete remote selection",
+            icon: "trash",
+            disabled: remotePane.selectedFullPaths.length === 0 || !remotePane.connectionId,
+            danger: true,
+            onClick: () => openDeleteConfirm(activeTab.id, "remote")
+          },
+          {
+            label: "Open SSH Terminal Here",
+            title: "Open SSH Terminal here in remote current folder",
+            icon: "terminal",
+            disabled: !remotePane.connectionId,
+            onClick: () => void openTerminalHere(activeTab.id, "remote", remotePane.currentPath)
+          },
+          {
+            label: "Disconnect",
+            title: "Disconnect remote pane",
+            icon: "plug",
+            disabled: !remotePane.connectionId,
+            onClick: () => void disconnectRemote(activeTab.id)
+          }
+        ]}
+      />
+    ) : null;
+
   const localPaneEl = (
     <section
       className={localPaneSectionClass}
@@ -3360,6 +3442,7 @@ export function App(props: AppProps = {}) {
               onCancelPathInput={() => cancelPathEdit("local")}
               onCopyPath={() => void copyCurrentPath("local")}
             />
+            {localPaneActionStrip}
             {localNavTools}
           </div>
           <div className="v12m-pane-body">
@@ -3729,6 +3812,7 @@ export function App(props: AppProps = {}) {
                 pathInputDisabled
                 onCopyPath={() => void copyCurrentPath("remote")}
               />
+              {remotePaneActionStrip}
               {remoteNavTools}
             </div>
             <div className="v12m-pane-body">
@@ -3788,6 +3872,7 @@ export function App(props: AppProps = {}) {
                   </button>
                 }
               />
+              {remotePaneActionStrip}
               {remoteNavTools}
             </div>
             <div className="v12m-pane-body">

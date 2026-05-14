@@ -21,18 +21,6 @@ export type V12ToolbarProps = {
   connectActionTitle: string;
   connectActionAriaLabel: string;
 
-  onUpload: () => void;
-  onDownload: () => void;
-  onNewFolder: () => void;
-  onNewTextFile: () => void;
-  uploadDisabled: boolean;
-  downloadDisabled: boolean;
-  newFolderDisabled: boolean;
-  newTextFileDisabled: boolean;
-
-  onDelete: () => void;
-  deleteDisabled: boolean;
-
   onInspectorToggle: () => void;
   inspectorToggleDisabled: boolean;
   inspectorTogglePressed: boolean;
@@ -125,60 +113,6 @@ export function V12Toolbar(props: V12ToolbarProps): ReactElement {
           <V12TbIcon name="plug" />
         </button>
       </div>
-      <span className="v12m-tsep" aria-hidden />
-      <div className="v12m-tg">
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Upload selection to server"
-          aria-label="Upload"
-          disabled={props.uploadDisabled}
-          onClick={() => props.onUpload()}
-        >
-          <V12TbIcon name="arrow-up-tray" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Download selection to local folder"
-          aria-label="Download"
-          disabled={props.downloadDisabled}
-          onClick={() => props.onDownload()}
-        >
-          <V12TbIcon name="arrow-down-tray" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="New folder"
-          aria-label="New folder"
-          disabled={props.newFolderDisabled}
-          onClick={() => props.onNewFolder()}
-        >
-          <V12TbIcon name="folder-badge-plus" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="New text file"
-          aria-label="New text file"
-          disabled={props.newTextFileDisabled}
-          onClick={() => props.onNewTextFile()}
-        >
-          <V12TbIcon name="doc-badge-plus" />
-        </button>
-        <button
-          type="button"
-          className="v12m-tb"
-          title="Delete selection"
-          aria-label="Delete"
-          disabled={props.deleteDisabled}
-          onClick={() => props.onDelete()}
-        >
-          <V12TbIcon name="trash" />
-        </button>
-      </div>
-      <span className="v12m-tsep" aria-hidden />
       <div className="v12m-tg">
         <button
           type="button"
