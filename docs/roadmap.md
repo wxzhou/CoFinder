@@ -174,6 +174,7 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 - **Binary/document remote edit auto-sync**. V2.5/V2.6 plan text-file-only remote edit workflows first.
 - **Full Remote Quick Look**. A limited read-only remote preview cache for text/images exists from **V1.3**; V2.8 may choose a broader remote Quick Look track, but it remains deferred until then.
+- **Real Column View**. V2.7 defers it deliberately; see `docs/dev/column-view-decision.md`.
 - **Indexed/full-text search** (V1.7 only filters current listings and suggests already-known paths)
 - **Full ACL editor / remote shell file-manager mode** (V1.8 ships curated remote operations only)
 - **Full i18n** (no localized product shell in near phases)
