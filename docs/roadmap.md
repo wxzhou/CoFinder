@@ -22,6 +22,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V1.9 | no standalone tag | Included in v1.0.0 |
 | V2.0 | v1.0.0 | Shipped |
 | V2.1 | v1.1.0 | Shipped |
+| V2.2 | v1.2.0 | Planned |
 
 ## Shipped phases (summary)
 
@@ -52,6 +53,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V1.9 | no standalone tag | Packaging, Updates, and Reliability — included in v1.0.0 |
 | V2.0 | v1.0.0 | Stable Personal Release — shipped |
 | V2.1 | v1.1.0 | v1.0 Feedback Stabilization — shipped |
+| V2.2 | v1.2.0 | v1.1 Feedback Fixes — planned |
 
 ## Latest Shipped Phase
 
@@ -67,6 +69,22 @@ V2.1 is driven by v1.0.0 hands-on feedback. It prioritized correctness bugs befo
 - macOS Preferences menu entry and resizable sidebar.
 
 See **`docs/dev/V2.1_PLAN.md`** for the detailed triage and acceptance checks.
+
+## Planned Next Phase
+
+### V2.2 / v1.2.0 — v1.1 Feedback Fixes
+
+V2.2 is a corrective release for v1.1.0 hands-on feedback. It focuses on operations that appear unresponsive or surprising:
+
+- Delete confirmation should close or become busy immediately after confirmation, preventing repeated delete submissions.
+- New Folder must be re-tested and fixed for local and remote toolbar/context paths.
+- Preferences should allow a default text editor for remote text preview, including TextMate.
+- Inspector must not auto-open on ordinary single-click and squeeze the file list.
+- Copy Current Path needs a discoverable shortcut and shortcut-reference entry.
+- Open Terminal Here / Open SSH Terminal Here should work from pane background context menus and use intuitive folder/file target semantics.
+- Remote SSH terminal launch must preserve the requested path even when remote startup files contain `cd ...`.
+
+See **`docs/dev/V2.2_PLAN.md`** for the detailed triage and acceptance checks.
 
 ## Explicitly out of scope or not on the main line (today)
 
