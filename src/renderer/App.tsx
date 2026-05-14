@@ -567,6 +567,7 @@ export function App(props: AppProps = {}) {
         event.preventDefault();
         event.stopPropagation();
       };
+      const isKeyC = key === "c" || event.code === "KeyC";
       if (event.key === "F2") {
         openInlineRename(activeTab.id, activePane);
         prevent();
@@ -576,11 +577,11 @@ export function App(props: AppProps = {}) {
       } else if (cmd && key === "i") {
         void openInfoDialog(activeTab.id, activePane);
         prevent();
-      } else if (cmd && event.shiftKey && key === "c") {
-        void copySelection(activeTab.id, activePane, "path");
-        prevent();
-      } else if (cmd && event.altKey && key === "c") {
+      } else if (cmd && event.altKey && isKeyC) {
         void copyCurrentPath(activePane);
+        prevent();
+      } else if (cmd && event.shiftKey && isKeyC) {
+        void copySelection(activeTab.id, activePane, "path");
         prevent();
       } else if (cmd && key === "r") {
         if (activePane === "local" && localPane.currentPath) void navigateLocal(activeTab.id, localPane.currentPath, "replace");
