@@ -528,19 +528,7 @@ export function App(props: AppProps = {}) {
         if (contextMenu) return;
         if (isEditableTarget(document.activeElement)) return;
         if (activePane === "remote") {
-          setTabs((prev) =>
-            prev.map((item) =>
-              item.id === activeTab.id
-                ? {
-                    ...item,
-                    remotePane: {
-                      ...item.remotePane,
-                      error: "Remote Quick Look is not implemented yet. Double-click a remote file or use Open for read-only preview."
-                    }
-                  }
-                : item
-            )
-          );
+          void quickLookSelection(activeTab.id, "remote");
           event.preventDefault();
           event.stopPropagation();
           return;
@@ -2754,19 +2742,7 @@ export function App(props: AppProps = {}) {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (pane === "remote") {
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId
-            ? {
-                ...item,
-                remotePane: {
-                  ...item.remotePane,
-                  error: "Remote Quick Look is not implemented yet. Double-click a remote file or use Open for read-only preview."
-                }
-              }
-            : item
-        )
-      );
+      await previewRemoteSelection(tabId);
       return;
     }
     const selected = tab.localPane.selectedFullPaths;
@@ -4966,6 +4942,18 @@ export function App(props: AppProps = {}) {
               >
                 Open
                 <span className="context-shortcut">double-click</span>
+              </button>
+              <button
+                type="button"
+                className="context-item"
+                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
+                onClick={async () => {
+                  await quickLookSelection(contextMenu.tabId, "remote");
+                  setContextMenu(null);
+                }}
+              >
+                Quick Look
+                <span className="context-shortcut">Space</span>
               </button>
               <button
                 type="button"
