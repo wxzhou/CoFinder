@@ -594,7 +594,7 @@ export function App(props: AppProps = {}) {
         openDeleteConfirm(activeTab.id, activePane);
         prevent();
       } else if (cmd && key === "i") {
-        void openInfoDialog(activeTab.id, activePane);
+        toggleInspectorFromShortcut(activeTab.id, activePane);
         prevent();
       } else if (cmd && event.altKey && isKeyC) {
         void copyCurrentPath(activePane);
@@ -2075,7 +2075,7 @@ export function App(props: AppProps = {}) {
           localPane: {
             ...tab.localPane,
             ...applyRowSelection(
-              tab.localPane.entries,
+              sortedEntries,
               {
                 selectedFullPaths: tab.localPane.selectedFullPaths,
                 selectionAnchorFullPath: tab.localPane.selectionAnchorFullPath
@@ -2112,7 +2112,7 @@ export function App(props: AppProps = {}) {
           remotePane: {
             ...tab.remotePane,
             ...applyRowSelection(
-              tab.remotePane.entries,
+              sortedRemoteEntries,
               {
                 selectedFullPaths: tab.remotePane.selectedFullPaths,
                 selectionAnchorFullPath: tab.remotePane.selectionAnchorFullPath
@@ -2566,17 +2566,33 @@ export function App(props: AppProps = {}) {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (pane === "local") {
-      if (tab.localPane.selectedFullPaths.length !== 1) return;
+      if (tab.localPane.selectedFullPaths.length === 0) return;
       setActivePane("local");
       cancelV12LocalInspRevealTimer();
       setV12LocalInspectorReveal(true);
       return;
     }
 
-    if (tab.remotePane.selectedFullPaths.length !== 1 || !tab.remotePane.connectionId) return;
+    if (tab.remotePane.selectedFullPaths.length === 0 || !tab.remotePane.connectionId) return;
     setActivePane("remote");
     cancelV12RemoteInspRevealTimer();
     setV12RemoteInspectorReveal(true);
+  }
+
+  function toggleInspectorFromShortcut(tabId: string, pane: ActivePane): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "local") {
+      if (!inspectorColumnVisible("local", tab.localPane.selectedFullPaths.length, remoteConnected)) return;
+      setActivePane("local");
+      cancelV12LocalInspRevealTimer();
+      setV12LocalInspectorReveal((visible) => !visible);
+      return;
+    }
+    if (!inspectorColumnVisible("remote", tab.remotePane.selectedFullPaths.length, !!tab.remotePane.connectionId)) return;
+    setActivePane("remote");
+    cancelV12RemoteInspRevealTimer();
+    setV12RemoteInspectorReveal((visible) => !visible);
   }
 
   async function createRemoteDirectory(tabId: string): Promise<void> {

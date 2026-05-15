@@ -46,6 +46,15 @@ describe("selection helpers", () => {
     expect(next.selectedFullPaths).toEqual(["/b", "/c", "/d"]);
   });
 
+  it("shift-click follows caller-provided visible row order", () => {
+    const visibleRows = [rows[3]!, rows[1]!, rows[2]!, rows[0]!];
+    const next = applyRowSelection(visibleRows, { selectedFullPaths: ["/d"], selectionAnchorFullPath: "/d" }, "/c", {
+      metaKey: false,
+      shiftKey: true
+    });
+    expect(next.selectedFullPaths).toEqual(["/d", "/b", "/c"]);
+  });
+
   it("shift-click replaces previous non-range selections", () => {
     const next = applyRowSelection(rows, { selectedFullPaths: ["/a", "/d"], selectionAnchorFullPath: "/b" }, "/c", {
       metaKey: false,

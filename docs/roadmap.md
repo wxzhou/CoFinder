@@ -30,6 +30,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.7 | v1.7.0 | Complete on dev |
 | V2.8 | v1.8.0 | Complete on dev |
 | V2.8.1 | v1.8.1 | Complete on dev |
+| V2.8.2 | v1.8.2 | Complete on dev |
 
 ## Shipped phases (summary)
 
@@ -68,6 +69,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.7 | v1.7.0 | V12 UI Refinement and Task-Center Polish — complete on dev |
 | V2.8 | v1.8.0 | Remote Quick Look — complete on dev |
 | V2.8.1 | v1.8.1 | Pane-Scoped Toolbar Cleanup — complete on dev |
+| V2.8.2 | v1.8.2 | Selection and Inspector Shortcut Fixes — complete on dev |
 
 ## Latest Completed Phase
 
@@ -126,6 +128,16 @@ V2.8.1 is a V12 patch release for command placement:
 - Moved pane meta/status beside pane titles, removed the duplicate header Disconnect link, and compacted Recent/History/Clear Recent to icon controls.
 
 See **`docs/dev/V2.8.1_PLAN.md`**.
+
+### V2.8.2 / v1.8.2 — Selection and Inspector Shortcut Fixes
+
+V2.8.2 fixes hands-on regressions found in v1.8.1:
+
+- `Shift` range selection now uses the visible sorted/filtered row order in local and remote panes.
+- `Cmd+I` now toggles the current pane Inspector for one or more selected files.
+- Show Inspector command paths can reveal Inspector for multi-selection.
+
+See **`docs/dev/V2.8.2_PLAN.md`**.
 
 ### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
 
@@ -193,4 +205,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.8.1 / v1.8.1 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.8.2 / v1.8.2 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

@@ -126,6 +126,13 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Compact history controls:** confirm Recent, History, and Clear Recent appear as icon controls with tooltips/accessible labels and still perform their original actions.
 - **Danger color:** connect to a remote profile and confirm the remote Disconnect toolbar icon is visibly red.
 
+## V2.8.2 selection and Inspector shortcuts
+
+- **Local Shift range:** sort/filter a local folder if useful, click one visible file, then `Shift`-click another visible file; confirm exactly the two files and visible rows between them are selected.
+- **Remote Shift range:** repeat the same range-selection check in a connected remote folder.
+- **Multi-select Inspector shortcut:** select multiple local files and press `Cmd+I`; confirm the Inspector opens with multi-selection summary. Repeat on remote while connected.
+- **Inspector shortcut toggle:** select a single file, press `Cmd+I` to open Inspector, press `Cmd+I` again, and confirm the Inspector closes. Repeat for local and remote.
+
 ## V2.5 remote text edit MVP
 
 - **Edit entry point:** connect to the isolated remote test root, select exactly one text file with content such as BED/tab-delimited text, then use the remote pane Edit action or right-click `Edit`. Confirm the configured text editor opens an app-managed edit-cache copy.

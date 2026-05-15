@@ -4,11 +4,20 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.8.1.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.2.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.8.1**.
+No user-facing changes since **v1.8.2**.
+
+## v1.8.2 — Product milestone V2.8.2
+
+V2.8.2 is a selection and Inspector shortcut bugfix release.
+
+- Fixed `Shift` range selection in local and remote panes so it follows the visible sorted/filtered row order.
+- `Cmd+I` now reveals Inspector for multi-selection, matching the toolbar Inspector toggle.
+- Pressing `Cmd+I` again now hides the currently revealed pane Inspector.
+- Show Inspector command paths no longer require exactly one selected item.
 
 ## v1.8.1 — Product milestone V2.8.1
 
