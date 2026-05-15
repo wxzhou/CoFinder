@@ -4,11 +4,22 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.8.2.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.3.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.8.2**.
+No user-facing changes since **v1.8.3**.
+
+## v1.8.3 — Product milestone V2.8.3
+
+V2.8.3 is an Inspector detail and keyboard selection bugfix release.
+
+- Folder Inspector metadata now shows folder size again for local and remote directories.
+- V12 row selection highlight is limited to the Name column; clicking Date modified, Size, Kind, or list blank space clears selection.
+- Plain `Up` / `Down` now move file selection through visible rows while preserving `Cmd+Up` / `Cmd+Down` and `Option+Up` / `Option+Down` page navigation.
+- `Shift+Up` / `Shift+Down` now extends and shrinks contiguous row selection ranges.
+- Inspector preview icons are larger and no longer sit inside a rounded-square wrapper.
+- Document icons now use rounded outer and folded-corner geometry.
 
 ## v1.8.2 — Product milestone V2.8.2
 

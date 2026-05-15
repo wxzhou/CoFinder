@@ -89,7 +89,7 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
               <div className="v12m-insp-block">
                 <h2 className="v12m-insp-name">{props.info.name}</h2>
                 <p className="v12m-insp-line">
-                  {props.info.type === "directory" ? "—" : props.formatSize(props.info.size)} · Modified {props.formatTime(props.info.mtime)}
+                  {props.formatSize(props.info.size)} · Modified {props.formatTime(props.info.mtime)}
                 </p>
               </div>
               <div className="v12m-insp-sect">
@@ -105,7 +105,7 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                   </li>
                   <li>
                     <span>Size</span>
-                    <span>{props.info.type === "directory" ? "—" : props.formatSize(props.info.size)}</span>
+                    <span>{props.formatSize(props.info.size)}</span>
                   </li>
                   <li>
                     <span>Modified</span>

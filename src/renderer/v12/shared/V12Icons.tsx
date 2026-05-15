@@ -15,8 +15,21 @@ export function V12Icon(props: { name: "disk" | "folder" | "server" | "clock" | 
   if (name === "doc") {
     return (
       <svg {...c} className="v12m-svg-doc">
-        <path d="M5 3.5h6.5L14 6v10.5H5V3.5z" fill="#fafafa" stroke="rgba(60,60,67,0.42)" strokeWidth="1.1" />
-        <path d="M11.5 3.5V7H14" fill="none" stroke="rgba(60,60,67,0.32)" strokeWidth="1.05" />
+        <path
+          d="M5.25 3.35h5.95c.34 0 .66.13.9.37l2.18 2.18c.24.24.37.56.37.9v8.95c0 .69-.56 1.25-1.25 1.25H5.25C4.56 17 4 16.44 4 15.75V4.6c0-.69.56-1.25 1.25-1.25z"
+          fill="#fafafa"
+          stroke="rgba(60,60,67,0.42)"
+          strokeWidth="1.1"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M11.35 3.55v2.6c0 .5.4.9.9.9h2.2"
+          fill="none"
+          stroke="rgba(60,60,67,0.32)"
+          strokeWidth="1.05"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     );
   }

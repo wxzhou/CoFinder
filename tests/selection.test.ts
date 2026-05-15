@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyKeyboardRowSelection,
   applyMarqueeSelection,
   applyRowSelection,
   clearSelectionState,
@@ -59,6 +60,36 @@ describe("selection helpers", () => {
     const next = applyRowSelection(rows, { selectedFullPaths: ["/a", "/d"], selectionAnchorFullPath: "/b" }, "/c", {
       metaKey: false,
       shiftKey: true
+    });
+    expect(next.selectedFullPaths).toEqual(["/b", "/c"]);
+  });
+
+  it("arrow keys move selection through visible rows", () => {
+    const down = applyKeyboardRowSelection(rows, { selectedFullPaths: ["/b"], selectionAnchorFullPath: "/b" }, 1, {
+      extend: false
+    });
+    expect(down).toEqual({ selectedFullPaths: ["/c"], selectionAnchorFullPath: "/c" });
+
+    const upFromEmpty = applyKeyboardRowSelection(rows, clearSelectionState(), -1, { extend: false });
+    expect(upFromEmpty).toEqual({ selectedFullPaths: ["/d"], selectionAnchorFullPath: "/d" });
+  });
+
+  it("shift-arrow extends and shrinks a range from the anchor", () => {
+    const extended = applyKeyboardRowSelection(rows, { selectedFullPaths: ["/b"], selectionAnchorFullPath: "/b" }, 1, {
+      extend: true
+    });
+    expect(extended.selectedFullPaths).toEqual(["/b", "/c"]);
+    expect(extended.selectionAnchorFullPath).toBe("/b");
+
+    const shrunk = applyKeyboardRowSelection(rows, extended, -1, { extend: true });
+    expect(shrunk.selectedFullPaths).toEqual(["/b"]);
+    expect(shrunk.selectionAnchorFullPath).toBe("/b");
+  });
+
+  it("keyboard range selection follows caller-provided visible row order", () => {
+    const visibleRows = [rows[3]!, rows[1]!, rows[2]!, rows[0]!];
+    const next = applyKeyboardRowSelection(visibleRows, { selectedFullPaths: ["/b"], selectionAnchorFullPath: "/b" }, 1, {
+      extend: true
     });
     expect(next.selectedFullPaths).toEqual(["/b", "/c"]);
   });

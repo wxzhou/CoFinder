@@ -14,6 +14,7 @@ export type V12VisualFileListProps<T extends FileEntry> = {
   selectedFullPaths: string[];
   onSort: (key: SortKey) => void;
   onRowClick: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
+  onRowDetailClick?: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
   onRowContextMenu: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
   onRowDoubleClick: (entry: T) => void;
   onBackgroundMouseDown: (event: MouseEvent<HTMLDivElement>) => void;
@@ -97,7 +98,14 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
               onDragOver={(e) => props.onRowDragOver?.(entry, e)}
               onDrop={(e) => props.onRowDrop?.(entry, e)}
               onDragEnd={(e) => props.onRowDragEnd?.(e)}
-              onClick={(e) => props.onRowClick(entry, e)}
+              onClick={(e) => {
+                const target = e.target as HTMLElement | null;
+                if (target?.closest(".v12m-lname")) {
+                  props.onRowClick(entry, e);
+                  return;
+                }
+                props.onRowDetailClick?.(entry, e);
+              }}
               onContextMenu={(e) => props.onRowContextMenu(entry, e)}
               onDoubleClick={() => props.onRowDoubleClick(entry)}
             >

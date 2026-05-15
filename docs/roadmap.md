@@ -31,6 +31,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.8 | v1.8.0 | Complete on dev |
 | V2.8.1 | v1.8.1 | Complete on dev |
 | V2.8.2 | v1.8.2 | Complete on dev |
+| V2.8.3 | v1.8.3 | Complete on dev |
 
 ## Shipped phases (summary)
 
@@ -70,6 +71,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.8 | v1.8.0 | Remote Quick Look — complete on dev |
 | V2.8.1 | v1.8.1 | Pane-Scoped Toolbar Cleanup — complete on dev |
 | V2.8.2 | v1.8.2 | Selection and Inspector Shortcut Fixes — complete on dev |
+| V2.8.3 | v1.8.3 | Inspector Detail and Keyboard Selection Fixes — complete on dev |
 
 ## Latest Completed Phase
 
@@ -139,6 +141,18 @@ V2.8.2 fixes hands-on regressions found in v1.8.1:
 
 See **`docs/dev/V2.8.2_PLAN.md`**.
 
+### V2.8.3 / v1.8.3 — Inspector Detail and Keyboard Selection Fixes
+
+V2.8.3 fixes hands-on regressions found in v1.8.2:
+
+- Folder Inspector metadata shows folder size again.
+- Row selection highlight is constrained to the Name column, and non-name row areas clear selection.
+- Plain `Up` / `Down` move selection through visible rows; `Shift+Up` / `Shift+Down` extends ranges.
+- Existing `Cmd+Up` / `Cmd+Down` and `Option+Up` / `Option+Down` page navigation behavior remains unchanged.
+- Inspector preview and document icons are polished closer to Finder-style visual expectations.
+
+See **`docs/dev/V2.8.3_PLAN.md`**.
+
 ### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
 
 V2.4 addresses V12 command ownership and visible polish before larger remote-edit work:
@@ -205,4 +219,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.8.2 / v1.8.2 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.8.3 / v1.8.3 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

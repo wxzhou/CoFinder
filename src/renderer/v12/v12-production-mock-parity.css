@@ -488,6 +488,57 @@
   box-shadow: inset 3px 0 0 color-mix(in srgb, var(--m-accent, #0a5fff) 45%, transparent);
 }
 
+.cfv12-root .v12m-lrow.sel-active,
+.cfv12-root .v12m-lrow.sel-inactive {
+  background: transparent;
+  color: var(--m-fg);
+  border-bottom-color: rgba(0, 0, 0, 0.035);
+  box-shadow: none;
+}
+
+.cfv12-root .v12m-lrow.sel-active .v12m-lname,
+.cfv12-root .v12m-lrow.sel-inactive .v12m-lname {
+  min-height: calc(var(--m-row-h) - 4px);
+  margin-left: -4px;
+  padding: 0 4px;
+  border-radius: 5px;
+}
+
+.cfv12-root .v12m-lrow.sel-active .v12m-lname {
+  background: var(--m-sel-active-bg);
+  color: var(--m-sel-active-fg);
+}
+
+.cfv12-root .v12m-lrow.sel-inactive .v12m-lname {
+  background: var(--m-sel-inactive-bg);
+  color: var(--m-fg);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--m-accent, #0a5fff) 45%, transparent);
+}
+
+.cfv12-root .v12m-lrow.sel-active .v12m-lname-txt {
+  color: var(--m-sel-active-fg);
+}
+
+.cfv12-root .v12m-lrow.sel-active .v12m-lcell,
+.cfv12-root .v12m-lrow.sel-active .v12m-kind {
+  color: var(--m-fg-faint);
+}
+
+.cfv12-root .v12m-insp-iconwrap {
+  width: auto;
+  height: auto;
+  margin: 0 auto 6px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.cfv12-root .v12m-insp-iconwrap svg {
+  width: 48px;
+  height: 48px;
+}
+
 .cfv12-root .v12m-tb:focus-visible:not(:disabled) {
   outline: 2px solid color-mix(in srgb, var(--m-accent, #0a5fff) 55%, transparent);
   outline-offset: 1px;

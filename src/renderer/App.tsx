@@ -26,6 +26,7 @@ import {
   type RecentPath
 } from "./navigationEfficiency";
 import {
+  applyKeyboardRowSelection,
   applyMarqueeSelection,
   applyRowSelection,
   clearSelectionState,
@@ -542,7 +543,7 @@ export function App(props: AppProps = {}) {
         if (isEditableTarget(document.activeElement)) return;
 
         if (activePane === "local") {
-          const selectedState = selectAllRows(localPane.entries, "first");
+          const selectedState = selectAllRows(sortedEntries, "first");
           setTabs((prev) =>
             prev.map((tab) =>
               tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, ...selectedState } } : tab
@@ -555,7 +556,7 @@ export function App(props: AppProps = {}) {
           event.stopPropagation();
         }
         if (activePane === "remote") {
-          const selectedState = selectAllRows(remotePane.entries, "first");
+          const selectedState = selectAllRows(sortedRemoteEntries, "first");
           setTabs((prev) =>
             prev.map((tab) =>
               tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, ...selectedState } } : tab
@@ -574,6 +575,13 @@ export function App(props: AppProps = {}) {
       if (contextMenu) return;
       if (cmd && event.key.toLowerCase() === "l") {
         beginPathEdit(activePane);
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      if (!cmd && !event.altKey && (event.key === "ArrowUp" || event.key === "ArrowDown")) {
+        if (isEditableTarget(document.activeElement)) return;
+        moveSelectionByKeyboard(activeTab.id, activePane, event.key === "ArrowDown" ? 1 : -1, event.shiftKey);
         event.preventDefault();
         event.stopPropagation();
         return;
@@ -1111,7 +1119,8 @@ export function App(props: AppProps = {}) {
     const token = ++v12LocalInspTokenRef.current;
     setV12LocalInsp({ status: "loading", info: null, error: "" });
     void (async () => {
-      const r = await window.cofinder.local.getInfo({ path, includeDirectorySize: false });
+      const selectedEntry = localPane.entries.find((entry) => entry.fullPath === path);
+      const r = await window.cofinder.local.getInfo({ path, includeDirectorySize: selectedEntry?.type === "directory" });
       if (token !== v12LocalInspTokenRef.current) return;
       if (!r.ok) {
         setV12LocalInsp({ status: "error", info: null, error: r.error.message });
@@ -1120,7 +1129,7 @@ export function App(props: AppProps = {}) {
       const base = r.data.info;
       setV12LocalInsp({ status: "ready", info: base, error: "" });
     })();
-  }, [uiShell, remoteConnected, activeTab.id, localPane.selectedFullPaths, v12LocalInspectorReveal]);
+  }, [uiShell, remoteConnected, activeTab.id, localPane.selectedFullPaths, localPane.entries, v12LocalInspectorReveal]);
 
   useEffect(() => {
     if (uiShell !== "v12") return;
@@ -1139,7 +1148,8 @@ export function App(props: AppProps = {}) {
     const token = ++v12RemoteInspTokenRef.current;
     setV12RemoteInsp({ status: "loading", info: null, error: "" });
     void (async () => {
-      const r = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: false });
+      const selectedEntry = remotePane.entries.find((entry) => entry.fullPath === path);
+      const r = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: selectedEntry?.type === "directory" });
       if (token !== v12RemoteInspTokenRef.current) return;
       if (!r.ok) {
         setV12RemoteInsp({ status: "error", info: null, error: r.error.message });
@@ -1148,7 +1158,7 @@ export function App(props: AppProps = {}) {
       const base = r.data.info;
       setV12RemoteInsp({ status: "ready", info: base, error: "" });
     })();
-  }, [uiShell, remotePane.connectionId, remotePane.selectedFullPaths, activeTab.id, v12RemoteInspectorReveal]);
+  }, [uiShell, remotePane.connectionId, remotePane.selectedFullPaths, remotePane.entries, activeTab.id, v12RemoteInspectorReveal]);
 
   async function handleRowDoubleClick(tabId: string, entry: LocalFileEntry): Promise<void> {
     if (uiShell === "v12") {
@@ -2132,6 +2142,51 @@ export function App(props: AppProps = {}) {
       } else {
         cancelV12RemoteInspRevealTimer();
       }
+    }
+  }
+
+  function moveSelectionByKeyboard(tabId: string, pane: ActivePane, direction: -1 | 1, extend: boolean): void {
+    setActivePane(pane);
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        if (pane === "local") {
+          return {
+            ...tab,
+            localPane: {
+              ...tab.localPane,
+              ...applyKeyboardRowSelection(
+                sortedEntries,
+                {
+                  selectedFullPaths: tab.localPane.selectedFullPaths,
+                  selectionAnchorFullPath: tab.localPane.selectionAnchorFullPath
+                },
+                direction,
+                { extend }
+              )
+            }
+          };
+        }
+        return {
+          ...tab,
+          remotePane: {
+            ...tab.remotePane,
+            ...applyKeyboardRowSelection(
+              sortedRemoteEntries,
+              {
+                selectedFullPaths: tab.remotePane.selectedFullPaths,
+                selectionAnchorFullPath: tab.remotePane.selectionAnchorFullPath
+              },
+              direction,
+              { extend }
+            )
+          }
+        };
+      })
+    );
+    if (uiShell === "v12") {
+      if (pane === "local") cancelV12LocalInspRevealTimer();
+      else cancelV12RemoteInspRevealTimer();
     }
   }
 
@@ -3832,6 +3887,14 @@ export function App(props: AppProps = {}) {
                       lastPlainClickRef.current = null;
                     }
                   }}
+                  onRowDetailClick={(_, event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    setActivePane("local");
+                    lastPlainClickRef.current = null;
+                    cancelV12LocalInspRevealTimer();
+                    clearLocalSelection(activeTab.id);
+                  }}
                   onRowContextMenu={(entry, event) => {
                     event.preventDefault();
                     event.stopPropagation();
@@ -4257,6 +4320,14 @@ export function App(props: AppProps = {}) {
                       } else {
                         lastPlainClickRef.current = null;
                       }
+                    }}
+                    onRowDetailClick={(_, event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setActivePane("remote");
+                      lastPlainClickRef.current = null;
+                      cancelV12RemoteInspRevealTimer();
+                      clearRemoteSelection(activeTab.id);
                     }}
                     onRowContextMenu={(entry, event) => {
                       event.preventDefault();

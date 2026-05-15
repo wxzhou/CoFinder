@@ -133,6 +133,15 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Multi-select Inspector shortcut:** select multiple local files and press `Cmd+I`; confirm the Inspector opens with multi-selection summary. Repeat on remote while connected.
 - **Inspector shortcut toggle:** select a single file, press `Cmd+I` to open Inspector, press `Cmd+I` again, and confirm the Inspector closes. Repeat for local and remote.
 
+## V2.8.3 Inspector and keyboard selection
+
+- **Folder Inspector size:** select a local folder, open Inspector, and confirm Size shows a calculated folder size rather than `—`. Repeat on a remote folder.
+- **Name-column selection:** select a row and confirm the blue selection background appears only behind the Name column. Click Date modified, Size, Kind, and blank list space; each should clear selection.
+- **Keyboard row movement:** select one visible row, press `Down` and `Up`, and confirm selection moves one visible row at a time instead of scrolling the whole list.
+- **Keyboard range extension:** select one row, press `Shift+Down` several times and `Shift+Up` once; confirm the contiguous range extends and shrinks from the anchor. Repeat in local and remote panes.
+- **Page navigation shortcuts:** confirm `Cmd+Up` / `Cmd+Down` still jump to list top/bottom and `Option+Up` / `Option+Down` still page up/down.
+- **Inspector icon polish:** open Inspector for a file and a folder. Confirm the top preview icon is larger, has no rounded-square wrapper, and document icons have rounded page/fold corners.
+
 ## V2.5 remote text edit MVP
 
 - **Edit entry point:** connect to the isolated remote test root, select exactly one text file with content such as BED/tab-delimited text, then use the remote pane Edit action or right-click `Edit`. Confirm the configured text editor opens an app-managed edit-cache copy.
