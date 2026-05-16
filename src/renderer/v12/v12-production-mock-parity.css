@@ -4,6 +4,10 @@
  */
 @import "../mockups/v12-mockup.css";
 
+.cfv12-root.cfv12-root .cfv12-titlestrip.v12m-titlestrip {
+  padding: 0 8px 0 148px;
+}
+
 .cfv12-root.v12m-root {
   min-height: 0 !important;
   height: 100%;
@@ -62,11 +66,19 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  min-width: 0;
+}
+
+.cfv12-root .v12m-file-grid-scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
 }
 
 .cfv12-root .v12m-pane-main.v12m-pane-main--stack .v12m-list {
-  flex: 1;
   min-height: 0;
+  overflow: visible;
 }
 
 /* Dev-only hint: out of hero layout */
@@ -153,6 +165,7 @@
 .cfv12-root .v12m-lrow {
   grid-template-columns: var(--v12-file-columns, minmax(0, 1fr));
   overflow: visible;
+  max-width: none;
 }
 
 .cfv12-root .v12m-hcell {

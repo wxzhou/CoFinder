@@ -63,7 +63,7 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const visibleColumns = props.columns.filter((column) => column.visible || column.required);
   const gridTemplateColumns = visibleColumns.map((column) => `${column.width}px`).join(" ");
-  const gridStyle: CSSProperties = { gridTemplateColumns };
+  const gridStyle: CSSProperties = { gridTemplateColumns, minWidth: "100%", width: "max-content" };
   const startResize = (column: V12FileColumn, event: MouseEvent<HTMLSpanElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -128,7 +128,7 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
     return "—";
   };
   return (
-    <>
+    <div className="v12m-file-grid-scroll">
       <div
         className="v12m-list-head"
         style={gridStyle}
@@ -226,6 +226,6 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
           );
         })}
       </div>
-    </>
+    </div>
   );
 }
