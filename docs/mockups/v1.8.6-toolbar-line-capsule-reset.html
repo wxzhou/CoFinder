@@ -111,6 +111,32 @@
         background: rgba(0,0,0,.06);
         color: #202124;
       }
+      .location-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .location-row .crumbs {
+        margin-top: 0;
+      }
+      .path-copy {
+        width: 34px;
+        height: 34px;
+        display: inline-grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: 9px;
+        background: #ffffff;
+        color: var(--icon);
+      }
+      .path-copy svg {
+        width: 32px;
+        height: 32px;
+        display: block;
+      }
       .toolbar {
         display: flex;
         align-items: center;
@@ -254,7 +280,10 @@
           <div class="pane local">
             <div class="pane-top">
               <div class="pane-title"><strong>Experiment</strong><span>Local</span></div>
-              <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+              <div class="location-row">
+                <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+                <button class="path-copy" title="Copy path" aria-label="Copy path"></button>
+              </div>
               <div id="local-toolbar"></div>
             </div>
             <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
@@ -264,7 +293,10 @@
           <div class="pane remote">
             <div class="pane-top">
               <div class="pane-title"><strong>sge</strong><span>zhouwenxiong@10.0.32.10:22</span><i class="dot"></i><span>Connected</span></div>
-              <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> Users <span>›</span> <b>260429</b></div>
+              <div class="location-row">
+                <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> Users <span>›</span> <b>260429</b></div>
+                <button class="path-copy" title="Copy path" aria-label="Copy path"></button>
+              </div>
               <div id="remote-toolbar"></div>
             </div>
             <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Owner</span></div>
@@ -332,6 +364,7 @@
           filePlus: line(`<path d="M7 5.6C7 4.7 7.7 4 8.6 4h7.1L21 9.3v13.1c0 .9-.7 1.6-1.6 1.6H8.6c-.9 0-1.6-.7-1.6-1.6z"/><path d="M15.1 4v5.9c0 .8.6 1.4 1.4 1.4H21"/><path d="M14 13.8v6.4"/><path d="M10.8 17h6.4"/>`),
           delete: line(`<path d="M7.2 8.4h13.6"/><path d="M10.1 8.4V5.2h7.8v3.2"/><path d="m9.1 11.2.8 12h8.2l.8-12"/><path d="M12.4 13.8v6.5"/><path d="M15.6 13.8v6.5"/>`),
           terminal: line(`<rect x="4.5" y="5.5" width="19" height="17" rx="2.8"/><path d="m8.5 10.6 3.5 3.4-3.5 3.4"/><path d="M14.4 17.4h5.2"/>`),
+          copyPath: line(`<rect x="10.2" y="5" width="12.2" height="16.4" rx="2.2"/><path d="M7.6 18.8H6.7c-1.1 0-2-.9-2-2V7.6c0-1.1.9-2 2-2h8.1c1.1 0 2 .9 2 2v.8"/>`),
           edit: line(`<g transform="translate(-1.2 -1) scale(1.22)"><path d="M5.5 17.7 6.4 14l7.9-7.9 3.6 3.6-7.9 7.9-3.7.9a.7.7 0 0 1-.8-.8z"/><path d="M16.9 3.5a1.9 1.9 0 0 1 2.7 0l.9.9a1.9 1.9 0 0 1 0 2.7l-.8.8-3.6-3.6.8-.8z"/></g>`),
           recent: line(`<circle cx="14" cy="14" r="9.1"/><path d="M14 8v6.3l4.3 2.6"/>`),
           history: line(`<path d="M7.2 8.4H4.1V5.3"/><path d="M4.6 8a9 9 0 1 1 1.5 12.2"/><path d="M14 9v5.2l3.6 2.2"/>`),
@@ -350,8 +383,12 @@
       }
       document.getElementById("local-toolbar").innerHTML = toolbar(localActions, groups.local);
       document.getElementById("remote-toolbar").innerHTML = toolbar(remoteActions, groups.remote);
+      document.querySelectorAll(".path-copy").forEach((element) => {
+        element.innerHTML = icon("copyPath");
+      });
       const unique = [...localActions, ...remoteActions].filter((item, i, arr) => arr.findIndex((x) => x[0] === item[0]) === i);
-      document.getElementById("sheet").innerHTML = unique.map((action) => `<div class="sheet-item">${button(action)}<span>${action[1]}</span></div>`).join("");
+      const sheetActions = [...unique, ["copyPath", "Copy path", "nav"]];
+      document.getElementById("sheet").innerHTML = sheetActions.map((action) => `<div class="sheet-item">${button(action)}<span>${action[1]}</span></div>`).join("");
     </script>
   </body>
 </html>
