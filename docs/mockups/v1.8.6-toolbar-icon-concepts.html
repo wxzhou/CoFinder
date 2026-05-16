@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CoFinder v1.8.6 Toolbar Icon Concepts</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --text: #1f2329;
+        --muted: #6f737b;
+        --line: #dfe3e8;
+        --pane: #ffffff;
+        --chrome: #eef5ff;
+        --chrome-2: #f8fafc;
+        --blue: #4d91d9;
+        --green: #37865a;
+        --red: #d35a4e;
+        --violet: #816fb0;
+        --ink: #4f5967;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #f2f3f5;
+        color: var(--text);
+        font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      }
+
+      main {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: 20px;
+        letter-spacing: 0;
+      }
+
+      .intro {
+        margin: 0 0 24px;
+        color: var(--muted);
+      }
+
+      .concept {
+        margin: 0 0 26px;
+        border: 1px solid #d9dde3;
+        background: var(--pane);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(31, 35, 41, 0.06);
+      }
+
+      .concept-head {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 16px;
+        align-items: end;
+        padding: 16px 18px 12px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(#ffffff, #fafbfc);
+      }
+
+      .concept h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .concept p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .rating {
+        color: #56616f;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 320px;
+      }
+
+      .pane {
+        min-width: 0;
+        border-right: 1px solid var(--line);
+      }
+
+      .pane:last-child {
+        border-right: 0;
+      }
+
+      .pane-top {
+        padding: 12px 14px 0;
+        background: var(--chrome);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .pane-title {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 9px;
+      }
+
+      .pane-title strong {
+        font-size: 16px;
+      }
+
+      .pane-title span {
+        color: var(--muted);
+      }
+
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #69717c;
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+
+      .crumbs b {
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.055);
+        padding: 2px 7px;
+        border-radius: 5px;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding-bottom: 10px;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      .filter {
+        height: 30px;
+        min-width: 180px;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: #fff;
+        color: #7a8089;
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+      }
+
+      .file-list {
+        background: #fff;
+      }
+
+      .file-head,
+      .file-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 150px 86px 98px;
+        gap: 10px;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 14px;
+        border-bottom: 1px solid #edf0f3;
+      }
+
+      .file-head {
+        color: #9aa0a8;
+        font-weight: 600;
+      }
+
+      .file-row {
+        color: #262b32;
+      }
+
+      .name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .folder {
+        width: 18px;
+        height: 14px;
+        border-radius: 4px 4px 3px 3px;
+        background: linear-gradient(#73b8ef, #4c9fe0);
+        box-shadow: inset 0 1px rgba(255, 255, 255, 0.45);
+      }
+
+      .doc {
+        width: 14px;
+        height: 18px;
+        border-radius: 3px;
+        border: 1.4px solid #aeb5be;
+        background: #fff;
+      }
+
+      .tb {
+        width: 30px;
+        height: 30px;
+        border-radius: 7px;
+        border: 1px solid transparent;
+        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--ink);
+      }
+
+      .tb svg {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .sep {
+        width: 1px;
+        height: 20px;
+        background: rgba(0, 0, 0, 0.09);
+        margin: 0 3px;
+      }
+
+      .a .tb {
+        background: #ffffff;
+        border-color: #dfe5ec;
+        box-shadow: 0 1px 1px rgba(31, 35, 41, 0.04);
+      }
+
+      .a .tb svg {
+        stroke-width: 2.05;
+      }
+
+      .a .tone-nav {
+        color: #647080;
+      }
+
+      .a .tone-transfer {
+        color: var(--blue);
+      }
+
+      .a .tone-create {
+        color: var(--green);
+      }
+
+      .a .tone-danger {
+        color: var(--red);
+      }
+
+      .b .toolbar {
+        gap: 7px;
+      }
+
+      .b .tb {
+        background: #fff;
+        border-color: #dde3ea;
+        box-shadow: inset 0 -1px rgba(31, 35, 41, 0.04), 0 1px 2px rgba(31, 35, 41, 0.06);
+      }
+
+      .b .tb svg {
+        stroke-width: 2.25;
+      }
+
+      .b .tb::before {
+        content: "";
+        position: absolute;
+      }
+
+      .b .tone-nav {
+        color: #596575;
+      }
+
+      .b .tone-transfer {
+        color: #2f7fc8;
+      }
+
+      .b .tone-create {
+        color: #26744a;
+      }
+
+      .b .tone-danger {
+        color: #c5483d;
+        background: #fff8f7;
+      }
+
+      .c .toolbar-cluster {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 3px;
+        border: 1px solid #dce2e8;
+        border-radius: 9px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .c .tb {
+        width: 28px;
+        height: 28px;
+      }
+
+      .c .tb svg {
+        stroke-width: 2.35;
+      }
+
+      .c .tone-nav {
+        color: #586473;
+      }
+
+      .c .tone-transfer {
+        color: #2d75ba;
+      }
+
+      .c .tone-create {
+        color: #276f45;
+      }
+
+      .c .tone-danger {
+        color: #bd4037;
+      }
+
+      .tone-disabled {
+        opacity: 0.42;
+      }
+
+      .disconnect {
+        color: #c9342b;
+      }
+
+      @media (max-width: 980px) {
+        main {
+          padding: 18px;
+        }
+
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .pane {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>CoFinder v1.8.6 Toolbar Icon Concepts</h1>
+      <p class="intro">Three static visual directions for thicker, less fatiguing toolbar icons. These mockups do not implement behavior.</p>
+
+      <section class="concept a">
+        <div class="concept-head">
+          <div>
+            <h2>Option A — Finder-weight line icons</h2>
+            <p>Closest to the current UI, but with heavier 2px strokes, calmer icon boxes, and restrained semantic color.</p>
+          </div>
+          <div class="rating">Lowest risk · Best continuity</div>
+        </div>
+        <div class="workspace">
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>Experiment</strong><span>Local</span></div>
+              <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+              <div class="toolbar">
+                <button class="tb tone-nav" title="Back"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" /></svg></button>
+                <button class="tb tone-nav" title="Forward"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" /></svg></button>
+                <button class="tb tone-nav" title="Up"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6" /></svg></button>
+                <button class="tb tone-nav" title="Home"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7" /><path d="M6.5 10.5V20h11v-9.5" /></svg></button>
+                <button class="tb tone-nav" title="Refresh"><svg viewBox="0 0 24 24"><path d="M19 8a7 7 0 0 0-12-2l-2 2" /><path d="M5 4v4h4" /><path d="M5 16a7 7 0 0 0 12 2l2-2" /><path d="M19 20v-4h-4" /></svg></button>
+                <button class="tb tone-transfer tone-disabled" title="Upload"><svg viewBox="0 0 24 24"><path d="M12 17V5" /><path d="m7 10 5-5 5 5" /><path d="M5 19h14" /></svg></button>
+                <button class="tb tone-create" title="New folder"><svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z" /><path d="M12 14h6" /><path d="M15 11v6" /></svg></button>
+                <button class="tb tone-create" title="New file"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z" /><path d="M14 3v5h5" /><path d="M10 14h6" /><path d="M13 11v6" /></svg></button>
+                <button class="tb tone-danger" title="Delete"><svg viewBox="0 0 24 24"><path d="M5 7h14" /><path d="M9 7V5h6v2" /><path d="M8 10v9h8v-9" /></svg></button>
+                <button class="tb tone-nav" title="Terminal"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" /><path d="m8 9 3 3-3 3" /><path d="M13 15h4" /></svg></button>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-list">
+              <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+              <div class="file-row"><span class="name"><i class="folder"></i> 260429</span><span>2026/5/14 11:38</span><span>—</span><span>Folder</span></div>
+              <div class="file-row"><span class="name"><i class="folder"></i> result_ilmn</span><span>2026/5/14 09:34</span><span>—</span><span>Folder</span></div>
+              <div class="file-row"><span class="name"><i class="doc"></i> align_cyg_1.log</span><span>2026/5/2 00:55</span><span>516 B</span><span>Document</span></div>
+            </div>
+          </div>
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>sge</strong><span>zhouwenxiong@10.0.32.10:22</span><span>Connected</span></div>
+              <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> Users <span>›</span> <b>260429</b></div>
+              <div class="toolbar">
+                <button class="tb tone-nav" title="Back"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" /></svg></button>
+                <button class="tb tone-nav" title="Home"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7" /><path d="M6.5 10.5V20h11v-9.5" /></svg></button>
+                <button class="tb tone-transfer" title="Download"><svg viewBox="0 0 24 24"><path d="M12 5v12" /><path d="m7 12 5 5 5-5" /><path d="M5 19h14" /></svg></button>
+                <button class="tb tone-create" title="New folder"><svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z" /><path d="M12 14h6" /><path d="M15 11v6" /></svg></button>
+                <button class="tb tone-danger" title="Delete"><svg viewBox="0 0 24 24"><path d="M5 7h14" /><path d="M9 7V5h6v2" /><path d="M8 10v9h8v-9" /></svg></button>
+                <button class="tb disconnect" title="Disconnect"><svg viewBox="0 0 24 24"><path d="M8 6H5v12h3" /><path d="m14 8 4 4-4 4" /><path d="M18 12H9" /></svg></button>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-list">
+              <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Permission</span></div>
+              <div class="file-row"><span class="name"><i class="folder"></i> bulk-foodie-pipeline</span><span>2026/5/14 11:38</span><span>—</span><span>rwxr-xr-x</span></div>
+              <div class="file-row"><span class="name"><i class="doc"></i> align_ilmn_1.sh</span><span>2026/5/4 20:46</span><span>1.48 KB</span><span>rw-r--r--</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="concept b">
+        <div class="concept-head">
+          <div>
+            <h2>Option B — Filled glyphs with soft buttons</h2>
+            <p>More visual weight through filled shapes and 2.25px strokes. Better scan speed, slightly more opinionated.</p>
+          </div>
+          <div class="rating">Most legible · Slightly stronger personality</div>
+        </div>
+        <div class="workspace">
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>Experiment</strong><span>Local</span></div>
+              <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+              <div class="toolbar">
+                <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M15.5 5 8.5 12l7 7" /></svg></button>
+                <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="m8.5 5 7 7-7 7" /></svg></button>
+                <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6" /></svg></button>
+                <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M4.5 11.2 12 4.5l7.5 6.7" /><path d="M7 10.5V20h10v-9.5" /></svg></button>
+                <button class="tb tone-transfer"><svg viewBox="0 0 24 24"><path d="M12 17V5" /><path d="m7 10 5-5 5 5" /><path d="M5 19h14" /></svg></button>
+                <button class="tb tone-create"><svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z" /><path d="M12 14h6" /><path d="M15 11v6" /></svg></button>
+                <button class="tb tone-create"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z" /><path d="M14 3v5h5" /><path d="M10 14h6" /><path d="M13 11v6" /></svg></button>
+                <button class="tb tone-danger"><svg viewBox="0 0 24 24"><path d="M5 7h14" /><path d="M9 7V5h6v2" /><path d="M8 10v9h8v-9" /></svg></button>
+                <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" /><path d="m8 9 3 3-3 3" /><path d="M13 15h4" /></svg></button>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-list">
+              <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+              <div class="file-row"><span class="name"><i class="folder"></i> 260429</span><span>2026/5/14 11:38</span><span>—</span><span>Folder</span></div>
+              <div class="file-row"><span class="name"><i class="doc"></i> postrun_test.log</span><span>2026/5/12 22:11</span><span>4.10 MB</span><span>Document</span></div>
+            </div>
+          </div>
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>sge</strong><span>Connected</span></div>
+              <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> <b>260429</b></div>
+              <div class="toolbar">
+                <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" /></svg></button>
+                <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7" /><path d="M6.5 10.5V20h11v-9.5" /></svg></button>
+                <button class="tb tone-transfer"><svg viewBox="0 0 24 24"><path d="M12 5v12" /><path d="m7 12 5 5 5-5" /><path d="M5 19h14" /></svg></button>
+                <button class="tb tone-create"><svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z" /><path d="M12 14h6" /><path d="M15 11v6" /></svg></button>
+                <button class="tb tone-danger"><svg viewBox="0 0 24 24"><path d="M5 7h14" /><path d="M9 7V5h6v2" /><path d="M8 10v9h8v-9" /></svg></button>
+                <button class="tb disconnect"><svg viewBox="0 0 24 24"><path d="M8 6H5v12h3" /><path d="m14 8 4 4-4 4" /><path d="M18 12H9" /></svg></button>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-list">
+              <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Owner</span></div>
+              <div class="file-row"><span class="name"><i class="folder"></i> result_cyg</span><span>2026/5/16 10:31</span><span>—</span><span>zhouwenxiong</span></div>
+              <div class="file-row"><span class="name"><i class="doc"></i> check_cyg2.sh</span><span>2026/5/14 18:19</span><span>1.7 KB</span><span>zhouwenxiong</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="concept c">
+        <div class="concept-head">
+          <div>
+            <h2>Option C — Segmented compact clusters</h2>
+            <p>Heavier icons inside subtle grouped capsules. Strongest organization, useful if the toolbar keeps growing.</p>
+          </div>
+          <div class="rating">Best structure · More chrome</div>
+        </div>
+        <div class="workspace">
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>Experiment</strong><span>Local</span></div>
+              <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+              <div class="toolbar">
+                <span class="toolbar-cluster">
+                  <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" /></svg></button>
+                  <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="m9 5 7 7-7 7" /></svg></button>
+                  <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="m6 15 6-6 6 6" /></svg></button>
+                  <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7" /><path d="M6.5 10.5V20h11v-9.5" /></svg></button>
+                </span>
+                <span class="toolbar-cluster">
+                  <button class="tb tone-transfer"><svg viewBox="0 0 24 24"><path d="M12 17V5" /><path d="m7 10 5-5 5 5" /><path d="M5 19h14" /></svg></button>
+                  <button class="tb tone-create"><svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z" /><path d="M12 14h6" /><path d="M15 11v6" /></svg></button>
+                  <button class="tb tone-create"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z" /><path d="M14 3v5h5" /><path d="M10 14h6" /><path d="M13 11v6" /></svg></button>
+                  <button class="tb tone-danger"><svg viewBox="0 0 24 24"><path d="M5 7h14" /><path d="M9 7V5h6v2" /><path d="M8 10v9h8v-9" /></svg></button>
+                </span>
+                <span class="toolbar-cluster">
+                  <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z" /><path d="m8 9 3 3-3 3" /><path d="M13 15h4" /></svg></button>
+                </span>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-list">
+              <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+              <div class="file-row"><span class="name"><i class="folder"></i> 260429</span><span>2026/5/14 11:38</span><span>—</span><span>Folder</span></div>
+              <div class="file-row"><span class="name"><i class="doc"></i> rescue_cyg2.sh</span><span>2026/5/14 19:43</span><span>1.3 KB</span><span>Document</span></div>
+            </div>
+          </div>
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>sge</strong><span>Connected</span></div>
+              <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> <b>260429</b></div>
+              <div class="toolbar">
+                <span class="toolbar-cluster">
+                  <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7" /></svg></button>
+                  <button class="tb tone-nav"><svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7" /><path d="M6.5 10.5V20h11v-9.5" /></svg></button>
+                  <button class="tb tone-transfer"><svg viewBox="0 0 24 24"><path d="M12 5v12" /><path d="m7 12 5 5 5-5" /><path d="M5 19h14" /></svg></button>
+                </span>
+                <span class="toolbar-cluster">
+                  <button class="tb tone-create"><svg viewBox="0 0 24 24"><path d="M3 7h7l2 2h9v10H3z" /><path d="M12 14h6" /><path d="M15 11v6" /></svg></button>
+                  <button class="tb tone-create"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7z" /><path d="M14 3v5h5" /><path d="M10 14h6" /><path d="M13 11v6" /></svg></button>
+                  <button class="tb tone-danger"><svg viewBox="0 0 24 24"><path d="M5 7h14" /><path d="M9 7V5h6v2" /><path d="M8 10v9h8v-9" /></svg></button>
+                  <button class="tb disconnect"><svg viewBox="0 0 24 24"><path d="M8 6H5v12h3" /><path d="m14 8 4 4-4 4" /><path d="M18 12H9" /></svg></button>
+                </span>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-list">
+              <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Permission</span></div>
+              <div class="file-row"><span class="name"><i class="folder"></i> logs</span><span>2026/5/15 11:06</span><span>—</span><span>rwxr-xr-x</span></div>
+              <div class="file-row"><span class="name"><i class="doc"></i> postrun_ilmn.sh</span><span>2026/5/12 23:11</span><span>796 B</span><span>rw-r--r--</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
