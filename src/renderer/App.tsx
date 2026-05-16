@@ -3704,53 +3704,55 @@ export function App(props: AppProps = {}) {
           placeholder="Filter names"
           aria-label="Filter local files by name"
         />
-        <V12ToolbarIconSelect
-          label="Local recent locations"
-          title="Recent locations"
-          icon="clock"
-          onChange={(event) => {
-            const path = event.target.value;
-            if (path) void navigateLocal(activeTab.id, path, "push");
-          }}
-        >
-          <option value="">Recent</option>
-          {localRecentPaths.map((item) => (
-            <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
-              {item.label} - {item.path}
-            </option>
-          ))}
-        </V12ToolbarIconSelect>
-        <V12ToolbarIconSelect
-          label="Local back and forward history"
-          title="Back and forward history"
-          icon="history"
-          onChange={(event) => {
-            const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
-            if (path) void navigateLocal(activeTab.id, path, mode);
-          }}
-        >
-          <option value="">History</option>
-          {localPane.history.backStack.slice().reverse().map((path) => (
-            <option key={`back-${path}`} value={`back:${path}`}>
-              Back: {path}
-            </option>
-          ))}
-          {localPane.history.forwardStack.map((path) => (
-            <option key={`forward-${path}`} value={`forward:${path}`}>
-              Forward: {path}
-            </option>
-          ))}
-        </V12ToolbarIconSelect>
-        <button
-          type="button"
-          className="toolbar-button v12m-icon-button"
-          title="Clear recent locations"
-          aria-label="Clear recent locations"
-          disabled={localRecentPaths.length === 0}
-          onClick={clearLocalRecents}
-        >
-          <V12TbIcon name="clear-clock" />
-        </button>
+        <div className="v12m-pane-toolbar-history-group">
+          <V12ToolbarIconSelect
+            label="Local recent locations"
+            title="Recent locations"
+            icon="clock"
+            onChange={(event) => {
+              const path = event.target.value;
+              if (path) void navigateLocal(activeTab.id, path, "push");
+            }}
+          >
+            <option value="">Recent</option>
+            {localRecentPaths.map((item) => (
+              <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
+                {item.label} - {item.path}
+              </option>
+            ))}
+          </V12ToolbarIconSelect>
+          <V12ToolbarIconSelect
+            label="Local back and forward history"
+            title="Back and forward history"
+            icon="history"
+            onChange={(event) => {
+              const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
+              if (path) void navigateLocal(activeTab.id, path, mode);
+            }}
+          >
+            <option value="">History</option>
+            {localPane.history.backStack.slice().reverse().map((path) => (
+              <option key={`back-${path}`} value={`back:${path}`}>
+                Back: {path}
+              </option>
+            ))}
+            {localPane.history.forwardStack.map((path) => (
+              <option key={`forward-${path}`} value={`forward:${path}`}>
+                Forward: {path}
+              </option>
+            ))}
+          </V12ToolbarIconSelect>
+          <button
+            type="button"
+            className="toolbar-button v12m-icon-button"
+            title="Clear recent locations"
+            aria-label="Clear recent locations"
+            disabled={localRecentPaths.length === 0}
+            onClick={clearLocalRecents}
+          >
+            <V12TbIcon name="clear-clock" />
+          </button>
+        </div>
       </V12PaneToolbar>
     ) : null;
 
@@ -3879,55 +3881,57 @@ export function App(props: AppProps = {}) {
           placeholder="Filter names"
           aria-label="Filter remote files by name"
         />
-        <V12ToolbarIconSelect
-          label="Remote recent locations"
-          title="Recent locations"
-          icon="clock"
-          disabled={!remotePane.connectionId || remoteRecentPaths.length === 0}
-          onChange={(event) => {
-            const path = event.target.value;
-            if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
-          }}
-        >
-          <option value="">Recent</option>
-          {remoteRecentPaths.map((item) => (
-            <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
-              {item.label} - {item.path}
-            </option>
-          ))}
-        </V12ToolbarIconSelect>
-        <V12ToolbarIconSelect
-          label="Remote back and forward history"
-          title="Back and forward history"
-          icon="history"
-          disabled={!remotePane.connectionId}
-          onChange={(event) => {
-            const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
-            if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, mode, activeTab.id);
-          }}
-        >
-          <option value="">History</option>
-          {remotePane.history.backStack.slice().reverse().map((path) => (
-            <option key={`back-${path}`} value={`back:${path}`}>
-              Back: {path}
-            </option>
-          ))}
-          {remotePane.history.forwardStack.map((path) => (
-            <option key={`forward-${path}`} value={`forward:${path}`}>
-              Forward: {path}
-            </option>
-          ))}
-        </V12ToolbarIconSelect>
-        <button
-          type="button"
-          className="toolbar-button v12m-icon-button"
-          title="Clear recent locations"
-          aria-label="Clear recent locations"
-          disabled={!activeProfile?.id || remoteRecentPaths.length === 0}
-          onClick={() => clearRemoteRecents(activeProfile?.id)}
-        >
-          <V12TbIcon name="clear-clock" />
-        </button>
+        <div className="v12m-pane-toolbar-history-group">
+          <V12ToolbarIconSelect
+            label="Remote recent locations"
+            title="Recent locations"
+            icon="clock"
+            disabled={!remotePane.connectionId || remoteRecentPaths.length === 0}
+            onChange={(event) => {
+              const path = event.target.value;
+              if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
+            }}
+          >
+            <option value="">Recent</option>
+            {remoteRecentPaths.map((item) => (
+              <option key={`${item.path}-${item.visitedAt}`} value={item.path}>
+                {item.label} - {item.path}
+              </option>
+            ))}
+          </V12ToolbarIconSelect>
+          <V12ToolbarIconSelect
+            label="Remote back and forward history"
+            title="Back and forward history"
+            icon="history"
+            disabled={!remotePane.connectionId}
+            onChange={(event) => {
+              const [mode, path] = event.target.value.split(":", 2) as ["back" | "forward", string];
+              if (path && remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, mode, activeTab.id);
+            }}
+          >
+            <option value="">History</option>
+            {remotePane.history.backStack.slice().reverse().map((path) => (
+              <option key={`back-${path}`} value={`back:${path}`}>
+                Back: {path}
+              </option>
+            ))}
+            {remotePane.history.forwardStack.map((path) => (
+              <option key={`forward-${path}`} value={`forward:${path}`}>
+                Forward: {path}
+              </option>
+            ))}
+          </V12ToolbarIconSelect>
+          <button
+            type="button"
+            className="toolbar-button v12m-icon-button"
+            title="Clear recent locations"
+            aria-label="Clear recent locations"
+            disabled={!activeProfile?.id || remoteRecentPaths.length === 0}
+            onClick={() => clearRemoteRecents(activeProfile?.id)}
+          >
+            <V12TbIcon name="clear-clock" />
+          </button>
+        </div>
       </V12PaneToolbar>
     ) : null;
 

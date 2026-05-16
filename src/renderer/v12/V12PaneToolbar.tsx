@@ -19,29 +19,35 @@ export type V12PaneToolbarProps = {
 };
 
 export function V12PaneToolbar(props: V12PaneToolbarProps): ReactElement {
+  const actionGroups = [props.actions.slice(0, 6), props.actions.slice(6)].filter((group) => group.length > 0);
+
   return (
     <div className="v12m-pane-toolbar" role="toolbar" aria-label={props.label}>
       <div className="v12m-pane-toolbar-actions" aria-label={`${props.label} actions`}>
-        {props.actions.map((action) => (
-          <button
-            key={action.label}
-            type="button"
-            className={[
-              "v12m-pane-action",
-              action.danger || action.tone === "danger" ? "is-danger" : "",
-              action.tone ? `tone-${action.tone}` : "",
-              action.pressed ? "is-pressed" : ""
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            title={action.title}
-            aria-label={action.label}
-            aria-pressed={action.pressed}
-            disabled={action.disabled}
-            onClick={() => action.onClick()}
-          >
-            <V12TbIcon name={action.icon} />
-          </button>
+        {actionGroups.map((group, index) => (
+          <div className="v12m-pane-toolbar-group" key={`${props.label}-group-${index}`}>
+            {group.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                className={[
+                  "v12m-pane-action",
+                  action.danger || action.tone === "danger" ? "is-danger" : "",
+                  action.tone ? `tone-${action.tone}` : "",
+                  action.pressed ? "is-pressed" : ""
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+                title={action.title}
+                aria-label={action.label}
+                aria-pressed={action.pressed}
+                disabled={action.disabled}
+                onClick={() => action.onClick()}
+              >
+                <V12TbIcon name={action.icon} />
+              </button>
+            ))}
+          </div>
         ))}
       </div>
       <div className="v12m-pane-toolbar-controls">{props.children}</div>

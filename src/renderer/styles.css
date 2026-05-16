@@ -549,16 +549,23 @@ body,
 .cfv12-root .v12m-pane-toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 6px;
   flex: 0 0 auto;
   min-width: 0;
+}
+
+.cfv12-root .v12m-pane-toolbar-group,
+.cfv12-root .v12m-pane-toolbar-history-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
   border-radius: 999px;
   background: #fff;
 }
 
 .cfv12-root .v12m-pane-toolbar-controls {
   display: grid;
-  grid-template-columns: minmax(112px, 1fr) 30px 30px 30px;
+  grid-template-columns: minmax(112px, 1fr) auto;
   gap: 6px;
   align-items: center;
   flex: 1 1 auto;
@@ -591,6 +598,12 @@ body,
   appearance: none;
   -webkit-appearance: none;
   cursor: default;
+}
+
+.cfv12-root .v12m-pane-toolbar-history-group .v12m-icon-select,
+.cfv12-root .v12m-pane-toolbar-history-group .v12m-icon-button {
+  border-color: transparent;
+  background: transparent;
 }
 
 .cfv12-root .v12m-icon-select:hover:not(:disabled),
