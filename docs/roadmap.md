@@ -32,6 +32,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.8.1 | v1.8.1 | Complete on dev |
 | V2.8.2 | v1.8.2 | Complete on dev |
 | V2.8.3 | v1.8.3 | Complete on dev |
+| V2.8.4 | v1.8.4 | Complete on dev |
 
 ## Shipped phases (summary)
 
@@ -72,6 +73,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.8.1 | v1.8.1 | Pane-Scoped Toolbar Cleanup — complete on dev |
 | V2.8.2 | v1.8.2 | Selection and Inspector Shortcut Fixes — complete on dev |
 | V2.8.3 | v1.8.3 | Inspector Detail and Keyboard Selection Fixes — complete on dev |
+| V2.8.4 | v1.8.4 | Inspector and Remote Edit Polish — complete on dev |
 
 ## Latest Completed Phase
 
@@ -153,6 +155,17 @@ V2.8.3 fixes hands-on regressions found in v1.8.2:
 
 See **`docs/dev/V2.8.3_PLAN.md`**.
 
+### V2.8.4 / v1.8.4 — Inspector and Remote Edit Polish
+
+V2.8.4 fixes hands-on polish issues found in v1.8.3:
+
+- Document icons gain subtler Finder-like depth while keeping rounded page and folded-corner geometry.
+- Remote Disconnect moves from the toolbar to the Connected status menu, separating connection/session actions from file deletion.
+- Folder Inspector loads immediately available metadata first, then updates slow directory details in place.
+- Successful remote edit uploads leave the Remote edits panel and appear in the transfer drawer with normal auto-hide behavior.
+
+See **`docs/dev/V2.8.4_PLAN.md`**.
+
 ### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
 
 V2.4 addresses V12 command ownership and visible polish before larger remote-edit work:
@@ -219,4 +232,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.8.3 / v1.8.3 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.8.4 / v1.8.4 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

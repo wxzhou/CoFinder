@@ -11,6 +11,8 @@ export type V12PaneInspectorProps = {
   info: PathInfo | null;
   infoLoading: boolean;
   infoError: string;
+  detailsLoading?: boolean;
+  detailsError?: string;
   formatSize: (n: number) => string;
   formatTime: (iso: string) => string;
   /** Remote pane: host for Details row */
@@ -32,6 +34,9 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
 
   const iconName =
     single && props.info?.type === "directory" ? ("folder" as const) : single && props.info ? ("doc" as const) : ("doc" as const);
+  const slowDirectoryDetails = single && props.info?.type === "directory" && props.detailsLoading;
+  const detailValue = (value: string): ReactElement | string =>
+    slowDirectoryDetails ? <span className="v12m-insp-spin" aria-label="Loading">Loading...</span> : value;
 
   return (
     <aside className="v12m-inspector v12m-inspector--pane" aria-label={aria}>
@@ -89,8 +94,9 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
               <div className="v12m-insp-block">
                 <h2 className="v12m-insp-name">{props.info.name}</h2>
                 <p className="v12m-insp-line">
-                  {props.formatSize(props.info.size)} · Modified {props.formatTime(props.info.mtime)}
+                  {detailValue(props.formatSize(props.info.size))} · Modified {props.formatTime(props.info.mtime)}
                 </p>
+                {props.detailsError ? <p className="v12m-insp-line v12m-insp-line--sub">{props.detailsError}</p> : null}
               </div>
               <div className="v12m-insp-sect">
                 <h3>Metadata</h3>
@@ -105,7 +111,7 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                   </li>
                   <li>
                     <span>Size</span>
-                    <span>{props.formatSize(props.info.size)}</span>
+                    <span>{detailValue(props.formatSize(props.info.size))}</span>
                   </li>
                   <li>
                     <span>Modified</span>
@@ -114,13 +120,13 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                   {props.info.type === "directory" && typeof props.info.fileCount === "number" ? (
                     <li>
                       <span>Files</span>
-                      <span>{props.info.fileCount}</span>
+                      <span>{detailValue(String(props.info.fileCount))}</span>
                     </li>
                   ) : null}
                   {props.info.type === "directory" && typeof props.info.folderCount === "number" ? (
                     <li>
                       <span>Folders</span>
-                      <span>{props.info.folderCount}</span>
+                      <span>{detailValue(String(props.info.folderCount))}</span>
                     </li>
                   ) : null}
                   {props.info.permissions ? (

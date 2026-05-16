@@ -4,11 +4,20 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.8.3.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.4.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.8.3**.
+No user-facing changes since **v1.8.4**.
+
+## v1.8.4 — Product milestone V2.8.4
+
+V2.8.4 is an Inspector and remote-edit polish release.
+
+- Document icons now have more Finder-like depth with subtle page shading, fold treatment, and shadow.
+- Remote Disconnect moved out of the file-operation toolbar into the remote status menu, reducing proximity to Delete.
+- Folder Inspector now opens quickly and progressively updates slow directory details instead of blocking the whole Inspector.
+- Successful remote edit uploads no longer leave a persistent Remote edits panel row; completion is surfaced in the transfer drawer and follows transfer auto-hide behavior.
 
 ## v1.8.3 — Product milestone V2.8.3
 

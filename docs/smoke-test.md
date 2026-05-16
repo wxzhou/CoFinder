@@ -118,13 +118,13 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 - **No global toolbar:** confirm the V12 shell has no top global toolbar between the tab strip and dual-pane workspace.
 - **Local pane toolbar:** verify Back, Forward, Enclosing folder, Home, Refresh, Toggle Inspector, Upload, New Folder, New Text File, Delete, Open Terminal Here, Filter names, Recent, History, and Clear Recent are all on one local toolbar row and operate on the local pane.
-- **Remote pane toolbar:** after connecting, verify Back, Forward, Enclosing folder, Home, Refresh, Toggle Inspector, Download, Edit Remote Text File, New Folder, New Text File, Delete, Open SSH Terminal Here, Disconnect, Filter names, Recent, History, and Clear Recent are all on one remote toolbar row and operate on the remote pane.
+- **Remote pane toolbar:** after connecting, verify Back, Forward, Enclosing folder, Home, Refresh, Toggle Inspector, Download, Edit Remote Text File, New Folder, New Text File, Delete, Open SSH Terminal Here, Filter names, Recent, History, and Clear Recent are all on one remote toolbar row and operate on the remote pane.
 - **Copy path placement:** confirm each pane has exactly one breadcrumb-row Copy Path button and the former global Copy Current Path button is absent.
-- **Disconnect placement:** confirm remote Disconnect appears in the remote pane toolbar and not in the remote title/header corner.
+- **Disconnect placement:** confirm remote Disconnect is available from the Connected status menu, not from the remote pane toolbar.
 - **Remote status placement:** confirm Connected/Offline/Connecting/Error appears immediately beside the remote pane title.
 - **Preferences placement:** click the lower-left sidebar gear and confirm the Preferences modal opens.
 - **Compact history controls:** confirm Recent, History, and Clear Recent appear as icon controls with tooltips/accessible labels and still perform their original actions.
-- **Danger color:** connect to a remote profile and confirm the remote Disconnect toolbar icon is visibly red.
+- **Danger color:** connect to a remote profile and confirm the Connected status menu's Disconnect action is visibly red.
 
 ## V2.8.2 selection and Inspector shortcuts
 
@@ -141,6 +141,14 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Keyboard range extension:** select one row, press `Shift+Down` several times and `Shift+Up` once; confirm the contiguous range extends and shrinks from the anchor. Repeat in local and remote panes.
 - **Page navigation shortcuts:** confirm `Cmd+Up` / `Cmd+Down` still jump to list top/bottom and `Option+Up` / `Option+Down` still page up/down.
 - **Inspector icon polish:** open Inspector for a file and a folder. Confirm the top preview icon is larger, has no rounded-square wrapper, and document icons have rounded page/fold corners.
+
+## V2.8.4 Inspector and remote-edit polish
+
+- **Document icon depth:** compare a file row and Inspector file preview with Finder-style document icons; confirm the page has subtle depth, fold shading, and rounded geometry.
+- **Disconnect placement:** connect to a remote profile and confirm Disconnect is absent from the remote toolbar. Open the Connected status menu beside the remote title and confirm Disconnect is available there.
+- **Delete separation:** confirm the remote toolbar Delete button is no longer adjacent to any Disconnect control.
+- **Progressive folder Inspector:** select a large local folder and a large remote folder. Confirm the Inspector appears quickly, Size / Files / Folders show loading while directory details are calculated, and update in place when done.
+- **Remote edit completion:** edit and save a remote text file. Confirm successful upload completion appears in Transfers and auto-hides like a normal successful transfer, while the Remote edits panel does not keep a persistent uploaded row.
 
 ## V2.5 remote text edit MVP
 

@@ -15,18 +15,41 @@ export function V12Icon(props: { name: "disk" | "folder" | "server" | "clock" | 
   if (name === "doc") {
     return (
       <svg {...c} className="v12m-svg-doc">
+        <defs>
+          <linearGradient id="v12-doc-page" x1="3.5" x2="15.5" y1="3" y2="17.5" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="58%" stopColor="#f7f7f6" />
+            <stop offset="100%" stopColor="#ecebea" />
+          </linearGradient>
+          <linearGradient id="v12-doc-fold" x1="11" x2="15" y1="3.5" y2="7.5" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#ffffff" />
+            <stop offset="100%" stopColor="#ececea" />
+          </linearGradient>
+          <filter id="v12-doc-shadow" x="-20%" y="-10%" width="140%" height="135%">
+            <feDropShadow dx="0" dy="0.7" stdDeviation="0.6" floodColor="rgba(0,0,0,0.2)" />
+          </filter>
+        </defs>
         <path
           d="M5.25 3.35h5.95c.34 0 .66.13.9.37l2.18 2.18c.24.24.37.56.37.9v8.95c0 .69-.56 1.25-1.25 1.25H5.25C4.56 17 4 16.44 4 15.75V4.6c0-.69.56-1.25 1.25-1.25z"
-          fill="#fafafa"
+          fill="url(#v12-doc-page)"
           stroke="rgba(60,60,67,0.42)"
           strokeWidth="1.1"
           strokeLinejoin="round"
+          filter="url(#v12-doc-shadow)"
         />
         <path
-          d="M11.35 3.55v2.6c0 .5.4.9.9.9h2.2"
+          d="M11.35 3.55v2.6c0 .5.4.9.9.9h2.2c-.05-.43-.2-.82-.5-1.12l-2.27-2.28a1.55 1.55 0 00-1.13-.5z"
+          fill="url(#v12-doc-fold)"
+          stroke="rgba(60,60,67,0.18)"
+          strokeWidth="0.9"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M11.72 6.8c.85.42 1.78.54 2.72.25"
           fill="none"
-          stroke="rgba(60,60,67,0.32)"
-          strokeWidth="1.05"
+          stroke="rgba(60,60,67,0.16)"
+          strokeWidth="0.8"
           strokeLinecap="round"
           strokeLinejoin="round"
         />

@@ -251,6 +251,7 @@ export function App(props: AppProps = {}) {
   const [queuePanelState, setQueuePanelState] = useState<QueuePanelState>("hidden");
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
+  const [remoteEditTransferTasks, setRemoteEditTransferTasks] = useState<TransferTask[]>([]);
   const [remoteEditSessions, setRemoteEditSessions] = useState<RemoteEditSession[]>([]);
   const [queueError, setQueueError] = useState<string>("");
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_RENDERER_SETTINGS);
@@ -289,7 +290,13 @@ export function App(props: AppProps = {}) {
   const [v12LocalInspectorReveal, setV12LocalInspectorReveal] = useState(false);
   const [v12RemoteInspectorReveal, setV12RemoteInspectorReveal] = useState(false);
   const [pathEditPane, setPathEditPane] = useState<ActivePane | null>(null);
-  type V12InspPaneState = { status: "idle" | "loading" | "ready" | "error"; info: PathInfo | null; error: string };
+  type V12InspPaneState = {
+    status: "idle" | "loading" | "ready" | "error";
+    info: PathInfo | null;
+    error: string;
+    detailsLoading?: boolean;
+    detailsError?: string;
+  };
   const [v12LocalInsp, setV12LocalInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
   const [v12RemoteInsp, setV12RemoteInsp] = useState<V12InspPaneState>({ status: "idle", info: null, error: "" });
   const [v12LocalFavorites, setV12LocalFavorites] = useState<LocalFavoriteListItem[]>([]);
@@ -453,7 +460,7 @@ export function App(props: AppProps = {}) {
         return [session, ...without].sort((a, b) => b.updatedAt - a.updatedAt);
       });
       if (session.state === "uploaded") {
-        setQueueError(`Uploaded edits to ${session.remotePath}`);
+        setRemoteEditTransferTasks((prev) => [remoteEditSessionToTransferTask(session), ...prev.filter((item) => item.id !== remoteEditTransferTaskId(session.id))]);
         const tab = tabs.find((item) => item.id === session.tabId);
         if (tab?.remotePane.connectionId === session.connectionId && getParentPath(session.remotePath) === tab.remotePane.currentPath) {
           void listRemotePath(session.connectionId, tab.remotePane.currentPath, "replace", session.tabId);
@@ -998,21 +1005,23 @@ export function App(props: AppProps = {}) {
     else showV12FavoriteHint(res.error.message);
   }
 
+  const drawerTransferTasks = useMemo(() => [...remoteEditTransferTasks, ...transferTasks], [remoteEditTransferTasks, transferTasks]);
+
   const queueStats = useMemo(() => {
-    const activeCount = transferTasks.filter((task) => task.status === "running").length;
-    const queuedCount = transferTasks.filter((task) => task.status === "pending").length;
-    const failedCount = transferTasks.filter((task) => task.status === "failed").length;
-    const completedCount = transferTasks.filter((task) =>
+    const activeCount = drawerTransferTasks.filter((task) => task.status === "running").length;
+    const queuedCount = drawerTransferTasks.filter((task) => task.status === "pending").length;
+    const failedCount = drawerTransferTasks.filter((task) => task.status === "failed").length;
+    const completedCount = drawerTransferTasks.filter((task) =>
       task.status === "success" || task.status === "canceled" || task.status === "stopped"
     ).length;
-    const allDone = transferTasks.length > 0 && activeCount === 0 && queuedCount === 0;
+    const allDone = drawerTransferTasks.length > 0 && activeCount === 0 && queuedCount === 0;
     return { activeCount, queuedCount, failedCount, completedCount, allDone };
-  }, [transferTasks]);
+  }, [drawerTransferTasks]);
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null;
 
-    if (transferTasks.length === 0) {
+    if (drawerTransferTasks.length === 0) {
       setQueuePanelState("hidden");
       return;
     }
@@ -1021,6 +1030,7 @@ export function App(props: AppProps = {}) {
       setQueuePanelState("autoHidePending");
       timer = setTimeout(() => {
         setQueuePanelState("hidden");
+        setRemoteEditTransferTasks([]);
         void clearCompletedTransfers();
       }, appSettings.transfer.queueAutoHideDelayMs);
       return () => {
@@ -1036,7 +1046,7 @@ export function App(props: AppProps = {}) {
     return () => {
       if (timer) clearTimeout(timer);
     };
-  }, [transferTasks, queuePinned, queueStats.allDone, queueStats.failedCount, appSettings.transfer.queueAutoHideDelayMs]);
+  }, [drawerTransferTasks.length, queuePinned, queueStats.allDone, queueStats.failedCount, appSettings.transfer.queueAutoHideDelayMs]);
 
   const sortedEntries = useMemo(() => {
     const copied = localPane.entries.filter((entry) => appSettings.general.showHiddenFiles || !entry.name.startsWith("."));
@@ -1120,14 +1130,23 @@ export function App(props: AppProps = {}) {
     setV12LocalInsp({ status: "loading", info: null, error: "" });
     void (async () => {
       const selectedEntry = localPane.entries.find((entry) => entry.fullPath === path);
-      const r = await window.cofinder.local.getInfo({ path, includeDirectorySize: selectedEntry?.type === "directory" });
+      const isDirectory = selectedEntry?.type === "directory";
+      const r = await window.cofinder.local.getInfo({ path, includeDirectorySize: false });
       if (token !== v12LocalInspTokenRef.current) return;
       if (!r.ok) {
         setV12LocalInsp({ status: "error", info: null, error: r.error.message });
         return;
       }
       const base = r.data.info;
-      setV12LocalInsp({ status: "ready", info: base, error: "" });
+      setV12LocalInsp({ status: "ready", info: base, error: "", detailsLoading: isDirectory });
+      if (!isDirectory) return;
+      const detailed = await window.cofinder.local.getInfo({ path, includeDirectorySize: true });
+      if (token !== v12LocalInspTokenRef.current) return;
+      if (!detailed.ok) {
+        setV12LocalInsp((prev) => ({ ...prev, detailsLoading: false, detailsError: detailed.error.message }));
+        return;
+      }
+      setV12LocalInsp({ status: "ready", info: detailed.data.info, error: "", detailsLoading: false });
     })();
   }, [uiShell, remoteConnected, activeTab.id, localPane.selectedFullPaths, localPane.entries, v12LocalInspectorReveal]);
 
@@ -1147,17 +1166,53 @@ export function App(props: AppProps = {}) {
     const path = paths[0]!;
     const token = ++v12RemoteInspTokenRef.current;
     setV12RemoteInsp({ status: "loading", info: null, error: "" });
+    let unsubscribeSize: (() => void) | null = null;
+    let sizeJobId: string | null = null;
     void (async () => {
       const selectedEntry = remotePane.entries.find((entry) => entry.fullPath === path);
-      const r = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: selectedEntry?.type === "directory" });
+      const isDirectory = selectedEntry?.type === "directory";
+      const r = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: false });
       if (token !== v12RemoteInspTokenRef.current) return;
       if (!r.ok) {
         setV12RemoteInsp({ status: "error", info: null, error: r.error.message });
         return;
       }
       const base = r.data.info;
-      setV12RemoteInsp({ status: "ready", info: base, error: "" });
+      setV12RemoteInsp({ status: "ready", info: base, error: "", detailsLoading: isDirectory });
+      if (!isDirectory) return;
+      unsubscribeSize = window.cofinder.remote.onDirectorySizeUpdate((payload) => {
+        if (token !== v12RemoteInspTokenRef.current) return;
+        if (payload.jobId !== sizeJobId || payload.connectionId !== conn || payload.path !== path) return;
+        if (payload.status === "success") {
+          setV12RemoteInsp((prev) => ({
+            ...prev,
+            info: prev.info ? { ...prev.info, size: payload.size ?? prev.info.size } : prev.info,
+            detailsLoading: false,
+            detailsError: payload.capped ? "Size calculation was capped." : ""
+          }));
+          unsubscribeSize?.();
+          unsubscribeSize = null;
+        } else if (payload.status === "failed") {
+          setV12RemoteInsp((prev) => ({ ...prev, detailsLoading: false, detailsError: payload.error ?? "Failed to calculate directory size." }));
+          unsubscribeSize?.();
+          unsubscribeSize = null;
+        }
+      });
+      const sizeStart = await window.cofinder.remote.directorySizeStart({ connectionId: conn, path });
+      if (token !== v12RemoteInspTokenRef.current) return;
+      if (!sizeStart.ok) {
+        setV12RemoteInsp((prev) => ({ ...prev, detailsLoading: false, detailsError: sizeStart.error.message }));
+        unsubscribeSize?.();
+        unsubscribeSize = null;
+        return;
+      }
+      sizeJobId = sizeStart.data.jobId;
     })();
+    return () => {
+      const job = sizeJobId;
+      unsubscribeSize?.();
+      if (job) void window.cofinder.remote.directorySizeCancel({ jobId: job });
+    };
   }, [uiShell, remotePane.connectionId, remotePane.selectedFullPaths, remotePane.entries, activeTab.id, v12RemoteInspectorReveal]);
 
   async function handleRowDoubleClick(tabId: string, entry: LocalFileEntry): Promise<void> {
@@ -1232,6 +1287,37 @@ export function App(props: AppProps = {}) {
   function basenameRemotePath(input: string): string {
     const parts = input.split("/").filter(Boolean);
     return parts.at(-1) ?? input;
+  }
+
+  function remoteEditTransferTaskId(sessionId: string): string {
+    return `remote-edit-${sessionId}`;
+  }
+
+  function remoteEditSessionToTransferTask(session: RemoteEditSession): TransferTask {
+    const uploadedAt = session.lastUploadedAt ?? Date.now();
+    const remoteName = basenameRemotePath(session.remotePath);
+    return {
+      id: remoteEditTransferTaskId(session.id),
+      tabId: session.tabId,
+      direction: "upload",
+      source: session.localPath,
+      destination: session.remotePath,
+      sourceDisplay: remoteName,
+      destinationDisplay: session.remotePath,
+      connectionId: session.connectionId,
+      host: "",
+      port: 22,
+      username: "",
+      remotePath: session.remotePath,
+      localPath: session.localPath,
+      status: "success",
+      progressText: `Remote edit uploaded ${new Date(uploadedAt).toLocaleTimeString()}`,
+      currentFile: remoteName,
+      rawLog: ["Remote edit uploaded successfully."],
+      createdAt: uploadedAt,
+      startedAt: uploadedAt,
+      finishedAt: uploadedAt
+    };
   }
 
   function formatRemoteEditUploadTime(session: RemoteEditSession): string {
@@ -2958,10 +3044,18 @@ export function App(props: AppProps = {}) {
     ) : remotePane.connectionStatus === "failed" ? (
       <span className="v12m-badge v12m-badge-err">Error</span>
     ) : (
-      <span className="v12m-badge v12m-badge-ok">
-        <span className="v12m-badge-dot" aria-hidden />
-        Connected
-      </span>
+      <details className="v12m-status-menu">
+        <summary className="v12m-badge v12m-badge-ok" title="Connection actions">
+          <span className="v12m-badge-dot" aria-hidden />
+          Connected
+        </summary>
+        <div className="v12m-status-popover">
+          <button type="button" className="v12m-status-action is-danger" onClick={() => void disconnectRemote(activeTab.id)}>
+            <V12TbIcon name="plug" />
+            Disconnect
+          </button>
+        </div>
+      </details>
     );
 
   function expandOrCollapseQueueFromV12Drawer(): void {
@@ -3093,7 +3187,7 @@ export function App(props: AppProps = {}) {
       state={queuePanelState}
       pinned={queuePinned}
       error={queueError}
-      tasks={transferTasks}
+      tasks={drawerTransferTasks}
       summary={summarizeQueue()}
       onToggleExpand={() => expandOrCollapseQueueFromV12Drawer()}
       onTogglePin={() => setQueuePinned((prev) => !prev)}
@@ -3112,18 +3206,19 @@ export function App(props: AppProps = {}) {
     />
   );
 
+  const visibleRemoteEditSessions = remoteEditSessions.filter((session) => session.state !== "uploaded");
   const remoteEditStatusPanel =
-    remoteEditSessions.length > 0 ? (
+    visibleRemoteEditSessions.length > 0 ? (
       <section className="remote-edit-panel" aria-label="Remote edit sessions">
         <div className="remote-edit-head">
           <strong>Remote edits</strong>
           <span>
-            {remoteEditSessions.length} active ·{" "}
-            {remoteEditSessions.filter((session) => session.state === "failed" || session.state === "conflict").length} need attention
+            {visibleRemoteEditSessions.length} active ·{" "}
+            {visibleRemoteEditSessions.filter((session) => session.state === "failed" || session.state === "conflict").length} need attention
           </span>
         </div>
         <div className="remote-edit-list">
-          {remoteEditSessions.map((session) => (
+          {visibleRemoteEditSessions.map((session) => (
             <div key={session.id} className={`remote-edit-row state-${session.state}`}>
               <span className={`remote-edit-state state-${session.state}`}>{session.state}</span>
               <span className="remote-edit-path" title={session.remotePath}>
@@ -3749,14 +3844,6 @@ export function App(props: AppProps = {}) {
             icon: "terminal",
             disabled: !remotePane.connectionId,
             onClick: () => void openTerminalHere(activeTab.id, "remote", remotePane.currentPath)
-          },
-          {
-            label: "Disconnect",
-            title: "Disconnect remote pane",
-            icon: "plug",
-            tone: "danger",
-            disabled: !remotePane.connectionId,
-            onClick: () => void disconnectRemote(activeTab.id)
           }
         ]}
       >
@@ -3959,6 +4046,8 @@ export function App(props: AppProps = {}) {
                   info={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.info : null}
                   infoLoading={localPane.selectedFullPaths.length === 1 && v12LocalInsp.status === "loading"}
                   infoError={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.error : ""}
+                  detailsLoading={localPane.selectedFullPaths.length === 1 && v12LocalInsp.detailsLoading}
+                  detailsError={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.detailsError : ""}
                   formatSize={formatSize}
                   formatTime={formatTime}
                   onQuickLook={() => void quickLookSelection(activeTab.id, "local")}
@@ -4393,6 +4482,8 @@ export function App(props: AppProps = {}) {
                     info={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.info : null}
                     infoLoading={remotePane.selectedFullPaths.length === 1 && v12RemoteInsp.status === "loading"}
                     infoError={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.error : ""}
+                    detailsLoading={remotePane.selectedFullPaths.length === 1 && v12RemoteInsp.detailsLoading}
+                    detailsError={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.detailsError : ""}
                     formatSize={formatSize}
                     formatTime={formatTime}
                     hostLabel={`${remotePane.username}@${remotePane.host}:${remotePane.port}`}
