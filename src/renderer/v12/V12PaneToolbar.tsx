@@ -18,39 +18,30 @@ export type V12PaneToolbarProps = {
   children: ReactNode;
 };
 
-function actionGroups(actions: V12PaneToolbarAction[]): V12PaneToolbarAction[][] {
-  const navCount = Math.min(6, actions.length);
-  return [actions.slice(0, navCount), actions.slice(navCount)].filter((group) => group.length > 0);
-}
-
 export function V12PaneToolbar(props: V12PaneToolbarProps): ReactElement {
   return (
     <div className="v12m-pane-toolbar" role="toolbar" aria-label={props.label}>
       <div className="v12m-pane-toolbar-actions" aria-label={`${props.label} actions`}>
-        {actionGroups(props.actions).map((group, groupIndex) => (
-          <span key={`${props.label}-group-${groupIndex}`} className="v12m-pane-toolbar-capsule">
-            {group.map((action) => (
-              <button
-                key={action.label}
-                type="button"
-                className={[
-                  "v12m-pane-action",
-                  action.danger || action.tone === "danger" ? "is-danger" : "",
-                  action.tone ? `tone-${action.tone}` : "",
-                  action.pressed ? "is-pressed" : ""
-                ]
-                  .filter(Boolean)
-                  .join(" ")}
-                title={action.title}
-                aria-label={action.label}
-                aria-pressed={action.pressed}
-                disabled={action.disabled}
-                onClick={() => action.onClick()}
-              >
-                <V12TbIcon name={action.icon} />
-              </button>
-            ))}
-          </span>
+        {props.actions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            className={[
+              "v12m-pane-action",
+              action.danger || action.tone === "danger" ? "is-danger" : "",
+              action.tone ? `tone-${action.tone}` : "",
+              action.pressed ? "is-pressed" : ""
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            title={action.title}
+            aria-label={action.label}
+            aria-pressed={action.pressed}
+            disabled={action.disabled}
+            onClick={() => action.onClick()}
+          >
+            <V12TbIcon name={action.icon} />
+          </button>
         ))}
       </div>
       <div className="v12m-pane-toolbar-controls">{props.children}</div>

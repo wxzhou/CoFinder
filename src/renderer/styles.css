@@ -353,9 +353,9 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
   border-radius: var(--radius-sm);
-  background: #fff;
+  background: color-mix(in srgb, #fff 78%, var(--bg-soft));
   color: #111;
   padding: 0;
 }
@@ -550,36 +550,24 @@ body,
 .cfv12-root .v12m-pane-toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 3px;
   flex: 0 0 auto;
   min-width: 0;
 }
 
 .cfv12-root .v12m-pane-toolbar-controls {
   display: grid;
-  grid-template-columns: minmax(112px, 1fr) auto;
+  grid-template-columns: minmax(112px, 1fr) 30px 30px 30px;
   gap: 6px;
   align-items: center;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.cfv12-root .v12m-pane-toolbar-capsule,
-.cfv12-root .v12m-pane-utility-capsule {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  height: 38px;
-  padding: 2px;
-  border: 0;
-  border-radius: 12px;
-  background: #fff;
-}
-
 .cfv12-root .v12m-icon-select-wrap {
   position: relative;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: var(--control-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -588,19 +576,19 @@ body,
 
 .cfv12-root .v12m-icon-select-wrap svg {
   pointer-events: none;
-  width: 32px;
-  height: 32px;
+  width: 25px;
+  height: 25px;
 }
 
 .cfv12-root .v12m-icon-select {
   position: absolute;
   inset: 0;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: var(--control-h);
   padding: 0;
   color: transparent;
   background: transparent;
-  border: 0;
+  border-color: color-mix(in srgb, var(--border-subtle) 80%, transparent);
   appearance: none;
   -webkit-appearance: none;
   cursor: default;
@@ -624,21 +612,19 @@ body,
 }
 
 .cfv12-root .v12m-icon-button {
-  width: 34px;
-  min-width: 34px;
-  height: 34px;
+  width: 30px;
+  min-width: 30px;
+  height: var(--control-h);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0;
-  border: 0;
-  background: transparent;
   color: #111;
 }
 
 .cfv12-root .v12m-icon-button svg {
-  width: 32px;
-  height: 32px;
+  width: 25px;
+  height: 25px;
 }
 
 .cfv12-root .v12m-pane-actions {
@@ -650,23 +636,23 @@ body,
 }
 
 .cfv12-root .v12m-pane-action {
-  width: 34px;
-  height: 34px;
-  min-width: 34px;
+  width: 27px;
+  height: var(--control-h);
+  min-width: 27px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 0;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 80%, transparent);
   border-radius: var(--radius-sm);
-  background: transparent;
+  background: color-mix(in srgb, #fff 78%, var(--bg-soft));
   color: #111;
   padding: 0;
 }
 
 .cfv12-root .v12m-pane-action svg,
 .cfv12-root .v12m-path-copy svg {
-  width: 32px;
-  height: 32px;
+  width: 25px;
+  height: 25px;
 }
 
 .cfv12-root .v12m-pane-action path,
@@ -735,7 +721,7 @@ body,
 
 .cfv12-root .v12m-pane-action:disabled {
   color: #b9c0ca;
-  opacity: 1;
+  opacity: 0.42;
   cursor: default;
 }
 
@@ -745,7 +731,7 @@ body,
   }
 
   .cfv12-root .v12m-pane-toolbar-controls {
-    grid-template-columns: minmax(112px, 1fr) auto;
+    grid-template-columns: minmax(112px, 1fr) 30px 30px 30px;
   }
 }
 
