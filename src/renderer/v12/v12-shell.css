@@ -48,7 +48,7 @@
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 0 8px 0 78px;
+  padding: 0 8px 0 148px;
   background: var(--cfv12-bg-chrome);
   border-bottom: 1px solid var(--cfv12-sep);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -408,13 +408,16 @@
   background: transparent;
   padding: 0;
   gap: 0;
+  overflow: hidden;
   -webkit-app-region: drag;
 }
 
 .cfv12-tabsHost .tab-item {
-  height: 31px;
-  margin-top: 5px;
-  border-radius: 13px 13px 0 0;
+  height: 30px;
+  margin-top: 6px;
+  margin-right: 0;
+  border: 0;
+  border-radius: 12px 12px 0 0;
   font-size: 12px;
   font-weight: 500;
   max-width: 200px;
@@ -425,29 +428,45 @@
 .cfv12-tabsHost .tab-item::after {
   content: "";
   position: absolute;
-  bottom: -1px;
-  width: 13px;
-  height: 13px;
+  pointer-events: none;
+}
+
+.cfv12-tabsHost .tab-item:not(.is-active)::after {
+  right: 0;
+  top: 9px;
+  width: 1px;
+  height: 14px;
+  background: color-mix(in srgb, var(--cfv12-fg-faint) 34%, transparent);
+}
+
+.cfv12-tabsHost .tab-item:not(.is-active):has(+ .tab-item.is-active)::after {
   opacity: 0;
 }
 
+.cfv12-tabsHost .tab-item.is-active::before,
+.cfv12-tabsHost .tab-item.is-active::after {
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  opacity: 0;
+  background: transparent;
+}
+
 .cfv12-tabsHost .tab-item.is-active::before {
-  left: -13px;
+  left: -18px;
   opacity: 1;
-  border-bottom-right-radius: 13px;
-  box-shadow: 6px 6px 0 var(--bg-pane);
+  background: radial-gradient(circle at 0 0, transparent 0 18px, var(--bg-pane) 18.5px);
 }
 
 .cfv12-tabsHost .tab-item.is-active::after {
-  right: -13px;
+  right: -18px;
   opacity: 1;
-  border-bottom-left-radius: 13px;
-  box-shadow: -6px 6px 0 var(--bg-pane);
+  background: radial-gradient(circle at 100% 0, transparent 0 18px, var(--bg-pane) 18.5px);
 }
 
 .cfv12-tabsHost .tab-item.is-active {
   font-weight: 600;
-  margin-bottom: -1px;
+  margin-bottom: 0;
 }
 
 .cfv12-tabsHost .tab-add {
