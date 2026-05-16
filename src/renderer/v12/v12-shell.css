@@ -413,6 +413,8 @@
 }
 
 .cfv12-tabsHost .tab-item {
+  flex: 0 0 148px;
+  min-width: 148px;
   height: 30px;
   margin-top: 6px;
   margin-right: 0;
@@ -422,6 +424,10 @@
   font-weight: 500;
   max-width: 200px;
   -webkit-app-region: no-drag;
+}
+
+.cfv12-tabsHost .tab-item:not(.is-active) {
+  background: #f4f4f4;
 }
 
 .cfv12-tabsHost .tab-item::before,
@@ -474,6 +480,10 @@
   align-self: flex-end;
   margin: 0 0 0 8px;
   -webkit-app-region: no-drag;
+}
+
+.cfv12-tabsHost .tab-add svg {
+  transform: translateY(1px);
 }
 
 /* File panes: real lists from App (M2) */
