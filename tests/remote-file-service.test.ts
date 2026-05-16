@@ -1,5 +1,20 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { RemoteFileService } from "../src/main/services/RemoteFileService";
+
+function mockExecClient(names: Record<string, string>) {
+  return {
+    exec: vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const uid = command.match(/id -nu (\d+)/)?.[1] ?? "";
+      const stream = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        stream.emit("data", `${names[uid] ?? ""}\n`);
+        stream.emit("close", 0);
+      });
+    })
+  };
+}
 
 describe("RemoteFileService path/list behavior", () => {
   it("uses POSIX normalization for remote paths", async () => {
@@ -36,6 +51,41 @@ describe("RemoteFileService path/list behavior", () => {
     const result = await service.listDirectory("c1", "/data");
     expect(result.entries).toHaveLength(1);
     expect(stat).not.toHaveBeenCalled();
+  });
+
+  it("normalizes listed permissions and resolves numeric owners", async () => {
+    const execClient = mockExecClient({ "1007": "zhouwenxiong" });
+    const list = vi.fn().mockResolvedValue([
+      {
+        name: "folder",
+        type: "d",
+        size: 0,
+        modifyTime: Date.now(),
+        rights: { user: "rwx", group: "rx", other: "rx" },
+        owner: 1007
+      },
+      {
+        name: "file.txt",
+        type: "-",
+        size: 1,
+        modifyTime: Date.now(),
+        rights: { user: "rw", group: "r", other: "r" },
+        owner: 1007
+      }
+    ]);
+    const stat = vi.fn().mockRejectedValue(new Error("stat unavailable"));
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { list, stat, client: execClient }
+      })
+    } as any);
+
+    const result = await service.listDirectory("c1", "/data");
+    expect(result.entries.map((entry) => entry.permissions)).toEqual(["rwxr-xr-x", "rw-r--r--"]);
+    expect(result.entries.map((entry) => entry.owner)).toEqual(["zhouwenxiong", "zhouwenxiong"]);
+    expect(execClient.exec).toHaveBeenCalledTimes(1);
   });
 
   it("maps missing initial path to NOT_FOUND instead of auth failure", async () => {
@@ -197,6 +247,7 @@ describe("RemoteFileService path/list behavior", () => {
   });
 
   it("returns remote path info", async () => {
+    const execClient = mockExecClient({ "1000": "alice" });
     const stat = vi.fn().mockResolvedValue({
       type: "-",
       size: 42,
@@ -209,7 +260,7 @@ describe("RemoteFileService path/list behavior", () => {
       getConnection: () => ({
         id: "c1",
         homePath: "/",
-        client: { stat }
+        client: { stat, client: execClient }
       })
     } as any);
 
@@ -219,7 +270,7 @@ describe("RemoteFileService path/list behavior", () => {
     expect(info.type).toBe("file");
     expect(info.size).toBe(42);
     expect(info.permissions).toBe("rw-r-----");
-    expect(info.owner).toBe("1000");
+    expect(info.owner).toBe("alice");
     expect(info.group).toBe("100");
   });
 

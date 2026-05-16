@@ -3,6 +3,7 @@ import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/model
 import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse } from "../../shared/types/ipc";
 import { ConnectionManager } from "./ConnectionManager";
 import { isSafeHostOrUsername, normalizeRemotePosixPath } from "../utils/pathSafety";
+import { modeToRwx, rightsToRwx } from "./permissionDisplay";
 
 const posixPath = path.posix;
 type RemoteListItem = {
@@ -101,6 +102,7 @@ export class RemoteFileService {
         listAttempted: true
       });
       const entries = (await connection.client.list(normalizedPath)) as RemoteListItem[];
+      const ownerNames = await this.resolveRemoteOwnerNames(connection.client, entries);
       this.log("remote:listDirectory success", {
         connectionId,
         normalizedPath,
@@ -109,7 +111,7 @@ export class RemoteFileService {
       });
       return {
         path: normalizedPath,
-        entries: entries.map((entry) => this.mapRemoteEntry(normalizedPath, entry))
+        entries: entries.map((entry) => this.mapRemoteEntry(normalizedPath, entry, ownerNames))
       };
     } catch (error) {
       const raw = this.extractRawError(error);
@@ -280,6 +282,7 @@ export class RemoteFileService {
       const counts = type === "directory"
         ? await this.getRemoteDirectoryChildCounts(connection.client as unknown as RemoteDeleteClient, normalizedPath)
         : {};
+      const ownerNames = await this.resolveRemoteOwnerNames(connection.client, [stat]);
       const rights = stat.rights ? rightsToRwx(stat.rights) : undefined;
       return {
         name: posixPath.basename(normalizedPath),
@@ -288,7 +291,7 @@ export class RemoteFileService {
         size,
         mtime: new Date(stat.modifyTime ?? Date.now()).toISOString(),
         permissions: rights ?? (typeof stat.mode === "number" ? modeToRwx(stat.mode) : undefined),
-        owner: stat.owner !== undefined ? String(stat.owner) : undefined,
+        owner: stat.owner !== undefined ? ownerNames.get(String(stat.owner)) ?? String(stat.owner) : undefined,
         group: stat.group !== undefined ? String(stat.group) : undefined,
         ...counts
       };
@@ -336,7 +339,7 @@ export class RemoteFileService {
     return trimmed;
   }
 
-  private mapRemoteEntry(basePath: string, entry: RemoteListItem): RemoteFileEntry {
+  private mapRemoteEntry(basePath: string, entry: RemoteListItem, ownerNames: Map<string, string>): RemoteFileEntry {
     const fullPath = basePath === "/" ? `/${entry.name}` : posixPath.join(basePath, entry.name);
     return {
       name: entry.name,
@@ -344,11 +347,29 @@ export class RemoteFileService {
       type: entry.type === "d" ? "directory" : entry.type === "-" ? "file" : entry.type === "l" ? "symlink" : "unknown",
       size: entry.size ?? 0,
       mtime: new Date((entry.modifyTime ?? Date.now())).toISOString(),
-      permissions: entry.rights ? `${entry.rights.user}${entry.rights.group}${entry.rights.other}` : undefined,
-      owner: entry.owner !== undefined ? String(entry.owner) : undefined,
+      permissions: entry.rights ? rightsToRwx(entry.rights) : undefined,
+      owner: entry.owner !== undefined ? ownerNames.get(String(entry.owner)) ?? String(entry.owner) : undefined,
       group: entry.group !== undefined ? String(entry.group) : undefined,
       isHidden: entry.name.startsWith(".")
     };
+  }
+
+  private async resolveRemoteOwnerNames(client: unknown, entries: Array<{ owner?: number | string }>): Promise<Map<string, string>> {
+    const ownerIds = Array.from(
+      new Set(
+        entries
+          .map((entry) => (entry.owner === undefined ? "" : String(entry.owner)))
+          .filter((owner) => /^\d+$/.test(owner))
+      )
+    );
+    const out = new Map<string, string>();
+    await Promise.all(
+      ownerIds.map(async (uid) => {
+        const name = await resolveRemoteUidName(client, uid);
+        out.set(uid, name);
+      })
+    );
+    return out;
   }
 
   private mapError(error: unknown): RemoteServiceError {
@@ -648,18 +669,37 @@ function resolveRemoteType(stat: RemoteStatItem): "file" | "directory" | "symlin
   return "unknown";
 }
 
-function rightsToRwx(rights: { user: string; group: string; other: string }): string {
-  return `${normalizeRwx(rights.user)}${normalizeRwx(rights.group)}${normalizeRwx(rights.other)}`;
-}
-
-function normalizeRwx(part: string): string {
-  return `${part.includes("r") ? "r" : "-"}${part.includes("w") ? "w" : "-"}${part.includes("x") ? "x" : "-"}`;
-}
-
-function modeToRwx(mode: number): string {
-  const perm = mode & 0o777;
-  const chunks = [(perm >> 6) & 0b111, (perm >> 3) & 0b111, perm & 0b111];
-  return chunks
-    .map((chunk) => `${chunk & 0b100 ? "r" : "-"}${chunk & 0b010 ? "w" : "-"}${chunk & 0b001 ? "x" : "-"}`)
-    .join("");
+async function resolveRemoteUidName(client: unknown, uid: string): Promise<string> {
+  const sshClient = (client as { client?: { exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void } }).client;
+  if (!sshClient?.exec) return uid;
+  const exec = sshClient.exec;
+  return new Promise((resolve) => {
+    let stdout = "";
+    let settled = false;
+    const finish = (value: string) => {
+      if (settled) return;
+      settled = true;
+      const name = value.trim().split(/\s+/)[0];
+      resolve(name || uid);
+    };
+    try {
+      exec(`id -nu ${uid} 2>/dev/null`, (error, stream) => {
+        if (error || !stream || typeof stream !== "object") {
+          finish(uid);
+          return;
+        }
+        const readable = stream as {
+          on: (event: string, listener: (...args: unknown[]) => void) => unknown;
+          stderr?: { on: (event: string, listener: (...args: unknown[]) => void) => unknown };
+        };
+        readable.on("data", (chunk) => {
+          stdout += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+        });
+        readable.on("close", () => finish(stdout));
+        readable.on("error", () => finish(uid));
+      });
+    } catch {
+      finish(uid);
+    }
+  });
 }

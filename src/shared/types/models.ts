@@ -31,6 +31,7 @@ export interface FileEntry {
 
 export interface LocalFileEntry extends FileEntry {
   permissions?: string;
+  owner?: string;
   isHidden: boolean;
 }
 

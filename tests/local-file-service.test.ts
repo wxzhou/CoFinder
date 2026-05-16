@@ -103,6 +103,22 @@ describe("LocalFileService creation", () => {
   });
 });
 
+describe("LocalFileService listDirectory metadata", () => {
+  it("returns rwx permissions and owner names for listed local entries", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const filePath = path.join(dir, "mode.txt");
+    await fs.writeFile(filePath, "hello");
+    await fs.chmod(filePath, 0o640);
+
+    const listed = await service.listDirectory(dir);
+    const entry = listed.entries.find((item) => item.name === "mode.txt");
+    expect(entry?.permissions).toBe("rw-r-----");
+    expect(entry?.owner).toBeTruthy();
+    expect(entry?.owner).not.toMatch(/^\d+$/);
+  });
+});
+
 describe("LocalFileService getPathInfo", () => {
   it("returns info for a local file", async () => {
     const service = new LocalFileService();

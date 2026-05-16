@@ -1,10 +1,16 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
 import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo } from "../../shared/types/ipc";
 import { normalizeLocalPath } from "../utils/pathSafety";
+import { modeToRwx } from "./permissionDisplay";
+
+const execFileAsync = promisify(execFile);
+const localOwnerNameCache = new Map<number, string>();
 
 class LocalFileServiceError extends Error {
   constructor(
@@ -43,6 +49,7 @@ export class LocalFileService {
       dirEntries.map(async (dirent): Promise<LocalFileEntry> => {
         const fullPath = normalizeLocalPath(path.join(normalizedPath, dirent.name));
         const fileStats = await fs.lstat(fullPath);
+        const uid = typeof (fileStats as { uid?: unknown }).uid === "number" ? (fileStats as { uid: number }).uid : undefined;
 
         return {
           name: dirent.name,
@@ -50,7 +57,8 @@ export class LocalFileService {
           type: this.mapEntryType(dirent),
           size: fileStats.size,
           mtime: fileStats.mtime.toISOString(),
-          permissions: (fileStats.mode & 0o777).toString(8).padStart(3, "0"),
+          permissions: modeToRwx(fileStats.mode),
+          owner: uid !== undefined ? await resolveLocalOwnerName(uid) : undefined,
           isHidden: dirent.name.startsWith(".")
         };
       })
@@ -156,7 +164,7 @@ export class LocalFileService {
         size,
         mtime: stats.mtime.toISOString(),
         permissions: modeToRwx(stats.mode),
-        owner: typeof (stats as { uid?: unknown }).uid === "number" ? String((stats as { uid: number }).uid) : undefined,
+        owner: typeof (stats as { uid?: unknown }).uid === "number" ? await resolveLocalOwnerName((stats as { uid: number }).uid) : undefined,
         group: typeof (stats as { gid?: unknown }).gid === "number" ? String((stats as { gid: number }).gid) : undefined,
         ...counts
       };
@@ -280,10 +288,20 @@ function unique(items: string[]): string[] {
   return out;
 }
 
-function modeToRwx(mode: number): string {
-  const perm = mode & 0o777;
-  const chunks = [(perm >> 6) & 0b111, (perm >> 3) & 0b111, perm & 0b111];
-  return chunks
-    .map((chunk) => `${chunk & 0b100 ? "r" : "-"}${chunk & 0b010 ? "w" : "-"}${chunk & 0b001 ? "x" : "-"}`)
-    .join("");
+async function resolveLocalOwnerName(uid: number): Promise<string> {
+  const cached = localOwnerNameCache.get(uid);
+  if (cached) return cached;
+  try {
+    const { stdout } = await execFileAsync("id", ["-nu", String(uid)]);
+    const name = stdout.trim();
+    if (name) {
+      localOwnerNameCache.set(uid, name);
+      return name;
+    }
+  } catch {
+    // Fall back to the numeric uid when the local account database is unavailable.
+  }
+  const fallback = String(uid);
+  localOwnerNameCache.set(uid, fallback);
+  return fallback;
 }
