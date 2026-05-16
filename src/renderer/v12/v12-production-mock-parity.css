@@ -76,6 +76,13 @@
   overflow: auto;
 }
 
+.cfv12-root .v12m-file-grid-scroll .v12m-list-head {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--m-bg-pane, #fff);
+}
+
 .cfv12-root .v12m-pane-main.v12m-pane-main--stack .v12m-list {
   min-height: 0;
   overflow: visible;
