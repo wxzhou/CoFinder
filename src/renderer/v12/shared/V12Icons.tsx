@@ -188,7 +188,7 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     case "arrow-clockwise":
       return (
         <svg {...s}>
-          <path d="M10 4.5a5.5 5.5 0 014.9 3M15 4v3.5h-3.5M10 15.5a5.5 5.5 0 01-4.9-3M5 16v-3.5h3.5" />
+          <path d="M8.5 4.8A5.5 5.5 0 0114.9 7.5M15 4v3.5h-3.5M11.5 15.2a5.5 5.5 0 01-6.4-2.7M5 16v-3.5h3.5" />
         </svg>
       );
     case "arrow-up-tray":
