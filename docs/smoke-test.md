@@ -150,6 +150,15 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Progressive folder Inspector:** select a large local folder and a large remote folder. Confirm the Inspector appears quickly, Size / Files / Folders show loading while directory details are calculated, and update in place when done.
 - **Remote edit completion:** edit and save a remote text file. Confirm successful upload completion appears in Transfers and auto-hides like a normal successful transfer, while the Remote edits panel does not keep a persistent uploaded row.
 
+## V2.8.5 file-list columns and tab chrome
+
+- **Three-significant-digit sizes:** check file-list Size cells, Inspector size, selected size, and total size. Values should use three significant digits, for example `1.00 KB`, `12.3 MB`, and `123 GB`.
+- **Column resizing:** drag the boundaries between Name / Date modified / Size / Kind and confirm widths update without breaking row alignment.
+- **Column visibility menu:** right-click a V12 file-list header. Confirm Name is checked and disabled, and Date modified / Size / Kind / Permission / Owner can be toggled.
+- **Permission and Owner columns:** enable Permission and Owner and confirm they render available metadata or `—`.
+- **Icon polish:** confirm tab close, new tab, and sort direction controls are icons, not literal `x`, `+`, `^`, or `v` text.
+- **Tab chrome:** confirm the first tab aligns with the macOS traffic-light row and the native `CoFinder` title text is not visible above the app.
+
 ## V2.5 remote text edit MVP
 
 - **Edit entry point:** connect to the isolated remote test root, select exactly one text file with content such as BED/tab-delimited text, then use the remote pane Edit action or right-click `Edit`. Confirm the configured text editor opens an app-managed edit-cache copy.

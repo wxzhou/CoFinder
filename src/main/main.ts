@@ -34,6 +34,8 @@ function createMainWindow(): BrowserWindow {
     minHeight: 680,
     show: false,
     icon: appIconPath,
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 15 },
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,

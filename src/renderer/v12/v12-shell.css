@@ -48,10 +48,11 @@
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 0 12px;
+  padding: 0 8px 0 78px;
   background: var(--cfv12-bg-chrome);
   border-bottom: 1px solid var(--cfv12-sep);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  -webkit-app-region: drag;
 }
 
 .cfv12-traffic {
@@ -401,21 +402,47 @@
 .cfv12-tabsHost .tab-bar {
   flex: 1;
   min-width: 0;
-  height: calc(100% - 5px);
-  margin-top: 5px;
+  height: 100%;
+  margin-top: 0;
   border-bottom: none;
   background: transparent;
-  padding: 0 10px 0 0;
-  gap: 2px;
+  padding: 0;
+  gap: 0;
+  -webkit-app-region: drag;
 }
 
 .cfv12-tabsHost .tab-item {
-  height: calc(100% - 1px);
-  margin-top: 0;
-  border-radius: 7px 7px 0 0;
-  font-size: 11px;
+  height: 31px;
+  margin-top: 5px;
+  border-radius: 13px 13px 0 0;
+  font-size: 12px;
   font-weight: 500;
   max-width: 200px;
+  -webkit-app-region: no-drag;
+}
+
+.cfv12-tabsHost .tab-item::before,
+.cfv12-tabsHost .tab-item::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  width: 13px;
+  height: 13px;
+  opacity: 0;
+}
+
+.cfv12-tabsHost .tab-item.is-active::before {
+  left: -13px;
+  opacity: 1;
+  border-bottom-right-radius: 13px;
+  box-shadow: 6px 6px 0 var(--bg-pane);
+}
+
+.cfv12-tabsHost .tab-item.is-active::after {
+  right: -13px;
+  opacity: 1;
+  border-bottom-left-radius: 13px;
+  box-shadow: -6px 6px 0 var(--bg-pane);
 }
 
 .cfv12-tabsHost .tab-item.is-active {
@@ -424,9 +451,10 @@
 }
 
 .cfv12-tabsHost .tab-add {
-  height: 26px;
+  height: 30px;
   align-self: center;
-  margin-bottom: 5px;
+  margin-bottom: 0;
+  -webkit-app-region: no-drag;
 }
 
 /* File panes: real lists from App (M2) */

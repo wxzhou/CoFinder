@@ -1,3 +1,5 @@
+import { V12TbIcon } from "../v12/shared/V12Icons";
+
 type TabBarItem = {
   id: string;
   title: string;
@@ -48,12 +50,12 @@ export function TabBar({ tabs, activeTabId, onSelect, onAdd, onClose, onMove }: 
               onClose(tab.id);
             }}
           >
-            x
+            <V12TbIcon name="xmark" />
           </span>
         </button>
       ))}
       <button type="button" className="tab-add" onClick={onAdd} aria-label="New tab" title="New tab">
-        +
+        <V12TbIcon name="plus" />
       </button>
     </div>
   );

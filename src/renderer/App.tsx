@@ -15,7 +15,15 @@ import { V12TransferDrawer } from "./v12/V12TransferDrawer";
 import { V12PaneInspector } from "./v12/V12PaneInspector";
 import { pathToSegments } from "./v12/pane/pathSegments";
 import { inspectorColumnVisible } from "./v12/v12InspectorVisibility";
-import { V12PaneFootStatus, V12ProdDevHint, V12TbIcon, V12VisualFileList, V12VisualLocationStrip } from "./v12/shared";
+import {
+  V12PaneFootStatus,
+  V12ProdDevHint,
+  V12TbIcon,
+  V12VisualFileList,
+  V12VisualLocationStrip,
+  type V12FileColumn,
+  type V12FileColumnKey
+} from "./v12/shared";
 import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
@@ -59,6 +67,7 @@ type HistoryState = {
 };
 
 type RemoteConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
+type V12FileColumnSettings = Record<V12FileColumnKey, { width: number; visible: boolean }>;
 type LocalPaneState = {
   currentPath: string;
   pathInput: string;
@@ -178,8 +187,17 @@ const COFINDER_TRANSFER_MIME = "application/x-cofinder-transfer";
 const COFINDER_LAST_LOCAL_PATH_KEY = "cofinder.lastLocalPath";
 const COFINDER_LOCAL_RECENTS_KEY = "cofinder.recent.localPaths.v1";
 const COFINDER_REMOTE_RECENTS_KEY = "cofinder.recent.remotePathsByProfile.v1";
+const COFINDER_V12_COLUMNS_KEY = "cofinder.v12FileColumns.v1";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
+const V12_DEFAULT_COLUMNS: V12FileColumn[] = [
+  { key: "name", label: "Name", width: 320, visible: true, required: true },
+  { key: "mtime", label: "Date modified", width: 136, visible: true },
+  { key: "size", label: "Size", width: 78, visible: true },
+  { key: "kind", label: "Kind", width: 92, visible: true },
+  { key: "permissions", label: "Permission", width: 96, visible: false },
+  { key: "owner", label: "Owner", width: 84, visible: false }
+];
 const DEFAULT_RENDERER_SETTINGS: AppSettings = {
   schemaVersion: 2,
   general: {
@@ -282,6 +300,7 @@ export function App(props: AppProps = {}) {
     const n = raw ? Number(raw) : 0.5;
     return Number.isFinite(n) && n >= 0.25 && n <= 0.75 ? n : 0.5;
   });
+  const [v12FileColumnSettings, setV12FileColumnSettings] = useState<V12FileColumnSettings>(() => readV12FileColumnSettings());
   const v12LocalInspTokenRef = useRef(0);
   const v12RemoteInspTokenRef = useRef(0);
   const v12LocalInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -474,6 +493,10 @@ export function App(props: AppProps = {}) {
   }, [tabs]);
 
   useEffect(() => window.cofinder.system.onOpenPreferences(openPreferences), [appSettings]);
+
+  useEffect(() => {
+    writeJsonLocalStorage(COFINDER_V12_COLUMNS_KEY, v12FileColumnSettings);
+  }, [v12FileColumnSettings]);
 
   useEffect(() => {
     if (!marquee) return;
@@ -3907,6 +3930,37 @@ export function App(props: AppProps = {}) {
       </V12PaneToolbar>
     ) : null;
 
+  const v12FileColumns = useMemo(
+    () =>
+      V12_DEFAULT_COLUMNS.map((column) => ({
+        ...column,
+        width: v12FileColumnSettings[column.key]?.width ?? column.width,
+        visible: column.required ? true : v12FileColumnSettings[column.key]?.visible ?? column.visible
+      })),
+    [v12FileColumnSettings]
+  );
+
+  function updateV12ColumnWidth(key: V12FileColumnKey, width: number): void {
+    setV12FileColumnSettings((prev) => ({
+      ...prev,
+      [key]: {
+        width: Math.round(width),
+        visible: key === "name" ? true : prev[key]?.visible ?? V12_DEFAULT_COLUMNS.find((column) => column.key === key)?.visible ?? true
+      }
+    }));
+  }
+
+  function updateV12ColumnVisibility(key: V12FileColumnKey, visible: boolean): void {
+    if (key === "name") return;
+    setV12FileColumnSettings((prev) => ({
+      ...prev,
+      [key]: {
+        width: prev[key]?.width ?? V12_DEFAULT_COLUMNS.find((column) => column.key === key)?.width ?? 90,
+        visible
+      }
+    }));
+  }
+
   const localPaneEl = (
     <section
       className={localPaneSectionClass}
@@ -3950,6 +4004,9 @@ export function App(props: AppProps = {}) {
                   sortKey={localPane.sortKey}
                   sortDirection={localPane.sortDirection}
                   selectedFullPaths={localPane.selectedFullPaths}
+                  columns={v12FileColumns}
+                  onColumnWidthChange={updateV12ColumnWidth}
+                  onColumnVisibilityChange={updateV12ColumnVisibility}
                   onSort={(key) => handleSort(activeTab.id, key)}
                   onRowClick={(entry, event) => {
                     if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -4027,7 +4084,6 @@ export function App(props: AppProps = {}) {
                   }
                   formatSize={formatSize}
                   formatTime={formatTime}
-                  sortMark={sortMark}
                   formatKind={formatKindV12}
                 />
                 <V12PaneFootStatus
@@ -4386,6 +4442,9 @@ export function App(props: AppProps = {}) {
                     sortKey={remotePane.sortKey}
                     sortDirection={remotePane.sortDirection}
                     selectedFullPaths={remotePane.selectedFullPaths}
+                    columns={v12FileColumns}
+                    onColumnWidthChange={updateV12ColumnWidth}
+                    onColumnVisibilityChange={updateV12ColumnVisibility}
                     onSort={(key) => handleRemoteSort(activeTab.id, key)}
                     onRowClick={(entry, event) => {
                       if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -4463,7 +4522,6 @@ export function App(props: AppProps = {}) {
                     }
                     formatSize={formatSize}
                     formatTime={formatTime}
-                    sortMark={sortMark}
                     formatKind={formatKindV12}
                   />
                   <V12PaneFootStatus
@@ -5522,7 +5580,7 @@ export function App(props: AppProps = {}) {
 }
 
 function formatSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024) return `${Math.max(0, Math.round(bytes))} B`;
   const units = ["KB", "MB", "GB", "TB"];
   let value = bytes / 1024;
   let index = 0;
@@ -5530,7 +5588,7 @@ function formatSize(bytes: number): string {
     value /= 1024;
     index += 1;
   }
-  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[index]}`;
+  return `${value.toPrecision(3)} ${units[index]}`;
 }
 
 function formatTime(isoString: string): string {
@@ -5716,6 +5774,29 @@ function readRemoteRecentPathsByProfile(): Record<string, RecentPath[]> {
     return out;
   } catch {
     return {};
+  }
+}
+
+function readV12FileColumnSettings(): V12FileColumnSettings {
+  const fallback = Object.fromEntries(V12_DEFAULT_COLUMNS.map((column) => [column.key, { width: column.width, visible: column.visible }])) as V12FileColumnSettings;
+  try {
+    const raw = window.localStorage.getItem(COFINDER_V12_COLUMNS_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return fallback;
+    const out = { ...fallback };
+    for (const column of V12_DEFAULT_COLUMNS) {
+      const row = (parsed as Record<string, unknown>)[column.key];
+      if (typeof row !== "object" || row === null || Array.isArray(row)) continue;
+      const value = row as Record<string, unknown>;
+      out[column.key] = {
+        width: typeof value.width === "number" && Number.isFinite(value.width) ? Math.max(60, Math.min(720, value.width)) : column.width,
+        visible: column.required ? true : typeof value.visible === "boolean" ? value.visible : column.visible
+      };
+    }
+    return out;
+  } catch {
+    return fallback;
   }
 }
 

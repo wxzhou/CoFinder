@@ -4,11 +4,21 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.8.4.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.5.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.8.4**.
+No user-facing changes since **v1.8.5**.
+
+## v1.8.5 — Product milestone V2.8.5
+
+V2.8.5 is a file-list and tab chrome polish release.
+
+- File sizes now render with three significant digits across list cells, Inspector, and pane footer totals.
+- V12 file-list columns can be resized by dragging header boundaries.
+- Header right-click now opens a column menu; Name is mandatory, while Date modified, Size, Kind, Permission, and Owner are optional.
+- Sort direction, tab close, and new-tab controls now use icons instead of text glyphs.
+- V12 tabs are restyled with smoother Chrome-like curves and live in hidden-titlebar macOS window chrome.
 
 ## v1.8.4 — Product milestone V2.8.4
 

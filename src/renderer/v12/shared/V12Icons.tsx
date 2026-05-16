@@ -148,6 +148,36 @@ export function V12TbIcon(props: { name: string }): ReactElement {
           <path d="M5 12l5-5 5 5" />
         </svg>
       );
+    case "sort-asc":
+      return (
+        <svg {...s}>
+          <path d="M6 12l4-4 4 4" />
+        </svg>
+      );
+    case "sort-desc":
+      return (
+        <svg {...s}>
+          <path d="M6 8l4 4 4-4" />
+        </svg>
+      );
+    case "xmark":
+      return (
+        <svg {...s}>
+          <path d="M6.5 6.5l7 7M13.5 6.5l-7 7" />
+        </svg>
+      );
+    case "plus":
+      return (
+        <svg {...s}>
+          <path d="M10 5v10M5 10h10" />
+        </svg>
+      );
+    case "check":
+      return (
+        <svg {...s}>
+          <path d="M5 10.5l3 3 7-7" />
+        </svg>
+      );
     case "home":
       return (
         <svg {...s}>
