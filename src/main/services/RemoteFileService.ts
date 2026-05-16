@@ -672,7 +672,7 @@ function resolveRemoteType(stat: RemoteStatItem): "file" | "directory" | "symlin
 async function resolveRemoteUidName(client: unknown, uid: string): Promise<string> {
   const sshClient = (client as { client?: { exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void } }).client;
   if (!sshClient?.exec) return uid;
-  const exec = sshClient.exec;
+  const exec = sshClient.exec.bind(sshClient);
   return new Promise((resolve) => {
     let stdout = "";
     let settled = false;

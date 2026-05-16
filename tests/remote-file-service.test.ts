@@ -3,8 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import { RemoteFileService } from "../src/main/services/RemoteFileService";
 
 function mockExecClient(names: Record<string, string>) {
+  const client = { ready: true };
   return {
-    exec: vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+    ...client,
+    exec: vi.fn(function (this: typeof client, command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) {
+      if (!this.ready) throw new Error("exec lost this binding");
       const uid = command.match(/id -nu (\d+)/)?.[1] ?? "";
       const stream = new EventEmitter();
       callback(undefined, stream);

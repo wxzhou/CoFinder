@@ -68,6 +68,7 @@ type HistoryState = {
 
 type RemoteConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
 type V12FileColumnSettings = Record<V12FileColumnKey, { width: number; visible: boolean }>;
+type V12PaneFileColumnSettings = Record<"local" | "remote", V12FileColumnSettings>;
 type LocalPaneState = {
   currentPath: string;
   pathInput: string;
@@ -187,7 +188,7 @@ const COFINDER_TRANSFER_MIME = "application/x-cofinder-transfer";
 const COFINDER_LAST_LOCAL_PATH_KEY = "cofinder.lastLocalPath";
 const COFINDER_LOCAL_RECENTS_KEY = "cofinder.recent.localPaths.v1";
 const COFINDER_REMOTE_RECENTS_KEY = "cofinder.recent.remotePathsByProfile.v1";
-const COFINDER_V12_COLUMNS_KEY = "cofinder.v12FileColumns.v1";
+const COFINDER_V12_COLUMNS_KEY = "cofinder.v12FileColumns.v2";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
 const V12_DEFAULT_COLUMNS: V12FileColumn[] = [
@@ -300,7 +301,7 @@ export function App(props: AppProps = {}) {
     const n = raw ? Number(raw) : 0.5;
     return Number.isFinite(n) && n >= 0.25 && n <= 0.75 ? n : 0.5;
   });
-  const [v12FileColumnSettings, setV12FileColumnSettings] = useState<V12FileColumnSettings>(() => readV12FileColumnSettings());
+  const [v12FileColumnSettings, setV12FileColumnSettings] = useState<V12PaneFileColumnSettings>(() => readV12FileColumnSettings());
   const v12LocalInspTokenRef = useRef(0);
   const v12RemoteInspTokenRef = useRef(0);
   const v12LocalInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -3930,33 +3931,32 @@ export function App(props: AppProps = {}) {
       </V12PaneToolbar>
     ) : null;
 
-  const v12FileColumns = useMemo(
-    () =>
-      V12_DEFAULT_COLUMNS.map((column) => ({
-        ...column,
-        width: v12FileColumnSettings[column.key]?.width ?? column.width,
-        visible: column.required ? true : v12FileColumnSettings[column.key]?.visible ?? column.visible
-      })),
-    [v12FileColumnSettings]
-  );
+  const v12LocalFileColumns = useMemo(() => buildV12FileColumns(v12FileColumnSettings.local), [v12FileColumnSettings.local]);
+  const v12RemoteFileColumns = useMemo(() => buildV12FileColumns(v12FileColumnSettings.remote), [v12FileColumnSettings.remote]);
 
-  function updateV12ColumnWidth(key: V12FileColumnKey, width: number): void {
+  function updateV12ColumnWidth(pane: ActivePane, key: V12FileColumnKey, width: number): void {
     setV12FileColumnSettings((prev) => ({
       ...prev,
-      [key]: {
-        width: Math.round(width),
-        visible: key === "name" ? true : prev[key]?.visible ?? V12_DEFAULT_COLUMNS.find((column) => column.key === key)?.visible ?? true
+      [pane]: {
+        ...prev[pane],
+        [key]: {
+          width: Math.round(width),
+          visible: key === "name" ? true : prev[pane][key]?.visible ?? V12_DEFAULT_COLUMNS.find((column) => column.key === key)?.visible ?? true
+        }
       }
     }));
   }
 
-  function updateV12ColumnVisibility(key: V12FileColumnKey, visible: boolean): void {
+  function updateV12ColumnVisibility(pane: ActivePane, key: V12FileColumnKey, visible: boolean): void {
     if (key === "name") return;
     setV12FileColumnSettings((prev) => ({
       ...prev,
-      [key]: {
-        width: prev[key]?.width ?? V12_DEFAULT_COLUMNS.find((column) => column.key === key)?.width ?? 90,
-        visible
+      [pane]: {
+        ...prev[pane],
+        [key]: {
+          width: prev[pane][key]?.width ?? V12_DEFAULT_COLUMNS.find((column) => column.key === key)?.width ?? 90,
+          visible
+        }
       }
     }));
   }
@@ -4004,9 +4004,9 @@ export function App(props: AppProps = {}) {
                   sortKey={localPane.sortKey}
                   sortDirection={localPane.sortDirection}
                   selectedFullPaths={localPane.selectedFullPaths}
-                  columns={v12FileColumns}
-                  onColumnWidthChange={updateV12ColumnWidth}
-                  onColumnVisibilityChange={updateV12ColumnVisibility}
+                  columns={v12LocalFileColumns}
+                  onColumnWidthChange={(key, width) => updateV12ColumnWidth("local", key, width)}
+                  onColumnVisibilityChange={(key, visible) => updateV12ColumnVisibility("local", key, visible)}
                   onSort={(key) => handleSort(activeTab.id, key)}
                   onRowClick={(entry, event) => {
                     if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -4442,9 +4442,9 @@ export function App(props: AppProps = {}) {
                     sortKey={remotePane.sortKey}
                     sortDirection={remotePane.sortDirection}
                     selectedFullPaths={remotePane.selectedFullPaths}
-                    columns={v12FileColumns}
-                    onColumnWidthChange={updateV12ColumnWidth}
-                    onColumnVisibilityChange={updateV12ColumnVisibility}
+                    columns={v12RemoteFileColumns}
+                    onColumnWidthChange={(key, width) => updateV12ColumnWidth("remote", key, width)}
+                    onColumnVisibilityChange={(key, visible) => updateV12ColumnVisibility("remote", key, visible)}
                     onSort={(key) => handleRemoteSort(activeTab.id, key)}
                     onRowClick={(entry, event) => {
                       if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
@@ -5777,27 +5777,58 @@ function readRemoteRecentPathsByProfile(): Record<string, RecentPath[]> {
   }
 }
 
-function readV12FileColumnSettings(): V12FileColumnSettings {
-  const fallback = Object.fromEntries(V12_DEFAULT_COLUMNS.map((column) => [column.key, { width: column.width, visible: column.visible }])) as V12FileColumnSettings;
+function buildV12FileColumns(settings: V12FileColumnSettings): V12FileColumn[] {
+  return V12_DEFAULT_COLUMNS.map((column) => ({
+    ...column,
+    width: settings[column.key]?.width ?? column.width,
+    visible: column.required ? true : settings[column.key]?.visible ?? column.visible
+  }));
+}
+
+function createV12FileColumnSettings(pane: "local" | "remote"): V12FileColumnSettings {
+  return Object.fromEntries(
+    V12_DEFAULT_COLUMNS.map((column) => [
+      column.key,
+      {
+        width: column.width,
+        visible: column.required ? true : pane === "remote" && (column.key === "permissions" || column.key === "owner") ? true : column.visible
+      }
+    ])
+  ) as V12FileColumnSettings;
+}
+
+function readV12FileColumnSettings(): V12PaneFileColumnSettings {
+  const fallback: V12PaneFileColumnSettings = {
+    local: createV12FileColumnSettings("local"),
+    remote: createV12FileColumnSettings("remote")
+  };
   try {
     const raw = window.localStorage.getItem(COFINDER_V12_COLUMNS_KEY);
     if (!raw) return fallback;
     const parsed = JSON.parse(raw) as unknown;
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return fallback;
-    const out = { ...fallback };
-    for (const column of V12_DEFAULT_COLUMNS) {
-      const row = (parsed as Record<string, unknown>)[column.key];
-      if (typeof row !== "object" || row === null || Array.isArray(row)) continue;
-      const value = row as Record<string, unknown>;
-      out[column.key] = {
-        width: typeof value.width === "number" && Number.isFinite(value.width) ? Math.max(60, Math.min(720, value.width)) : column.width,
-        visible: column.required ? true : typeof value.visible === "boolean" ? value.visible : column.visible
-      };
-    }
-    return out;
+    return {
+      local: readV12PaneFileColumnSettings((parsed as Record<string, unknown>).local, "local"),
+      remote: readV12PaneFileColumnSettings((parsed as Record<string, unknown>).remote, "remote")
+    };
   } catch {
     return fallback;
   }
+}
+
+function readV12PaneFileColumnSettings(value: unknown, pane: "local" | "remote"): V12FileColumnSettings {
+  const out = createV12FileColumnSettings(pane);
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return out;
+  for (const column of V12_DEFAULT_COLUMNS) {
+    const row = (value as Record<string, unknown>)[column.key];
+    if (typeof row !== "object" || row === null || Array.isArray(row)) continue;
+    const item = row as Record<string, unknown>;
+    out[column.key] = {
+      width: typeof item.width === "number" && Number.isFinite(item.width) ? Math.max(60, Math.min(720, item.width)) : column.width,
+      visible: column.required ? true : typeof item.visible === "boolean" ? item.visible : out[column.key].visible
+    };
+  }
+  return out;
 }
 
 function writeJsonLocalStorage(key: string, value: unknown): void {
