@@ -1,0 +1,509 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CoFinder v1.8.6 Complete Large Toolbar Icon Variants</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5f6f8;
+        --pane: #ffffff;
+        --panel: #eef5ff;
+        --text: #202124;
+        --muted: #717780;
+        --line: #dfe3e8;
+        --soft: #f7f8fa;
+        --nav: #6d7480;
+        --transfer: #4f9edc;
+        --create: #2f8f66;
+        --edit: #8a78c5;
+        --danger: #d95f55;
+        --history: #7b8290;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      }
+      main {
+        max-width: 1500px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+      .intro {
+        margin: 0 0 18px;
+        color: var(--muted);
+        max-width: 980px;
+      }
+      .concept {
+        margin: 18px 0 28px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--pane);
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(20, 26, 33, 0.06);
+      }
+      .concept-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(#fff, #fafbfc);
+      }
+      h2 {
+        margin: 0 0 4px;
+        font-size: 17px;
+      }
+      .concept-head p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .tag {
+        padding: 5px 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        white-space: nowrap;
+        font-size: 12px;
+        background: #fff;
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 342px;
+      }
+      .pane {
+        min-width: 0;
+        border-right: 1px solid var(--line);
+        background: #fff;
+      }
+      .pane:last-child { border-right: 0; }
+      .pane-top {
+        padding: 14px 14px 10px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+      }
+      .pane-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .pane-title strong {
+        font-size: 18px;
+        color: var(--text);
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #7bd78d;
+      }
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 34px;
+        margin-top: 4px;
+        color: #676d77;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .crumbs b {
+        padding: 3px 7px;
+        border-radius: 7px;
+        color: #1e1f21;
+        background: rgba(0, 0, 0, 0.06);
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+      }
+      .cluster {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px;
+        border: 1px solid rgba(135, 144, 157, 0.2);
+        border-radius: 11px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+      .tb {
+        display: inline-grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 1px solid rgba(145, 153, 164, 0.24);
+        border-radius: 8px;
+        color: var(--nav);
+        background: rgba(255, 255, 255, 0.58);
+      }
+      .tb svg {
+        display: block;
+        width: 31px;
+        height: 31px;
+      }
+      .tb.transfer { color: var(--transfer); }
+      .tb.create { color: var(--create); }
+      .tb.edit { color: var(--edit); }
+      .tb.danger { color: var(--danger); }
+      .tb.history { color: var(--history); }
+      .filter {
+        flex: 1 1 180px;
+        min-width: 120px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        color: #7b818a;
+        background: #fff;
+      }
+      .file-head, .file-row {
+        display: grid;
+        grid-template-columns: 1.8fr 1.2fr 0.55fr 0.72fr;
+        gap: 10px;
+        align-items: center;
+        height: 32px;
+        padding: 0 14px;
+        border-bottom: 1px solid #edf0f3;
+      }
+      .file-head {
+        color: #8b9098;
+        font-weight: 700;
+      }
+      .file-row { color: #6f747d; }
+      .name {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow: hidden;
+        color: #202124;
+        font-weight: 600;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .mini-folder, .mini-doc {
+        flex: 0 0 auto;
+        width: 18px;
+        height: 14px;
+        border-radius: 3px;
+        background: linear-gradient(#8bcaff, #4fa5ee);
+      }
+      .mini-doc {
+        width: 14px;
+        height: 18px;
+        border: 1px solid #aeb3ba;
+        border-radius: 3px;
+        background: linear-gradient(#fff, #f0f0ef);
+      }
+
+      .s2 .cluster {
+        border-color: rgba(94, 142, 184, 0.25);
+        background: rgba(239, 246, 255, 0.72);
+      }
+      .s2 .tb {
+        border-color: rgba(96, 143, 181, 0.22);
+        border-radius: 10px;
+        background: #fbfdff;
+      }
+      .s2 .tb svg { width: 32px; height: 32px; }
+      .s2 .tb.nav { color: #4f7da5; }
+      .s2 .tb.transfer { color: #2f93d1; }
+      .s2 .tb.create { color: #27895e; }
+      .s2 .tb.edit { color: #8d74bc; }
+      .s2 .tb.history { color: #687282; }
+
+      .s3 .pane-top { background: #f7f8fa; }
+      .s3 .cluster {
+        gap: 0;
+        padding: 1px;
+        border-radius: 9px;
+        background: #fff;
+      }
+      .s3 .tb {
+        width: 33px;
+        height: 33px;
+        border-color: transparent;
+        border-radius: 7px;
+        background: transparent;
+      }
+      .s3 .tb + .tb { border-left: 1px solid rgba(120, 127, 137, 0.18); border-radius: 0; }
+      .s3 .cluster .tb:first-child { border-radius: 7px 0 0 7px; }
+      .s3 .cluster .tb:last-child { border-radius: 0 7px 7px 0; }
+      .s3 .tb svg { width: 32px; height: 32px; }
+      .s3 .tb.nav { color: #565d68; }
+      .s3 .tb.transfer { color: #3d94c9; }
+      .s3 .tb.create { color: #247c58; }
+      .s3 .tb.edit { color: #826bb0; }
+      .s3 .tb.danger { color: #c94f48; }
+      .s3 .tb.history { color: #69707c; }
+
+      .icon-sheet {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+        gap: 8px;
+        padding: 12px 14px 16px;
+        border-top: 1px solid var(--line);
+        background: #fbfcfd;
+      }
+      .sheet-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        color: #68707b;
+        font-size: 12px;
+      }
+      .sheet-item .tb {
+        flex: 0 0 auto;
+        width: 30px;
+        height: 30px;
+      }
+      .sheet-item .tb svg { width: 28px; height: 28px; }
+
+      @media (max-width: 1000px) {
+        main { padding: 16px; }
+        .workspace { grid-template-columns: 1fr; }
+        .pane { border-right: 0; border-bottom: 1px solid var(--line); }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>CoFinder v1.8.6 Complete Large Toolbar Icon Variants</h1>
+      <p class="intro">
+        Three fuller icon directions for the entire v1.8.5 pane toolbar set. Disconnect is intentionally absent because it lives inside the Connected menu.
+        All schemes include Back, Forward, Enclosing folder, Home, Refresh, Toggle Inspector, transfer/edit, New folder, New text file, Delete, Terminal, Recent, History, and Clear Recent.
+      </p>
+      <div id="concepts"></div>
+    </main>
+
+    <script>
+      const localActions = [
+        ["back", "Back", "nav"],
+        ["forward", "Forward", "nav"],
+        ["up", "Enclosing folder", "nav"],
+        ["home", "Home", "nav"],
+        ["refresh", "Refresh", "nav"],
+        ["inspector", "Toggle inspector", "nav"],
+        ["upload", "Upload", "transfer"],
+        ["folderPlus", "New folder", "create"],
+        ["filePlus", "New text file", "create"],
+        ["delete", "Delete", "danger"],
+        ["terminal", "Open terminal here", "nav"]
+      ];
+      const remoteActions = [
+        ["back", "Back", "nav"],
+        ["forward", "Forward", "nav"],
+        ["up", "Enclosing folder", "nav"],
+        ["home", "Home", "nav"],
+        ["refresh", "Refresh", "nav"],
+        ["inspector", "Toggle inspector", "nav"],
+        ["download", "Download", "transfer"],
+        ["edit", "Edit remote text file", "edit"],
+        ["folderPlus", "New folder", "create"],
+        ["filePlus", "New text file", "create"],
+        ["delete", "Delete", "danger"],
+        ["terminal", "Open SSH terminal here", "nav"]
+      ];
+      const utilityActions = [
+        ["recent", "Recent", "history"],
+        ["history", "History", "history"],
+        ["clearRecent", "Clear recent", "history"]
+      ];
+      const concepts = [
+        {
+          cls: "s1",
+          title: "E1 — User-preference hybrid",
+          tag: "D2 navigation + D1 create/delete",
+          desc: "Keeps the D2-style Back/Forward/Enclosing/Upload/Download direction, uses the D1 delete/new-item feel, and makes Home a two-tone filled house."
+        },
+        {
+          cls: "s2",
+          title: "E2 — Finder-like filled symbols",
+          tag: "Softer color, stronger objects",
+          desc: "More macOS utility feel: rounded, filled, slightly glossy object shapes. Navigation stays restrained; file operations get clearer object silhouettes."
+        },
+        {
+          cls: "s3",
+          title: "E3 — Maximum-glyph compact toolbar",
+          tag: "Largest icons, minimal chrome",
+          desc: "The most compact and bold direction. Icons nearly touch the safe area, while grouped capsules use dividers instead of individual button outlines."
+        }
+      ];
+
+      function svg(paths) {
+        return `<svg viewBox="0 0 28 28" aria-hidden="true">${paths}</svg>`;
+      }
+      function p(d, fill = "currentColor", extra = "") {
+        return `<path d="${d}" fill="${fill}" ${extra}/>`;
+      }
+      function r(x, y, w, h, rx, fill = "currentColor", extra = "") {
+        return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${rx}" fill="${fill}" ${extra}/>`;
+      }
+      function c(cx, cy, rr, fill = "currentColor", extra = "") {
+        return `<circle cx="${cx}" cy="${cy}" r="${rr}" fill="${fill}" ${extra}/>`;
+      }
+
+      function iconE1(name) {
+        const op = 'opacity=".25"';
+        const op2 = 'opacity=".45"';
+        const common = {
+          back: p("M17.2 5.2 8.4 14l8.8 8.8-2.5 2.2L3.8 14 14.7 3z"),
+          forward: p("m10.8 5.2 8.8 8.8-8.8 8.8 2.5 2.2L24.2 14 13.3 3z"),
+          up: p("M14 4.8 24 14.8a1.75 1.75 0 0 1-2.48 2.48L14 9.78l-7.52 7.5A1.75 1.75 0 0 1 4 14.8z"),
+          home: p("M3.8 13.2 14 4l10.2 9.2-2.4 2.55-1.35-1.22V23H7.55v-8.47L6.2 15.75z", "currentColor", op) + p("M8.6 13.65 14 8.78l5.4 4.87V23H8.6z"),
+          refresh: p("M8.1 7.4a8.3 8.3 0 0 1 13.7 3.2h-3.5a5 5 0 0 0-8.1-1.1l2.1 2.1H5.1V4.4zm11.8 13.2A8.3 8.3 0 0 1 6.2 17.4h3.5a5 5 0 0 0 8.1 1.1l-2.1-2.1h7.2v7.2z"),
+          inspector: r(4, 4, 20, 20, 3, "currentColor", op) + r(14.2, 5.8, 7, 16.4, 1.6) + p("M11.2 5.8v16.4H7.3V5.8z"),
+          upload: p("M12.4 20V9.9l-3.3 3.2-2.3-2.4L14 3.8l7.2 6.9-2.3 2.4-3.3-3.2V20z") + r(5, 21.5, 18, 3, 1.5, "currentColor", op2),
+          download: p("M15.6 8v10.1l3.3-3.2 2.3 2.4-7.2 6.9-7.2-6.9 2.3-2.4 3.3 3.2V8z") + r(5, 3.5, 18, 3, 1.5, "currentColor", op2),
+          folderPlus: p("M3.4 8.2a2.3 2.3 0 0 1 2.3-2.3h5l2.25 2.25H22.3a2.3 2.3 0 0 1 2.3 2.3v9.2a2.6 2.6 0 0 1-2.6 2.6H6a2.6 2.6 0 0 1-2.6-2.6z", "currentColor", op) + p("M17 10.8h3.1v3.45h3.45v3H20.1v3.45H17v-3.45h-3.45v-3H17z"),
+          filePlus: p("M7.2 3.4h9.2l4.4 4.4v16.8H7.2z", "currentColor", op) + p("M15.6 3.9V8.8h4.9M12.4 12.2h3.2v3.4H19v3h-3.4V22h-3.2v-3.4H9v-3h3.4z"),
+          delete: p("M7.7 8.9h12.6l-.95 13.1a3 3 0 0 1-3 2.7h-4.7a3 3 0 0 1-3-2.7z", "currentColor", op) + p("M9.7 4.7h8.6l.7 2.3h4.3v2.8H4.7V7h4.3z"),
+          terminal: r(3.8, 5, 20.4, 18, 3, "currentColor", op) + p("m8 10 4.2 4L8 18l-1.9-2 2.1-2-2.1-2zM14.5 17.2h6.4v2.5h-6.4z"),
+          edit: p("m5.5 21.2 1.5-6.1 9.7-9.7 5.9 5.9-9.7 9.7-6.1 1.5a1 1 0 0 1-1.3-1.3z", "currentColor", op) + p("m18.3 3.7.95-.95a2.25 2.25 0 0 1 3.2 0l.8.8a2.25 2.25 0 0 1 0 3.2l-.95.95z"),
+          recent: c(14, 14, 9, "currentColor", op) + p("M12.7 7.6h2.7v7.3l4.2 2.5-1.35 2.3-5.55-3.3z"),
+          history: p("M7 9H3.8V5.8H6v1.3a9.2 9.2 0 1 1 .9 14.8l1.7-2.5A6.1 6.1 0 1 0 7 9z") + p("M12.6 7.5h2.7V15l4 2.35-1.35 2.3-5.35-3.2z", "currentColor", op2),
+          clearRecent: c(12.2, 12.2, 7.4, "currentColor", op) + p("M11 7.1h2.4v5.7l3.2 1.9-1.2 2-4.4-2.6zM18.8 17.2l4.4 4.4-1.9 1.9-4.4-4.4zM23.2 17.2l-4.4 4.4-1.9-1.9 4.4-4.4z")
+        };
+        return svg(common[name] || "");
+      }
+
+      function iconE2(name) {
+        const pale = 'opacity=".3"';
+        const mid = 'opacity=".58"';
+        const common = {
+          back: p("M17.4 4.2 7.6 14l9.8 9.8-3 2.2L2.5 14 14.4 2z"),
+          forward: p("m10.6 4.2 9.8 9.8-9.8 9.8 3 2.2L25.5 14 13.6 2z"),
+          up: p("M14 3.8 25 14.8l-2.8 2.7L14 9.3l-8.2 8.2L3 14.8z"),
+          home: p("M3.4 13 14 3.6 24.6 13l-2.5 2.8-1.2-1.1v8.8H7.1v-8.8l-1.2 1.1z", "currentColor", pale) + p("M9.1 13.5 14 9.1l4.9 4.4v10H9.1z", "currentColor", mid),
+          refresh: p("M8.4 7.2A8.5 8.5 0 0 1 22 10.5h-3.4A5.4 5.4 0 0 0 10.1 9l2.1 2.1H4.8V3.7zm11.2 13.6A8.5 8.5 0 0 1 6 17.5h3.4a5.4 5.4 0 0 0 8.5 1.5l-2.1-2.1h7.4v7.4z"),
+          inspector: r(3.8, 4, 20.4, 20, 4, "currentColor", pale) + r(13, 6, 8.2, 16, 2) + r(6.2, 6, 4.8, 16, 1.4, "currentColor", mid),
+          upload: p("M12 20.2V10.5l-3.4 3.1-2.5-2.6L14 3.8l7.9 7.2-2.5 2.6-3.4-3.1v9.7z") + r(5.2, 21.2, 17.6, 3.4, 1.7, "currentColor", mid),
+          download: p("M16 7.8v9.7l3.4-3.1 2.5 2.6-7.9 7.2L6.1 17l2.5-2.6 3.4 3.1V7.8z") + r(5.2, 3.4, 17.6, 3.4, 1.7, "currentColor", mid),
+          folderPlus: p("M3.1 7.5c0-1.2 1-2.2 2.2-2.2h5.2L12.9 8h9.8c1.2 0 2.2 1 2.2 2.2v9.2c0 1.5-1.2 2.7-2.7 2.7H5.8c-1.5 0-2.7-1.2-2.7-2.7z", "currentColor", pale) + p("M16.8 10.2h3.4v3.6h3.6V17h-3.6v3.6h-3.4V17h-3.6v-3.2h3.6z"),
+          filePlus: p("M6.8 3.1h9.6l4.8 4.8v16.9H6.8z", "currentColor", pale) + p("M15.7 3.5V9h5.1M12.2 11.8h3.6v3.6h3.6v3.1h-3.6v3.6h-3.6v-3.6H8.6v-3.1h3.6z"),
+          delete: p("M7.5 8.6h13l-1 13.7a2.9 2.9 0 0 1-2.9 2.6h-5.2a2.9 2.9 0 0 1-2.9-2.6z", "currentColor", pale) + p("M9.4 4.4h9.2l.7 2.4h4.4v3H4.3v-3h4.4z"),
+          terminal: r(3.2, 4.6, 21.6, 18.8, 4, "currentColor", pale) + p("m7.4 9.6 4.8 4.4-4.8 4.4-2-2.2 2.4-2.2-2.4-2.2zM14 17.5h7v2.6h-7z"),
+          edit: p("m5.2 21.3 1.65-6.5 9.8-9.8 6.35 6.35-9.8 9.8-6.5 1.65a1.2 1.2 0 0 1-1.5-1.5z", "currentColor", pale) + p("m18.4 3.3.95-.95a2.45 2.45 0 0 1 3.45 0l.85.85a2.45 2.45 0 0 1 0 3.45l-.95.95z"),
+          recent: c(14, 14, 9.3, "currentColor", pale) + p("M12.5 6.9h3v7.7l4.35 2.6-1.5 2.55-5.85-3.5z"),
+          history: p("M7.2 8.7H3.2V4.8h2.7v1.8A9.45 9.45 0 1 1 6.8 22l1.9-2.7A6.1 6.1 0 1 0 7.2 8.7z") + p("M12.4 7h3v7.7l4 2.4-1.45 2.45-5.55-3.3z", "currentColor", mid),
+          clearRecent: c(12, 12, 7.7, "currentColor", pale) + p("M10.6 6.6h2.8v5.8l3.3 2-1.4 2.3-4.7-2.8zM18.5 16.8l5 5-2 2-5-5zM23.5 16.8l-5 5-2-2 5-5z")
+        };
+        return svg(common[name] || "");
+      }
+
+      function iconE3(name) {
+        const tint = 'opacity=".22"';
+        const common = {
+          back: p("M17.7 4 7.7 14l10 10-3.2 2.2L2.3 14 14.5 1.8z"),
+          forward: p("m10.3 4 10 10-10 10 3.2 2.2L25.7 14 13.5 1.8z"),
+          up: p("M14 3.2 25.8 15l-3.1 2.8L14 9.2l-8.7 8.6L2.2 15z"),
+          home: p("M3 12.9 14 3l11 9.9-2.8 3-1-1v9.3H6.8v-9.3l-1 1z", "currentColor", tint) + p("M8.6 13.1 14 8.3l5.4 4.8v11.1H8.6z"),
+          refresh: p("M8 6.6a9 9 0 0 1 14.5 3.6h-3.8a5.5 5.5 0 0 0-8.6-1.3l2.25 2.25H4.5V3.3zm12 14.8a9 9 0 0 1-14.5-3.6h3.8a5.5 5.5 0 0 0 8.6 1.3l-2.25-2.25h7.85v7.85z"),
+          inspector: r(3.3, 3.6, 21.4, 20.8, 3.2, "currentColor", tint) + r(14.2, 5.3, 8.1, 17.4, 1.8) + r(5.7, 5.3, 5.8, 17.4, 1.5),
+          upload: p("M11.8 20.6V10.7L8.2 14 5.6 11.3 14 3.4l8.4 7.9-2.6 2.7-3.6-3.3v9.9z") + r(4.4, 21.5, 19.2, 3.4, 1.7),
+          download: p("M16.2 7.4v9.9l3.6-3.3 2.6 2.7-8.4 7.9-8.4-7.9L8.2 14l3.6 3.3V7.4z") + r(4.4, 3.1, 19.2, 3.4, 1.7),
+          folderPlus: p("M2.8 7.2h8.5l2.4 2.4h11.5v12.2H2.8z", "currentColor", tint) + p("M16.4 9.8H20v4h4v3.4h-4v4h-3.6v-4h-4v-3.4h4z"),
+          filePlus: p("M6.3 2.8h9.9l5.5 5.5v17H6.3z", "currentColor", tint) + p("M15.3 3.2v6.1h6M11.9 11.5h3.7v3.8h3.8v3.4h-3.8v3.8h-3.7v-3.8H8.1v-3.4h3.8z"),
+          delete: p("M7 8.2h14l-1 14.1a3 3 0 0 1-3 2.8h-6a3 3 0 0 1-3-2.8z", "currentColor", tint) + p("M9 4h10l.75 2.5h4.55v3.2H3.7V6.5h4.55z"),
+          terminal: r(2.9, 4.3, 22.2, 19.4, 3.2, "currentColor", tint) + p("m7 9.4 5 4.6-5 4.6-2.2-2.4 2.6-2.2-2.6-2.2zM14 17.6h7.4v2.9H14z"),
+          edit: p("m5 21.5 1.7-6.8L16.8 4.6l6.6 6.6-10.1 10.1-6.8 1.7A1.2 1.2 0 0 1 5 21.5z", "currentColor", tint) + p("m18.7 2.9.95-.95a2.6 2.6 0 0 1 3.7 0l.7.7a2.6 2.6 0 0 1 0 3.7l-.95.95z"),
+          recent: c(14, 14, 9.6, "currentColor", tint) + p("M12.3 6.4h3.2v8.1l4.6 2.7-1.65 2.8-6.15-3.65z"),
+          history: p("M7.5 8.5H3V4h3v2a9.8 9.8 0 1 1 .9 16l2-2.8a6.3 6.3 0 1 0-1.4-10.7z") + p("M12.2 6.5h3.2v8.1l4.25 2.55-1.6 2.7-5.85-3.5z", "currentColor", tint),
+          clearRecent: c(11.8, 11.8, 8, "currentColor", tint) + p("M10.2 6.2h3v6l3.6 2.1-1.5 2.6-5.1-3.1zM18.3 16.4l5.3 5.3-2.2 2.2-5.3-5.3zM23.6 16.4l-5.3 5.3-2.2-2.2 5.3-5.3z")
+        };
+        return svg(common[name] || "");
+      }
+
+      function icon(name, scheme) {
+        if (scheme === "s2") return iconE2(name);
+        if (scheme === "s3") return iconE3(name);
+        return iconE1(name);
+      }
+      function button(action, scheme) {
+        const [name, label, tone] = action;
+        return `<button class="tb ${tone}" title="${label}" aria-label="${label}">${icon(name, scheme)}</button>`;
+      }
+      function controls(scheme) {
+        return `
+          <div class="filter">Filter names</div>
+          <span class="cluster">${utilityActions.map((a) => button(a, scheme)).join("")}</span>
+        `;
+      }
+      function toolbar(actions, scheme) {
+        const groups = [
+          actions.slice(0, 6),
+          actions.slice(6, actions.length - 1),
+          actions.slice(actions.length - 1)
+        ];
+        return `
+          <div class="toolbar">
+            ${groups.map((g) => `<span class="cluster">${g.map((a) => button(a, scheme)).join("")}</span>`).join("")}
+            ${controls(scheme)}
+          </div>
+        `;
+      }
+      function iconSheet(scheme) {
+        const unique = [...localActions, ...remoteActions, ...utilityActions].filter((item, i, arr) => arr.findIndex((x) => x[0] === item[0]) === i);
+        return `<div class="icon-sheet">${unique.map((a) => `<div class="sheet-item">${button(a, scheme)}<span>${a[1]}</span></div>`).join("")}</div>`;
+      }
+      function conceptMarkup(concept) {
+        return `
+          <section class="concept ${concept.cls}">
+            <div class="concept-head">
+              <div>
+                <h2>${concept.title}</h2>
+                <p>${concept.desc}</p>
+              </div>
+              <div class="tag">${concept.tag}</div>
+            </div>
+            <div class="workspace">
+              <div class="pane">
+                <div class="pane-top">
+                  <div class="pane-title"><strong>Experiment</strong><span>Local</span></div>
+                  <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+                  ${toolbar(localActions, concept.cls)}
+                </div>
+                <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+                <div class="file-row"><span class="name"><i class="mini-folder"></i>260429</span><span>2026/5/14 11:38</span><span>—</span><span>Folder</span></div>
+                <div class="file-row"><span class="name"><i class="mini-doc"></i>postrun_test.log</span><span>2026/5/12 22:11</span><span>4.10 MB</span><span>Document</span></div>
+              </div>
+              <div class="pane">
+                <div class="pane-top">
+                  <div class="pane-title"><strong>sge</strong><span>zhouwenxiong@10.0.32.10:22</span><i class="dot"></i><span>Connected</span></div>
+                  <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> Users <span>›</span> <b>260429</b></div>
+                  ${toolbar(remoteActions, concept.cls)}
+                </div>
+                <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Owner</span></div>
+                <div class="file-row"><span class="name"><i class="mini-folder"></i>result_ilmn</span><span>2026/5/14 09:34</span><span>—</span><span>zhouwenxiong</span></div>
+                <div class="file-row"><span class="name"><i class="mini-doc"></i>align_ilmn_1.sh</span><span>2026/5/4 20:46</span><span>1.48 KB</span><span>zhouwenxiong</span></div>
+              </div>
+            </div>
+            ${iconSheet(concept.cls)}
+          </section>
+        `;
+      }
+      document.getElementById("concepts").innerHTML = concepts.map(conceptMarkup).join("");
+    </script>
+  </body>
+</html>
