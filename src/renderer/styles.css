@@ -586,6 +586,19 @@ body,
   pointer-events: none;
 }
 
+.cfv12-root .v12m-pane-toolbar .v12m-pane-action svg,
+.cfv12-root .v12m-pane-toolbar-history-group .v12m-icon-select-wrap svg,
+.cfv12-root .v12m-pane-toolbar-history-group .v12m-icon-button svg {
+  width: 22px;
+  height: 22px;
+}
+
+.cfv12-root .v12m-pane-toolbar .v12m-pane-action svg *,
+.cfv12-root .v12m-pane-toolbar-history-group .v12m-icon-select-wrap svg *,
+.cfv12-root .v12m-pane-toolbar-history-group .v12m-icon-button svg * {
+  vector-effect: non-scaling-stroke;
+}
+
 .cfv12-root .v12m-icon-select {
   position: absolute;
   inset: 0;
