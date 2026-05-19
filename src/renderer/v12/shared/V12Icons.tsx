@@ -227,14 +227,17 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     case "pencil":
       return (
         <svg {...s}>
-          <path d="M4.5 14.8l1.1-3.7 7.2-7.2a1.6 1.6 0 012.3 2.3l-7.2 7.2-3.4 1.4z" />
-          <path d="M11.7 5l2.3 2.3" />
+          <path d="M8.5 5.5h-2.7a1.3 1.3 0 00-1.3 1.3v7.4c0 .72.58 1.3 1.3 1.3h7.4c.72 0 1.3-.58 1.3-1.3v-2.7" />
+          <path d="M10.2 11.2l-2.7.8.8-2.7 5.6-5.6a1.2 1.2 0 011.7 1.7l-5.4 5.8z" />
         </svg>
       );
     case "trash":
       return (
         <svg {...s}>
-          <path d="M6.5 7.5v9h7v-9M4 7.5h12M8 4.5h4l1 1h3v2h-12v-2h3l1-1z" />
+          <path d="M6.7 7.4l.5 8.2c.04.64.57 1.15 1.21 1.15h3.18c.64 0 1.17-.51 1.21-1.15l.5-8.2" />
+          <path d="M5 7.4h10" />
+          <path d="M8.2 5.7h3.6M9 4.2h2l.45 1.5h-2.9L9 4.2z" />
+          <path d="M9 9.4v4.7M11 9.4v4.7" />
         </svg>
       );
     case "info-circle":

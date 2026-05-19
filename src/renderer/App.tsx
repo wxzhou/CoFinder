@@ -3904,8 +3904,8 @@ export function App(props: AppProps = {}) {
             onClick: () => void enqueueDownload(activeTab.id)
           },
           {
-            label: "Edit remote file",
-            title: "Edit selected remote text file",
+            label: "Edit",
+            title: "Edit",
             icon: "pencil",
             tone: "edit",
             disabled: remotePane.selectedFullPaths.length !== 1 || !remotePane.connectionId,
