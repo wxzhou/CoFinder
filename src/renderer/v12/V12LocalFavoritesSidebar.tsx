@@ -181,7 +181,7 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
           aria-label="Preferences"
           onClick={() => props.onOpenPreferences()}
         >
-          <V12TbIcon name="gear" />
+          <V12TbIcon name="gear-preferences" />
         </button>
       </div>
     </aside>
