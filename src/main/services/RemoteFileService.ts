@@ -101,7 +101,11 @@ export class RemoteFileService {
         normalizedPath,
         listAttempted: true
       });
-      const entries = (await connection.client.list(normalizedPath)) as RemoteListItem[];
+      const entries = (await withTimeout(
+        connection.client.list(normalizedPath),
+        15_000,
+        "Remote connection did not respond. Please reconnect."
+      )) as RemoteListItem[];
       const ownerNames = await this.resolveRemoteOwnerNames(connection.client, entries);
       this.log("remote:listDirectory success", {
         connectionId,
@@ -124,6 +128,12 @@ export class RemoteFileService {
         errorMessage: raw.message
       });
 
+      const mappedError = this.mapListError(error);
+      if (mappedError.code === "REMOTE_DISCONNECTED") {
+        void this.connectionManager.disconnect(connectionId).catch(() => undefined);
+        throw mappedError;
+      }
+
       // Optional diagnostic only. Do not use stat to pre-reject directory browsing.
       try {
         const stat = await connection.client.stat(normalizedPath);
@@ -143,7 +153,7 @@ export class RemoteFileService {
         });
       }
 
-      throw this.mapListError(error);
+      throw mappedError;
     }
   }
 
@@ -391,6 +401,7 @@ export class RemoteFileService {
   }
 
   private mapListError(error: unknown): RemoteServiceError {
+    if (error instanceof RemoteServiceError) return error;
     const message =
       typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote list failed";
     if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
@@ -402,7 +413,7 @@ export class RemoteFileService {
     if (/EACCES|Permission denied/i.test(message)) {
       return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
     }
-    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+    if (/Not connected|Connection lost|No response from server|did not respond|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
       return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
     }
     return new RemoteServiceError("REMOTE_LIST_FAILED", "Failed to list remote directory.", message);
@@ -654,6 +665,16 @@ function unique(items: string[]): string[] {
     out.push(item);
   }
   return out;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new RemoteServiceError("REMOTE_DISCONNECTED", message, "SFTP operation timed out.")), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
 }
 
 function resolveRemoteType(stat: RemoteStatItem): "file" | "directory" | "symlink" | "unknown" {

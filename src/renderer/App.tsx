@@ -1827,6 +1827,10 @@ export function App(props: AppProps = {}) {
       path: targetPath
     });
     if (!result.ok) {
+      if (result.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(tabId, connectionId, result.error.message);
+        return false;
+      }
       setTabs((prev) =>
         prev.map((tab) =>
           tab.id !== tabId ||
@@ -1872,6 +1876,27 @@ export function App(props: AppProps = {}) {
     const profileId = tabs.find((tab) => tab.id === tabId)?.remotePane.activeProfileId;
     rememberRemoteRecent(profileId, payload.path);
     return true;
+  }
+
+  function markRemoteDisconnected(tabId: string, connectionId: string, message: string): void {
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id !== tabId || tab.remotePane.connectionId !== connectionId
+          ? tab
+          : {
+              ...tab,
+              remotePane: {
+                ...tab.remotePane,
+                connectionStatus: "disconnected",
+                connectionId: null,
+                error: message,
+                entries: [],
+                selectedFullPaths: [],
+                selectionAnchorFullPath: null
+              }
+            }
+      )
+    );
   }
 
   async function handleRemoteDoubleClick(tabId: string, entry: RemoteFileEntry): Promise<void> {
@@ -2816,6 +2841,9 @@ export function App(props: AppProps = {}) {
       name
     });
     if (!result.ok) {
+      if (result.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(tabId, tab.remotePane.connectionId, result.error.message);
+      }
       setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
       setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
       return;
@@ -2890,6 +2918,9 @@ export function App(props: AppProps = {}) {
       name
     });
     if (!result.ok) {
+      if (result.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(tabId, tab.remotePane.connectionId, result.error.message);
+      }
       setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
       setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
       return;
@@ -3402,6 +3433,10 @@ export function App(props: AppProps = {}) {
       path: target
     });
     if (!res.ok) {
+      if (res.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(tabId, tab.remotePane.connectionId, res.error.message);
+        return;
+      }
       setTabs((prev) =>
         prev.map((item) =>
           item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: res.error.message } } : item
@@ -3421,6 +3456,10 @@ export function App(props: AppProps = {}) {
       path: remotePath
     });
     if (!res.ok) {
+      if (res.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(tabId, tab.remotePane.connectionId, res.error.message);
+        return;
+      }
       setTabs((prev) =>
         prev.map((item) =>
           item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: res.error.message } } : item

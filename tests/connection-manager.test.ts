@@ -3,12 +3,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const connectMock = vi.fn();
 const realPathMock = vi.fn();
 const endMock = vi.fn();
+const onMock = vi.fn();
 
 vi.mock("ssh2-sftp-client", () => ({
   default: vi.fn(() => ({
     connect: connectMock,
     realPath: realPathMock,
-    end: endMock
+    end: endMock,
+    on: onMock
   }))
 }));
 
@@ -17,6 +19,7 @@ describe("ConnectionManager", () => {
     connectMock.mockReset().mockResolvedValue(undefined);
     realPathMock.mockReset().mockResolvedValue("/home/alice");
     endMock.mockReset().mockResolvedValue(undefined);
+    onMock.mockReset();
   });
 
   it("creates and tracks a managed SFTP connection", async () => {
@@ -33,11 +36,27 @@ describe("ConnectionManager", () => {
       host: "example.com",
       port: 2222,
       username: "alice",
-      password: "session-only"
+      password: "session-only",
+      keepaliveInterval: 15_000,
+      keepaliveCountMax: 3
     });
+    expect(onMock).toHaveBeenCalledWith("close", expect.any(Function));
+    expect(onMock).toHaveBeenCalledWith("end", expect.any(Function));
+    expect(onMock).toHaveBeenCalledWith("error", expect.any(Function));
     expect(connection.homePath).toBe("/home/alice");
     expect(manager.has(connection.id)).toBe(true);
     expect(manager.getConnection(connection.id)).toBe(connection);
+  });
+
+  it("removes tracked connections when the client emits lifecycle events", async () => {
+    const { ConnectionManager } = await import("../src/main/services/ConnectionManager");
+    const manager = new ConnectionManager();
+    const connection = await manager.createConnection({ host: "example.com", port: 22, username: "alice" });
+    const closeHandler = onMock.mock.calls.find(([event]) => event === "close")?.[1] as (() => void) | undefined;
+
+    closeHandler?.();
+
+    expect(manager.has(connection.id)).toBe(false);
   });
 
   it("falls back to root when SFTP realPath returns an empty home", async () => {

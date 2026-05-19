@@ -106,6 +106,22 @@ describe("RemoteFileService path/list behavior", () => {
     await expect(service.listDirectory("c1", "/missing")).rejects.toMatchObject({ code: "REMOTE_NOT_FOUND" });
   });
 
+  it("drops stale connections when listing reports a lost connection", async () => {
+    const list = vi.fn().mockRejectedValue(new Error("No response from server"));
+    const disconnect = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { list }
+      }),
+      disconnect
+    } as any);
+
+    await expect(service.listDirectory("c1", "/data")).rejects.toMatchObject({ code: "REMOTE_DISCONNECTED" });
+    expect(disconnect).toHaveBeenCalledWith("c1");
+  });
+
   it("renames remote path and returns destination path", async () => {
     const rename = vi.fn().mockResolvedValue(undefined);
     const service = new RemoteFileService({
