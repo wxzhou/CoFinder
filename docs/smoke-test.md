@@ -159,6 +159,20 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Icon polish:** confirm tab close, new tab, and sort direction controls are icons, not literal `x`, `+`, `^`, or `v` text.
 - **Tab chrome:** confirm the first tab aligns with the macOS traffic-light row and the native `CoFinder` title text is not visible above the app.
 
+## V2.8.6 toolbar and long-list polish
+
+- **Grouped toolbar capsules:** confirm local and remote toolbar buttons are grouped into navigation, file action, and history capsules without changing the surrounding header layout.
+- **Toolbar glyph size:** confirm toolbar icons are larger but button height, inter-button spacing, color, and stroke weight remain stable.
+- **Refresh icon:** confirm both local and remote Refresh icons use the longer-tailed circular arrows.
+- **Sticky file headers:** open a folder with enough files to scroll and confirm the file-list header stays visible while scrolling.
+
+## V2.8.7 creation flow and stale connection fixes
+
+- **Blank-space deselect:** select one or more files in a long local folder, scroll if needed, click blank file-list space below the rows, and confirm selection clears. Repeat in a connected remote folder.
+- **New Folder naming:** click local and remote New Folder and confirm the dialog opens with `New Folder` fully selected so typing immediately replaces it.
+- **New Text File naming:** click local and remote New Text File and confirm the dialog asks for a file name instead of silently creating `Untitled.txt`.
+- **Stale remote connection:** connect to a disposable remote test root, let the machine sleep or network drop, then try Refresh or path navigation. Confirm CoFinder no longer remains misleadingly Connected when the SFTP session is stale and prompts reconnect behavior.
+
 ## V2.5 remote text edit MVP
 
 - **Edit entry point:** connect to the isolated remote test root, select exactly one text file with content such as BED/tab-delimited text, then use the remote pane Edit action or right-click `Edit`. Confirm the configured text editor opens an app-managed edit-cache copy.

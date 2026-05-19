@@ -34,6 +34,8 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.8.3 | v1.8.3 | Complete on dev |
 | V2.8.4 | v1.8.4 | Complete on dev |
 | V2.8.5 | v1.8.5 | Complete on dev |
+| V2.8.6 | v1.8.6 | Complete on dev |
+| V2.8.7 | v1.8.7 | Complete on dev |
 
 ## Shipped phases (summary)
 
@@ -76,6 +78,8 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.8.3 | v1.8.3 | Inspector Detail and Keyboard Selection Fixes — complete on dev |
 | V2.8.4 | v1.8.4 | Inspector and Remote Edit Polish — complete on dev |
 | V2.8.5 | v1.8.5 | File List Columns and Tab Chrome Polish — complete on dev |
+| V2.8.6 | v1.8.6 | Toolbar Capsule and Sticky Header Polish — complete on dev |
+| V2.8.7 | v1.8.7 | Creation Flow and Stale Connection Fixes — complete on dev |
 
 ## Latest Completed Phase
 
@@ -180,6 +184,26 @@ V2.8.5 continues V12 UI polish:
 
 See **`docs/dev/V2.8.5_PLAN.md`**.
 
+### V2.8.6 / v1.8.6 — Toolbar Capsule and Sticky Header Polish
+
+V2.8.6 keeps the V12 layout stable while refining toolbar grouping and long-list behavior:
+
+- Pane toolbar controls are grouped into navigation, file action, and history capsules.
+- Toolbar glyphs are enlarged in place without changing toolbar height or spacing.
+- Refresh arrows have longer tails for clearer recognition.
+- File-list headers stay visible while scrolling long folders.
+
+### V2.8.7 / v1.8.7 — Creation Flow and Stale Connection Fixes
+
+V2.8.7 fixes hands-on workflow issues found after the toolbar polish:
+
+- Clicking blank file-list space below rows clears selection.
+- New Folder selects the default name immediately on dialog open.
+- New Text File uses the same explicit naming dialog as New Folder.
+- Stale SFTP sessions caused by sleep/idle disconnects are detected and the remote pane leaves misleading Connected state.
+
+See **`docs/dev/V2.8.7_PLAN.md`**.
+
 ### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
 
 V2.4 addresses V12 command ownership and visible polish before larger remote-edit work:
@@ -246,4 +270,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.8.5 / v1.8.5 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.8.7 / v1.8.7 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

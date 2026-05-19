@@ -4,11 +4,29 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.8.5.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.7.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.8.5**.
+No user-facing changes since **v1.8.7**.
+
+## v1.8.7 — Product milestone V2.8.7
+
+V2.8.7 is a small reliability and creation-flow bugfix release.
+
+- Clicking the file-list blank area below rows now clears selection, matching blank-space behavior beside row metadata columns.
+- New Folder dialogs now select the default name on open for immediate replacement typing.
+- New Text File now uses the same naming dialog flow as New Folder for both local and remote panes.
+- SFTP connections use keepalive and stale-connection cleanup; list/open failures caused by dropped sleep-idle connections now move the remote pane out of misleading Connected state.
+
+## v1.8.6 — Product milestone V2.8.6
+
+V2.8.6 is a compact V12 toolbar polish release.
+
+- Pane toolbar buttons are grouped into compact capsules by navigation, file actions, and history controls.
+- Toolbar glyphs are slightly larger without changing toolbar height, spacing, colors, or stroke width.
+- Refresh icon tails are lengthened for clearer visual weight.
+- V12 file-list headers remain sticky while scrolling long folders.
 
 ## v1.8.5 — Product milestone V2.8.5
 
