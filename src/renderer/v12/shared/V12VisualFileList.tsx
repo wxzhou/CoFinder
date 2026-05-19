@@ -128,7 +128,19 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
     return "—";
   };
   return (
-    <div className="v12m-file-grid-scroll">
+    <div
+      className="v12m-file-grid-scroll"
+      onMouseDown={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("[data-pane-row],.v12m-list,.v12m-list-head,.v12m-column-menu,button,input,textarea,select")) return;
+        props.onBackgroundMouseDown(event);
+      }}
+      onContextMenu={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("[data-pane-row],.v12m-list,.v12m-list-head,.v12m-column-menu")) return;
+        props.onBackgroundContextMenu?.(event);
+      }}
+    >
       <div
         className="v12m-list-head"
         style={gridStyle}

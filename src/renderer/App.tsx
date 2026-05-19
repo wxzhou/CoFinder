@@ -133,6 +133,7 @@ type DeleteBusyByTab = Record<string, Partial<Record<ActivePane, string>>>;
 
 type CreateFolderDialogState = {
   pane: ActivePane;
+  kind: "folder" | "textFile";
   tabId: string;
   name: string;
   error: string;
@@ -2770,13 +2771,13 @@ export function App(props: AppProps = {}) {
       );
       return;
     }
-    setCreateFolderDialog({ pane: "remote", tabId, name: "New Folder", error: "", busy: false });
+    setCreateFolderDialog({ pane: "remote", kind: "folder", tabId, name: "New Folder", error: "", busy: false });
   }
 
   async function createLocalDirectory(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.localPane.currentPath) return;
-    setCreateFolderDialog({ pane: "local", tabId, name: "New Folder", error: "", busy: false });
+    setCreateFolderDialog({ pane: "local", kind: "folder", tabId, name: "New Folder", error: "", busy: false });
   }
 
   async function submitCreateFolderDialog(): Promise<void> {
@@ -2784,10 +2785,18 @@ export function App(props: AppProps = {}) {
     const draft = createFolderDialog;
     const name = draft.name.trim();
     if (!name) {
-      setCreateFolderDialog((prev) => (prev ? { ...prev, error: "Folder name is required." } : prev));
+      setCreateFolderDialog((prev) => (prev ? { ...prev, error: `${draft.kind === "folder" ? "Folder" : "File"} name is required.` } : prev));
       return;
     }
     setCreateFolderDialog((prev) => (prev ? { ...prev, error: "", busy: true } : prev));
+    if (draft.kind === "textFile") {
+      if (draft.pane === "local") {
+        await performCreateLocalTextFile(draft.tabId, name);
+        return;
+      }
+      await performCreateRemoteTextFile(draft.tabId, name);
+      return;
+    }
     if (draft.pane === "local") {
       await performCreateLocalDirectory(draft.tabId, name);
       return;
@@ -2839,12 +2848,7 @@ export function App(props: AppProps = {}) {
     if (!tab) return;
     if (pane === "local") {
       if (!tab.localPane.currentPath) return;
-      const result = await window.cofinder.local.createTextFile({ parentPath: tab.localPane.currentPath });
-      if (!result.ok) {
-        setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
-        return;
-      }
-      await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+      setCreateFolderDialog({ pane: "local", kind: "textFile", tabId, name: "Untitled.txt", error: "", busy: false });
       return;
     }
     if (!tab.remotePane.connectionId) {
@@ -2855,15 +2859,43 @@ export function App(props: AppProps = {}) {
       );
       return;
     }
+    setCreateFolderDialog({ pane: "remote", kind: "textFile", tabId, name: "Untitled.txt", error: "", busy: false });
+  }
+
+  async function performCreateLocalTextFile(tabId: string, name: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.localPane.currentPath) {
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: "Select a local folder first." } : prev));
+      return;
+    }
+    const result = await window.cofinder.local.createTextFile({ parentPath: tab.localPane.currentPath, name });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
+      return;
+    }
+    await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+    setCreateFolderDialog(null);
+  }
+
+  async function performCreateRemoteTextFile(tabId: string, name: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId) {
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: "Connect to a remote server first." } : prev));
+      return;
+    }
     const result = await window.cofinder.remote.createTextFile({
       connectionId: tab.remotePane.connectionId,
-      parentPath: tab.remotePane.currentPath
+      parentPath: tab.remotePane.currentPath,
+      name
     });
     if (!result.ok) {
       setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      setCreateFolderDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
       return;
     }
     await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+    setCreateFolderDialog(null);
   }
 
   async function chmodRemoteSelection(tabId: string): Promise<void> {
@@ -5525,14 +5557,18 @@ export function App(props: AppProps = {}) {
           }}
         >
           <div className="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="create-folder-title">
-            <h3 id="create-folder-title">New Folder</h3>
-            <p>Create a folder in {createFolderDialog.pane === "local" ? "local" : "remote"} current path.</p>
+            <h3 id="create-folder-title">{createFolderDialog.kind === "folder" ? "New Folder" : "New Text File"}</h3>
+            <p>
+              Create a {createFolderDialog.kind === "folder" ? "folder" : "text file"} in{" "}
+              {createFolderDialog.pane === "local" ? "local" : "remote"} current path.
+            </p>
             <label className="create-folder-field">
-              Folder name
+              {createFolderDialog.kind === "folder" ? "Folder name" : "File name"}
               <input
                 autoFocus
                 value={createFolderDialog.name}
                 disabled={createFolderDialog.busy}
+                onFocus={(event) => event.currentTarget.select()}
                 onChange={(event) => setCreateFolderDialog((prev) => (prev ? { ...prev, name: event.target.value, error: "" } : prev))}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
