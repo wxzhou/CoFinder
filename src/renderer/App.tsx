@@ -101,6 +101,7 @@ type RemotePaneState = {
   sortDirection: SortDirection;
   history: HistoryState;
   error: string;
+  isListing: boolean;
 };
 
 type ContextMenuState = {
@@ -214,6 +215,10 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     defaultConflictPolicy: "prompt",
     queueAutoHideDelayMs: AUTO_HIDE_DELAY_MS,
     preserveTimestamps: true
+  },
+  remote: {
+    autoRefreshEnabled: false,
+    autoRefreshIntervalSeconds: 60
   },
   appearance: {
     rowDensity: "comfortable",
@@ -373,6 +378,29 @@ export function App(props: AppProps = {}) {
       window.localStorage.setItem(COFINDER_LAST_LOCAL_PATH_KEY, localPane.currentPath);
     }
   }, [appSettings.general.restoreLastSession, localPane.currentPath]);
+
+  useEffect(() => {
+    if (!appSettings.remote.autoRefreshEnabled) return undefined;
+    const intervalSeconds = Math.max(5, Math.round(appSettings.remote.autoRefreshIntervalSeconds || 60));
+    if (remotePane.connectionStatus !== "connected" || !remotePane.connectionId || !remotePane.currentPath) return undefined;
+    let inFlight = false;
+    const timer = window.setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
+      void listRemotePath(remotePane.connectionId!, remotePane.currentPath, "replace", activeTab.id).finally(() => {
+        inFlight = false;
+      });
+    }, intervalSeconds * 1000);
+    return () => window.clearInterval(timer);
+  }, [
+    activeTab.id,
+    appSettings.remote.autoRefreshEnabled,
+    appSettings.remote.autoRefreshIntervalSeconds,
+    remotePane.connectionId,
+    remotePane.connectionStatus,
+    remotePane.currentPath
+  ]);
+
   useEffect(() => {
     void (async () => {
       const result = await window.cofinder.system.getAppVersion();
@@ -1482,6 +1510,10 @@ export function App(props: AppProps = {}) {
                 username: connMeta.username,
                 authType: connMeta.authType,
                 homePath: homePath || "/",
+                currentPath: initialPath || homePath || "/",
+                pathInput: initialPath || homePath || "/",
+                entries: [],
+                isListing: true,
                 connectionStatus: "connected"
               }
             }
@@ -1822,6 +1854,22 @@ export function App(props: AppProps = {}) {
     tabId: string = activeTabId
   ): Promise<boolean> {
     const previousPath = tabs.find((tab) => tab.id === tabId)?.remotePane.currentPath ?? "";
+    setTabs((prev) =>
+      prev.map((tab) =>
+        tab.id !== tabId ||
+        (tab.remotePane.connectionId !== connectionId && tab.remotePane.connectionStatus !== "connecting")
+          ? tab
+          : {
+              ...tab,
+              remotePane: {
+                ...tab.remotePane,
+                error: "",
+                isListing: true,
+                pathInput: targetPath || tab.remotePane.currentPath
+              }
+            }
+      )
+    );
     const result = await window.cofinder.remote.listDirectory({
       connectionId,
       path: targetPath
@@ -1841,7 +1889,8 @@ export function App(props: AppProps = {}) {
                 remotePane: {
                   ...tab.remotePane,
                   error: result.error.message,
-                  pathInput: previousPath || targetPath
+                  pathInput: previousPath || targetPath,
+                  isListing: false
                 }
               }
         )
@@ -1868,6 +1917,7 @@ export function App(props: AppProps = {}) {
             pathInput: payload.path,
             selectedFullPaths: [],
             selectionAnchorFullPath: null,
+            isListing: false,
             history: computeHistory(tab.remotePane.history, mode, previousPath, payload.path)
           }
         };
@@ -1892,7 +1942,8 @@ export function App(props: AppProps = {}) {
                 error: message,
                 entries: [],
                 selectedFullPaths: [],
-                selectionAnchorFullPath: null
+                selectionAnchorFullPath: null,
+                isListing: false
               }
             }
       )
@@ -4512,7 +4563,7 @@ export function App(props: AppProps = {}) {
                     isPaneActive={activePane === "remote"}
                     entries={sortedRemoteEntries}
                     emptyMessage={
-                      remotePane.error ? "Remote folder could not be loaded." : "This remote folder is empty."
+                      remotePane.isListing ? "Loading remote folder..." : remotePane.error ? "Remote folder could not be loaded." : "This remote folder is empty."
                     }
                     sortKey={remotePane.sortKey}
                     sortDirection={remotePane.sortDirection}
@@ -5070,6 +5121,41 @@ export function App(props: AppProps = {}) {
                       draft: {
                         ...p.draft,
                         transfer: { ...p.draft.transfer, queueAutoHideDelayMs: Math.max(0, Math.min(60, Number(e.target.value))) * 1000 }
+                      }
+                    }))
+                  }
+                />
+              </label>
+              <label className="preferences-check">
+                <input
+                  type="checkbox"
+                  checked={preferences.draft.remote.autoRefreshEnabled}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: { ...p.draft, remote: { ...p.draft.remote, autoRefreshEnabled: e.target.checked } }
+                    }))
+                  }
+                />
+                Auto-refresh remote pane
+              </label>
+              <label>
+                Remote refresh interval
+                <input
+                  type="number"
+                  min={5}
+                  max={3600}
+                  disabled={!preferences.draft.remote.autoRefreshEnabled}
+                  value={preferences.draft.remote.autoRefreshIntervalSeconds}
+                  onChange={(e) =>
+                    setPreferences((p) => ({
+                      ...p,
+                      draft: {
+                        ...p.draft,
+                        remote: {
+                          ...p.draft.remote,
+                          autoRefreshIntervalSeconds: Math.max(5, Math.min(3600, Math.round(Number(e.target.value) || 60)))
+                        }
                       }
                     }))
                   }
@@ -5735,7 +5821,8 @@ function createRemotePaneState(): RemotePaneState {
     sortKey: "name",
     sortDirection: "asc",
     history: { backStack: [], forwardStack: [] },
-    error: ""
+    error: "",
+    isListing: false
   };
 }
 

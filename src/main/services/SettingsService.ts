@@ -18,6 +18,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     queueAutoHideDelayMs: 10_000,
     preserveTimestamps: true
   },
+  remote: {
+    autoRefreshEnabled: false,
+    autoRefreshIntervalSeconds: 60
+  },
   appearance: {
     rowDensity: "comfortable",
     defaultInspectorVisible: false,
@@ -53,6 +57,7 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
   const root = isRecord(raw) ? raw : {};
   const general = isRecord(root.general) ? root.general : {};
   const transfer = isRecord(root.transfer) ? root.transfer : {};
+  const remote = isRecord(root.remote) ? root.remote : {};
   const appearance = isRecord(root.appearance) ? root.appearance : {};
   const conflict = transfer.defaultConflictPolicy;
   const rowDensity = appearance.rowDensity;
@@ -73,6 +78,12 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
           : base.transfer.defaultConflictPolicy,
       queueAutoHideDelayMs: numberInRange(transfer.queueAutoHideDelayMs, base.transfer.queueAutoHideDelayMs, 0, 60_000),
       preserveTimestamps: bool(transfer.preserveTimestamps, base.transfer.preserveTimestamps)
+    },
+    remote: {
+      autoRefreshEnabled: bool(remote.autoRefreshEnabled, base.remote.autoRefreshEnabled),
+      autoRefreshIntervalSeconds: Math.round(
+        numberInRange(remote.autoRefreshIntervalSeconds, base.remote.autoRefreshIntervalSeconds, 5, 3600)
+      )
     },
     appearance: {
       rowDensity: rowDensity === "compact" || rowDensity === "comfortable" ? rowDensity : base.appearance.rowDensity,
@@ -96,6 +107,7 @@ function mergeSettings(base: AppSettings, patch: unknown): AppSettings {
       schemaVersion: 2,
       general: { ...base.general, ...(isRecord(p.general) ? p.general : {}) },
       transfer: { ...base.transfer, ...(isRecord(p.transfer) ? p.transfer : {}) },
+      remote: { ...base.remote, ...(isRecord(p.remote) ? p.remote : {}) },
       appearance: { ...base.appearance, ...(isRecord(p.appearance) ? p.appearance : {}) }
     },
     base

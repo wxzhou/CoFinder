@@ -49,6 +49,8 @@ class RemoteServiceError extends Error {
 }
 
 export class RemoteFileService {
+  private readonly ownerNameCache = new WeakMap<object, Map<string, string>>();
+
   constructor(private readonly connectionManager: ConnectionManager) {}
 
   async connect(config: ConnectionConfig): Promise<RemoteConnectResponse> {
@@ -373,9 +375,18 @@ export class RemoteFileService {
       )
     );
     const out = new Map<string, string>();
+    const cacheKey = typeof client === "object" && client !== null ? client : null;
+    const cache = cacheKey ? this.ownerNameCache.get(cacheKey) ?? new Map<string, string>() : null;
+    if (cacheKey && cache && !this.ownerNameCache.has(cacheKey)) this.ownerNameCache.set(cacheKey, cache);
     await Promise.all(
       ownerIds.map(async (uid) => {
+        const cached = cache?.get(uid);
+        if (cached) {
+          out.set(uid, cached);
+          return;
+        }
         const name = await resolveRemoteUidName(client, uid);
+        cache?.set(uid, name);
         out.set(uid, name);
       })
     );
@@ -697,12 +708,18 @@ async function resolveRemoteUidName(client: unknown, uid: string): Promise<strin
   return new Promise((resolve) => {
     let stdout = "";
     let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const finish = (value: string) => {
       if (settled) return;
       settled = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
       const name = value.trim().split(/\s+/)[0];
       resolve(name || uid);
     };
+    timer = setTimeout(() => finish(uid), 800);
     try {
       exec(`id -nu ${uid} 2>/dev/null`, (error, stream) => {
         if (error || !stream || typeof stream !== "object") {

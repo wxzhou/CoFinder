@@ -179,6 +179,10 @@ export type AppSettings = {
     queueAutoHideDelayMs: number;
     preserveTimestamps: boolean;
   };
+  remote: {
+    autoRefreshEnabled: boolean;
+    autoRefreshIntervalSeconds: number;
+  };
   appearance: {
     rowDensity: "compact" | "comfortable";
     defaultInspectorVisible: boolean;
