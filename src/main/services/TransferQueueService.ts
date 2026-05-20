@@ -4,7 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { posix as posixPath } from "node:path";
 import type { EnqueueDownloadRequest, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
-import type { TransferErrorCategory, TransferTask } from "../../shared/types/models";
+import type { TransferErrorCategory, TransferTask, TransferTaskItem } from "../../shared/types/models";
 import { redactSensitivePlaintext } from "../security/redactSensitive";
 import { buildProcessEnv } from "../utils/processEnv";
 import { assertSafeRemotePath, isSafeHostOrUsername } from "../utils/pathSafety";
@@ -26,6 +26,7 @@ type TransferQueueDeps = {
   spawnProcess: SpawnProcess;
   pathExists: (fullPath: string) => Promise<boolean>;
   localPathKind: (fullPath: string) => Promise<"file" | "directory" | "other">;
+  localDirectoryFiles: (fullPath: string) => Promise<TransferTaskItem[]>;
 };
 
 export class TransferQueueService {
@@ -41,7 +42,8 @@ export class TransferQueueService {
       runCommand: deps?.runCommand ?? runSimpleCommand,
       spawnProcess: deps?.spawnProcess ?? defaultSpawnProcess,
       pathExists: deps?.pathExists ?? defaultPathExists,
-      localPathKind: deps?.localPathKind ?? defaultLocalPathKind
+      localPathKind: deps?.localPathKind ?? defaultLocalPathKind,
+      localDirectoryFiles: deps?.localDirectoryFiles ?? defaultLocalDirectoryFiles
     };
   }
 
@@ -87,6 +89,14 @@ export class TransferQueueService {
         remotePath: rsyncRemotePath,
         preserveTimestamps: request.preserveTimestamps ?? true
       });
+      if (sourceKind === "directory") {
+        const items = await this.deps.localDirectoryFiles(source).catch(() => []);
+        if (items.length > 0) {
+          task.itemEntries = items;
+          task.itemTotalCount = items.length;
+          task.itemDoneCount = 0;
+        }
+      }
       this.tasks.push(task);
       taskIds.push(task.id);
     }
@@ -168,6 +178,7 @@ export class TransferQueueService {
     task.eta = undefined;
     task.currentFile = undefined;
     task.progressText = undefined;
+    this.resetTaskItems(task);
     task.rawLog = [];
     this.emit();
     void this.pump();
@@ -188,6 +199,7 @@ export class TransferQueueService {
       task.eta = undefined;
       task.currentFile = undefined;
       task.progressText = undefined;
+      this.resetTaskItems(task);
       task.rawLog = [];
       retried += 1;
     }
@@ -300,9 +312,11 @@ export class TransferQueueService {
         } else if (code === 0) {
           task.status = "success";
           task.errorCode = undefined;
+          this.completeTaskItems(task);
           this.appendLog(task, "Transfer completed successfully.");
         } else {
           task.status = "failed";
+          this.failRunningTaskItem(task);
           const recent = task.rawLog.slice(-20).join("\n");
           task.errorCode = classifyTransferFailure(recent);
           task.error = humanTransferError(task.errorCode, code ?? -1);
@@ -318,8 +332,10 @@ export class TransferQueueService {
   private consumeProgressLine(task: TransferTask, line: string): void {
     const safeLine = line.slice(0, 400);
     this.appendLog(task, safeLine);
-    const fileHint = safeLine.match(/to-check=\d+\/\d+\)\s*(.+)$/);
+    const fileHint = safeLine.match(/to-ch(?:eck|k)=\d+\/\d+\)\s*(.+)$/);
     if (fileHint && fileHint[1]) task.currentFile = fileHint[1];
+    const itemPath = parseRsyncItemPath(safeLine);
+    if (itemPath) this.markCurrentTaskItem(task, itemPath);
 
     const progress = safeLine.match(/(\d+)%\s+([0-9.]+\w+\/s)\s+(\d+:\d+:\d+|\d+:\d+)/);
     if (progress) {
@@ -340,6 +356,39 @@ export class TransferQueueService {
     task.rawLog = [...task.rawLog.slice(-199), line];
   }
 
+  private resetTaskItems(task: TransferTask): void {
+    if (!task.itemEntries) return;
+    task.itemEntries = task.itemEntries.map((item) => ({ ...item, status: "pending" }));
+    task.itemDoneCount = 0;
+  }
+
+  private completeTaskItems(task: TransferTask): void {
+    if (!task.itemEntries) return;
+    task.itemEntries = task.itemEntries.map((item) => ({ ...item, status: "success" }));
+    task.itemDoneCount = task.itemEntries.length;
+  }
+
+  private failRunningTaskItem(task: TransferTask): void {
+    if (!task.itemEntries) return;
+    task.itemEntries = task.itemEntries.map((item) => (item.status === "running" ? { ...item, status: "failed" } : item));
+    task.itemDoneCount = task.itemEntries.filter((item) => item.status === "success").length;
+  }
+
+  private markCurrentTaskItem(task: TransferTask, itemPath: string): void {
+    if (!task.itemEntries) return;
+    const normalized = normalizeTransferItemPath(itemPath);
+    const index = task.itemEntries.findIndex((item) => item.relativePath === normalized || item.displayPath === normalized);
+    if (index < 0) return;
+    task.itemEntries = task.itemEntries.map((item, i) => {
+      if (i === index) return { ...item, status: "running" };
+      if (item.status === "running") return { ...item, status: "success" };
+      return item;
+    });
+    task.itemDoneCount = task.itemEntries.filter((item) => item.status === "success").length;
+    task.currentFile = task.itemEntries[index].displayPath;
+    this.emit();
+  }
+
   private failTask(task: TransferTask, message: string, detail?: string): void {
     task.status = "failed";
     task.error = message;
@@ -358,6 +407,7 @@ export class TransferQueueService {
   private snapshot(): TransferTask[] {
     return this.tasks.map((task) => ({
       ...task,
+      itemEntries: task.itemEntries?.map((item) => ({ ...item })),
       rawLog: [...task.rawLog]
     }));
   }
@@ -382,6 +432,18 @@ function humanTransferError(category: TransferErrorCategory, exitCode: number): 
   if (category === "rsync_not_found") return "rsync is not installed or not found in PATH";
   if (category === "ssh_batchmode_failed") return "SSH key/passwordless login required for rsync transfer.";
   return `rsync exited with code ${exitCode}.`;
+}
+
+function parseRsyncItemPath(line: string): string | null {
+  if (!line || line.endsWith("/") || line.startsWith("sending ") || line.startsWith("receiving ") || line.startsWith("sent ")) return null;
+  if (/^\s*\d[\d,.]*\s+\d+%/.test(line)) return null;
+  if (/^(total size is|created directory|deleting |\.\/?$)/i.test(line)) return null;
+  if (/\s+\d+%\s+/.test(line) || /xfr#\d+/.test(line) || /to-ch(?:eck|k)=/.test(line)) return null;
+  return normalizeTransferItemPath(line);
+}
+
+function normalizeTransferItemPath(input: string): string {
+  return input.replace(/^\.\//, "").replace(/\\/g, "/").replace(/^\/+/, "");
 }
 
 async function ensureExistingPath(pathExists: (fullPath: string) => Promise<boolean>, fullPath: string): Promise<void> {
@@ -517,4 +579,32 @@ async function defaultLocalPathKind(fullPath: string): Promise<"file" | "directo
   if (stat.isDirectory()) return "directory";
   if (stat.isFile()) return "file";
   return "other";
+}
+
+async function defaultLocalDirectoryFiles(rootPath: string): Promise<TransferTaskItem[]> {
+  const out: TransferTaskItem[] = [];
+  await walkLocalDirectory(rootPath, "", out);
+  out.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return out;
+}
+
+async function walkLocalDirectory(rootPath: string, relativeDir: string, out: TransferTaskItem[]): Promise<void> {
+  const currentDir = relativeDir ? path.join(rootPath, relativeDir) : rootPath;
+  const entries = await fs.readdir(currentDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const relativePath = relativeDir ? path.posix.join(relativeDir.replace(/\\/g, "/"), entry.name) : entry.name;
+    const fullPath = path.join(rootPath, relativePath);
+    if (entry.isDirectory()) {
+      await walkLocalDirectory(rootPath, relativePath, out);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const stat = await fs.stat(fullPath).catch(() => null);
+    out.push({
+      relativePath: normalizeTransferItemPath(relativePath),
+      displayPath: normalizeTransferItemPath(relativePath),
+      size: stat?.size,
+      status: "pending"
+    });
+  }
 }

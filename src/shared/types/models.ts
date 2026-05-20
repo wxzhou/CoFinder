@@ -20,6 +20,7 @@ export type TransferErrorCategory =
   | "no_space_left"
   | "remote_disconnected"
   | "unknown";
+export type TransferTaskItemStatus = "pending" | "running" | "success" | "failed" | "skipped";
 
 export interface FileEntry {
   name: string;
@@ -144,10 +145,20 @@ export interface TransferTask {
   speed?: string;
   eta?: string;
   currentFile?: string;
+  itemTotalCount?: number;
+  itemDoneCount?: number;
+  itemEntries?: TransferTaskItem[];
   rawLog: string[];
   createdAt: number;
   startedAt?: number;
   finishedAt?: number;
   error?: string;
   errorCode?: TransferErrorCategory;
+}
+
+export interface TransferTaskItem {
+  relativePath: string;
+  displayPath: string;
+  size?: number;
+  status: TransferTaskItemStatus;
 }

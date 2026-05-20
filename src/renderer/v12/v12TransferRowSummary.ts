@@ -10,6 +10,9 @@ export function formatTransferTaskMetaLine(task: TransferTask): string {
   if (task.percent != null && Number.isFinite(task.percent)) {
     parts.push(`${Math.round(task.percent)}%`);
   }
+  if (task.itemTotalCount) {
+    parts.push(`${task.itemDoneCount ?? 0}/${task.itemTotalCount} files`);
+  }
   if (task.progressText?.trim()) {
     parts.push(task.progressText.trim());
   } else if (task.currentFile?.trim()) {

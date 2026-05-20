@@ -39,6 +39,10 @@ describe("formatTransferTaskMetaLine", () => {
     expect(s).toContain("ETA 0:12");
   });
 
+  it("includes directory item counts when present", () => {
+    expect(formatTransferTaskMetaLine(baseTask({ itemDoneCount: 2, itemTotalCount: 5, currentFile: "a.bin" }))).toBe("2/5 files · a.bin");
+  });
+
   it("falls back to em dash when empty", () => {
     expect(formatTransferTaskMetaLine(baseTask({ percent: undefined }))).toBe("—");
   });

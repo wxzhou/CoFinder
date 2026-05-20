@@ -23,6 +23,7 @@ export type V12TransferDrawerProps = {
 export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
   const expanded = props.state === "expanded" || props.state === "autoHidePending";
   const [filter, setFilter] = useState<"all" | "running" | "failed" | "done">("all");
+  const [collapsedTasks, setCollapsedTasks] = useState<Record<string, boolean>>({});
   const filteredTasks = props.tasks.filter((task) => {
     if (filter === "running") return task.status === "running" || task.status === "pending";
     if (filter === "failed") return task.status === "failed";
@@ -69,8 +70,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
           <div className="v12m-tq-panel">
             <div className="v12m-tq-head">
               <div className="v12m-tq-head-titles">
-                <strong className="v12m-tq-head-title">Transfer queue</strong>
-                <span className="v12m-tq-head-sum">{props.summary}</span>
+                <strong className="v12m-tq-head-title">Transfers</strong>
               </div>
               <div className="v12m-tq-head-actions">
                 <button type="button" className="v12m-tq-btn" onClick={() => props.onToggleExpand()}>
@@ -121,6 +121,30 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
                       </span>
                     </div>
                     <div className="v12m-tq-row-meta">{formatTransferTaskMetaLine(task)}</div>
+                    {task.itemEntries?.length ? (
+                      <div className="v12m-tq-items">
+                        <button
+                          type="button"
+                          className="v12m-tq-items-toggle"
+                          onClick={() => setCollapsedTasks((prev) => ({ ...prev, [task.id]: !prev[task.id] }))}
+                        >
+                          {collapsedTasks[task.id] ? "Show files" : "Hide files"}
+                        </button>
+                        {collapsedTasks[task.id] ? null : (
+                          <div className="v12m-tq-items-list">
+                            {sortTransferItems(task.itemEntries).slice(0, 80).map((item) => (
+                              <div key={item.relativePath} className={`v12m-tq-item v12m-tq-item--${item.status}`}>
+                                <span className="v12m-tq-item-status">{item.status}</span>
+                                <span className="v12m-tq-item-path" title={item.displayPath}>{item.displayPath}</span>
+                              </div>
+                            ))}
+                            {task.itemEntries.length > 80 ? (
+                              <div className="v12m-tq-item v12m-tq-item--more">+{task.itemEntries.length - 80} more files</div>
+                            ) : null}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
                     <div className="v12m-tq-row-actions">
                       {task.status === "pending" ? (
                         <button type="button" className="v12m-tq-act" onClick={() => void props.onCancelTask(task.id)}>
@@ -155,4 +179,9 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
       ) : null}
     </div>
   );
+}
+
+function sortTransferItems(items: NonNullable<TransferTask["itemEntries"]>): NonNullable<TransferTask["itemEntries"]> {
+  const rank = { running: 0, pending: 1, failed: 2, skipped: 3, success: 4 } as const;
+  return [...items].sort((a, b) => rank[a.status] - rank[b.status] || a.displayPath.localeCompare(b.displayPath));
 }

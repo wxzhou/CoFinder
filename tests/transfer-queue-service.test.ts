@@ -3,6 +3,7 @@ import type { ChildProcess } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
 import { TransferQueueService } from "../src/main/services/TransferQueueService";
 import type { EnqueueDownloadRequest, EnqueueUploadRequest } from "../src/shared/types/ipc";
+import type { TransferTaskItem } from "../src/shared/types/models";
 
 class FakeProc extends EventEmitter {
   stdout = new EventEmitter();
@@ -41,6 +42,7 @@ function createService(options?: {
   procs?: FakeProc[];
   pathExists?: boolean;
   localPathKind?: "file" | "directory" | "other";
+  localDirectoryFiles?: TransferTaskItem[];
 }) {
   const procs = options?.procs ?? [new FakeProc()];
   const spawnProcess = vi.fn(() => procs.shift() as unknown as ChildProcess);
@@ -57,7 +59,8 @@ function createService(options?: {
       return { ok: false as const, message: result.message || notFoundMessage, detail: result.detail };
     },
     pathExists: async () => options?.pathExists ?? true,
-    localPathKind: async () => options?.localPathKind ?? "file"
+    localPathKind: async () => options?.localPathKind ?? "file",
+    localDirectoryFiles: async () => options?.localDirectoryFiles ?? []
   });
 
   return { service, spawnProcess, runCommand };
@@ -206,6 +209,36 @@ describe("TransferQueueService state machine", () => {
     const task = service.list()[0];
     expect(task.destination).toBe("/path1/path2/xyz");
     expect(task.remotePath).toBe("/path1/path2");
+  });
+
+  it("tracks upload directory child files from rsync output", async () => {
+    const p1 = new FakeProc();
+    const { service, spawnProcess } = createService({
+      procs: [p1],
+      localPathKind: "directory",
+      localDirectoryFiles: [
+        { relativePath: "a.bin", displayPath: "a.bin", status: "pending" },
+        { relativePath: "nested/b.bin", displayPath: "nested/b.bin", status: "pending" }
+      ]
+    });
+
+    await service.enqueueUpload({ ...baseUpload, localSources: ["/tmp/folder"] });
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1));
+    p1.stdout.emit("data", Buffer.from("a.bin\n"));
+    await vi.waitFor(() => expect(service.list()[0].currentFile).toBe("a.bin"));
+    p1.stdout.emit("data", Buffer.from("nested/b.bin\n"));
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.itemDoneCount).toBe(1);
+      expect(task.itemEntries?.map((item) => item.status)).toEqual(["success", "running"]);
+    });
+    p1.emit("close", 0, null);
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.status).toBe("success");
+      expect(task.itemDoneCount).toBe(2);
+      expect(task.itemEntries?.every((item) => item.status === "success")).toBe(true);
+    });
   });
 
   it("fails task when rsync is missing", async () => {

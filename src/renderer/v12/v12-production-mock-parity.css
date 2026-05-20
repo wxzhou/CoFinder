@@ -565,7 +565,7 @@
 .cfv12-root .v12m-tq-row {
   display: grid;
   grid-template-columns: 1fr auto;
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   column-gap: 8px;
   row-gap: 2px;
   padding: 5px 10px;
@@ -602,6 +602,67 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
+}
+
+.cfv12-root .v12m-tq-items {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin-top: 3px;
+  padding-left: 22px;
+  min-width: 0;
+}
+
+.cfv12-root .v12m-tq-items-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--m-accent, #0a5fff);
+  font: 500 10px var(--m-font, system-ui);
+  padding: 0;
+  cursor: pointer;
+}
+
+.cfv12-root .v12m-tq-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-top: 3px;
+  max-height: 128px;
+  overflow: auto;
+}
+
+.cfv12-root .v12m-tq-item {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  font-size: 10px;
+  color: var(--m-fg-dim, rgba(60, 60, 67, 0.72));
+}
+
+.cfv12-root .v12m-tq-item--success {
+  color: var(--m-fg-faint, rgba(60, 60, 67, 0.48));
+}
+
+.cfv12-root .v12m-tq-item--running {
+  color: var(--m-accent, #0a5fff);
+  font-weight: 600;
+}
+
+.cfv12-root .v12m-tq-item--failed {
+  color: #9a2318;
+}
+
+.cfv12-root .v12m-tq-item-status {
+  width: 46px;
+  flex-shrink: 0;
+  text-transform: uppercase;
+  font-size: 8px;
+}
+
+.cfv12-root .v12m-tq-item-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cfv12-root .v12m-tq-badge {
