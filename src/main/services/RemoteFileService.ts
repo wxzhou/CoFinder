@@ -287,6 +287,7 @@ export class RemoteFileService {
     const normalizedPath = this.normalizeRemotePath(targetPath);
     try {
       const stat = (await connection.client.stat(normalizedPath)) as RemoteStatItem;
+      const parentEntry = await this.findParentListEntry(connection.client, normalizedPath).catch(() => undefined);
       const type = resolveRemoteType(stat);
       const size = type === "directory" && options?.includeDirectorySize !== false
         ? await this.getRemoteDirectorySize(connection.client as unknown as RemoteDeleteClient, normalizedPath)
@@ -294,8 +295,10 @@ export class RemoteFileService {
       const counts = type === "directory"
         ? await this.getRemoteDirectoryChildCounts(connection.client as unknown as RemoteDeleteClient, normalizedPath)
         : {};
-      const ownerNames = await this.resolveRemoteOwnerNames(connection.client, [stat]);
-      const rights = stat.rights ? rightsToRwx(stat.rights) : undefined;
+      const ownerValue = stat.owner ?? parentEntry?.owner;
+      const groupValue = stat.group ?? parentEntry?.group;
+      const ownerNames = await this.resolveRemoteOwnerNames(connection.client, [stat, ...(parentEntry ? [parentEntry] : [])]);
+      const rights = stat.rights ? rightsToRwx(stat.rights) : parentEntry?.rights ? rightsToRwx(parentEntry.rights) : undefined;
       return {
         name: posixPath.basename(normalizedPath),
         fullPath: normalizedPath,
@@ -303,8 +306,8 @@ export class RemoteFileService {
         size,
         mtime: new Date(stat.modifyTime ?? Date.now()).toISOString(),
         permissions: rights ?? (typeof stat.mode === "number" ? modeToRwx(stat.mode) : undefined),
-        owner: stat.owner !== undefined ? ownerNames.get(String(stat.owner)) ?? String(stat.owner) : undefined,
-        group: stat.group !== undefined ? String(stat.group) : undefined,
+        owner: ownerValue !== undefined ? ownerNames.get(String(ownerValue)) ?? String(ownerValue) : undefined,
+        group: groupValue !== undefined ? String(groupValue) : undefined,
         ...counts
       };
     } catch (error) {
@@ -366,6 +369,16 @@ export class RemoteFileService {
     };
   }
 
+  private async findParentListEntry(client: unknown, normalizedPath: string): Promise<RemoteListItem | undefined> {
+    const parentPath = posixPath.dirname(normalizedPath);
+    if (!parentPath || parentPath === normalizedPath) return undefined;
+    const name = posixPath.basename(normalizedPath);
+    const listClient = client as { list?: (path: string) => Promise<unknown[]> };
+    if (typeof listClient.list !== "function") return undefined;
+    const entries = (await listClient.list(parentPath)) as RemoteListItem[];
+    return entries.find((entry) => entry.name === name);
+  }
+
   private async resolveRemoteOwnerNames(client: unknown, entries: Array<{ owner?: number | string }>): Promise<Map<string, string>> {
     const ownerIds = Array.from(
       new Set(
@@ -386,7 +399,7 @@ export class RemoteFileService {
           return;
         }
         const name = await resolveRemoteUidName(client, uid);
-        cache?.set(uid, name);
+        if (name !== uid) cache?.set(uid, name);
         out.set(uid, name);
       })
     );
@@ -719,7 +732,7 @@ async function resolveRemoteUidName(client: unknown, uid: string): Promise<strin
       const name = value.trim().split(/\s+/)[0];
       resolve(name || uid);
     };
-    timer = setTimeout(() => finish(uid), 800);
+    timer = setTimeout(() => finish(uid), 2500);
     try {
       exec(`id -nu ${uid} 2>/dev/null`, (error, stream) => {
         if (error || !stream || typeof stream !== "object") {

@@ -24,6 +24,7 @@ V2.8.7 is a workflow reliability release covering creation flow, stale remote se
 - Remote directory listing avoids repeated slow owner-name lookups by caching resolved owner names and timing out slow lookups.
 - Initial remote listing shows a loading state instead of briefly presenting an empty remote folder.
 - The transfer drawer removes duplicate queue summary text and can show a collapsible per-file list for local folder uploads, including current file and completed/total file count.
+- Follow-up fixes keep remote Owner values as usernames instead of sticky UID fallbacks, fill Inspector Owner from the parent listing when SFTP `stat` omits it, group the remote auto-refresh checkbox and interval field in Preferences, and collapse the transfer drawer header/filter/actions into one row.
 
 ## v1.8.6 — Product milestone V2.8.6
 

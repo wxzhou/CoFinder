@@ -36,6 +36,37 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
     failed: props.tasks.filter((task) => task.status === "failed").length,
     done: props.tasks.filter((task) => task.status === "success" || task.status === "canceled" || task.status === "stopped").length
   };
+  const filterChips = (
+    <div className="v12m-tq-filters" role="tablist" aria-label="Transfer task filters" onClick={(event) => event.stopPropagation()}>
+      {(["all", "running", "failed", "done"] as const).map((item) => (
+        <button
+          key={item}
+          type="button"
+          className={`v12m-tq-chip${filter === item ? " is-on" : ""}`}
+          onClick={() => setFilter(item)}
+        >
+          {item} {counts[item]}
+        </button>
+      ))}
+    </div>
+  );
+  const actionButtons = expanded ? (
+    <div className="v12m-tq-head-actions" onClick={(event) => event.stopPropagation()}>
+      <button
+        type="button"
+        className={`v12m-tq-btn${props.pinned ? " is-on" : ""}`}
+        onClick={() => props.onTogglePin()}
+      >
+        {props.pinned ? "Pinned" : "Pin"}
+      </button>
+      <button type="button" className="v12m-tq-btn" onClick={() => props.onClearCompleted()}>
+        Clear
+      </button>
+      <button type="button" className="v12m-tq-btn" onClick={() => void props.onRetryFailed()}>
+        Retry failed
+      </button>
+    </div>
+  ) : null;
 
   return (
     <div className={`v12m-drawer ${expanded ? "is-open" : "is-collapsed"}`}>
@@ -54,6 +85,8 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
       >
         <span className="v12m-drawer-title">Transfers</span>
         <span className="v12m-drawer-sum">{props.summary}</span>
+        {expanded ? filterChips : null}
+        {actionButtons}
         <button
           type="button"
           className="v12m-drawer-chev"
@@ -68,42 +101,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
       {expanded ? (
         <div className="v12m-drawer-panel">
           <div className="v12m-tq-panel">
-            <div className="v12m-tq-head">
-              <div className="v12m-tq-head-titles">
-                <strong className="v12m-tq-head-title">Transfers</strong>
-              </div>
-              <div className="v12m-tq-head-actions">
-                <button type="button" className="v12m-tq-btn" onClick={() => props.onToggleExpand()}>
-                  Minimize
-                </button>
-                <button
-                  type="button"
-                  className={`v12m-tq-btn${props.pinned ? " is-on" : ""}`}
-                  onClick={() => props.onTogglePin()}
-                >
-                  {props.pinned ? "Pinned" : "Pin"}
-                </button>
-                <button type="button" className="v12m-tq-btn" onClick={() => props.onClearCompleted()}>
-                  Clear
-                </button>
-                <button type="button" className="v12m-tq-btn" onClick={() => void props.onRetryFailed()}>
-                  Retry failed
-                </button>
-              </div>
-            </div>
             {props.error ? <div className="cfv12p-error v12m-tq-err">{props.error}</div> : null}
-            <div className="v12m-tq-filters" role="tablist" aria-label="Transfer task filters">
-              {(["all", "running", "failed", "done"] as const).map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={`v12m-tq-chip${filter === item ? " is-on" : ""}`}
-                  onClick={() => setFilter(item)}
-                >
-                  {item} {counts[item]}
-                </button>
-              ))}
-            </div>
             <div className="v12m-tq-list">
               {filteredTasks.length === 0 ? (
                 <div className="v12m-tq-empty">No transfer tasks.</div>

@@ -5126,41 +5126,44 @@ export function App(props: AppProps = {}) {
                   }
                 />
               </label>
-              <label className="preferences-check">
-                <input
-                  type="checkbox"
-                  checked={preferences.draft.remote.autoRefreshEnabled}
-                  onChange={(e) =>
-                    setPreferences((p) => ({
-                      ...p,
-                      draft: { ...p.draft, remote: { ...p.draft.remote, autoRefreshEnabled: e.target.checked } }
-                    }))
-                  }
-                />
-                Auto-refresh remote pane
-              </label>
-              <label>
-                Remote refresh interval
-                <input
-                  type="number"
-                  min={5}
-                  max={3600}
-                  disabled={!preferences.draft.remote.autoRefreshEnabled}
-                  value={preferences.draft.remote.autoRefreshIntervalSeconds}
-                  onChange={(e) =>
-                    setPreferences((p) => ({
-                      ...p,
-                      draft: {
-                        ...p.draft,
-                        remote: {
-                          ...p.draft.remote,
-                          autoRefreshIntervalSeconds: Math.max(5, Math.min(3600, Math.round(Number(e.target.value) || 60)))
+              <div className={`preferences-inline-setting${preferences.draft.remote.autoRefreshEnabled ? "" : " is-disabled"}`}>
+                <label className="preferences-check">
+                  <input
+                    type="checkbox"
+                    checked={preferences.draft.remote.autoRefreshEnabled}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: { ...p.draft, remote: { ...p.draft.remote, autoRefreshEnabled: e.target.checked } }
+                      }))
+                    }
+                  />
+                  Auto-refresh remote pane
+                </label>
+                <label>
+                  Every
+                  <input
+                    type="number"
+                    min={5}
+                    max={3600}
+                    disabled={!preferences.draft.remote.autoRefreshEnabled}
+                    value={preferences.draft.remote.autoRefreshIntervalSeconds}
+                    onChange={(e) =>
+                      setPreferences((p) => ({
+                        ...p,
+                        draft: {
+                          ...p.draft,
+                          remote: {
+                            ...p.draft.remote,
+                            autoRefreshIntervalSeconds: Math.max(5, Math.min(3600, Math.round(Number(e.target.value) || 60)))
+                          }
                         }
-                      }
-                    }))
-                  }
-                />
-              </label>
+                      }))
+                    }
+                  />
+                </label>
+                <span>seconds</span>
+              </div>
               <label>
                 Row density
                 <select

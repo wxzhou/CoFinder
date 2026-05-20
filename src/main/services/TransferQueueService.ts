@@ -377,7 +377,11 @@ export class TransferQueueService {
   private markCurrentTaskItem(task: TransferTask, itemPath: string): void {
     if (!task.itemEntries) return;
     const normalized = normalizeTransferItemPath(itemPath);
-    const index = task.itemEntries.findIndex((item) => item.relativePath === normalized || item.displayPath === normalized);
+    const sourceBase = normalizeTransferItemPath(path.basename(task.localPath));
+    const index = task.itemEntries.findIndex((item) => {
+      const withBase = sourceBase ? `${sourceBase}/${item.relativePath}` : item.relativePath;
+      return item.relativePath === normalized || item.displayPath === normalized || withBase === normalized;
+    });
     if (index < 0) return;
     task.itemEntries = task.itemEntries.map((item, i) => {
       if (i === index) return { ...item, status: "running" };

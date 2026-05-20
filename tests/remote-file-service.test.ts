@@ -293,6 +293,37 @@ describe("RemoteFileService path/list behavior", () => {
     expect(info.group).toBe("100");
   });
 
+  it("fills path info owner from parent listing when stat omits owner", async () => {
+    const execClient = mockExecClient({ "1007": "zhouwenxiong" });
+    const stat = vi.fn().mockResolvedValue({
+      type: "-",
+      size: 42,
+      modifyTime: Date.now()
+    });
+    const list = vi.fn().mockResolvedValue([
+      {
+        name: "file.txt",
+        type: "-",
+        size: 42,
+        modifyTime: Date.now(),
+        rights: { user: "rw", group: "r", other: "r" },
+        owner: 1007
+      }
+    ]);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, list, client: execClient }
+      })
+    } as any);
+
+    const info = await service.getPathInfo("c1", "/a/file.txt");
+    expect(list).toHaveBeenCalledWith("/a");
+    expect(info.owner).toBe("zhouwenxiong");
+    expect(info.permissions).toBe("rw-r--r--");
+  });
+
   it("maps get info not found to REMOTE_NOT_FOUND", async () => {
     const stat = vi.fn().mockRejectedValue(new Error("No such file or directory"));
     const service = new RemoteFileService({

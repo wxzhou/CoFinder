@@ -226,7 +226,7 @@ describe("TransferQueueService state machine", () => {
     await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1));
     p1.stdout.emit("data", Buffer.from("a.bin\n"));
     await vi.waitFor(() => expect(service.list()[0].currentFile).toBe("a.bin"));
-    p1.stdout.emit("data", Buffer.from("nested/b.bin\n"));
+    p1.stdout.emit("data", Buffer.from("folder/nested/b.bin\n"));
     await vi.waitFor(() => {
       const task = service.list()[0];
       expect(task.itemDoneCount).toBe(1);
