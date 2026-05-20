@@ -172,6 +172,12 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **New Folder naming:** click local and remote New Folder and confirm the dialog opens with `New Folder` fully selected so typing immediately replaces it.
 - **New Text File naming:** click local and remote New Text File and confirm the dialog asks for a file name instead of silently creating `Untitled.txt`.
 - **Stale remote connection:** connect to a disposable remote test root, let the machine sleep or network drop, then try Refresh or path navigation. Confirm CoFinder no longer remains misleadingly Connected when the SFTP session is stale and prompts reconnect behavior.
+- **Inspector labels:** select a local and remote file, open Inspector, and confirm the metadata row says `Kind` and Owner is present, using `—` when unavailable.
+- **Remote preview cache reuse:** open a remote text file, update the remote file from another session, then open it again while the editor remains open. Confirm the same local cache path is reused and refreshed rather than creating a second temporary preview path.
+- **Remote auto-refresh preference:** open Preferences, enable Auto-refresh remote pane, set a short interval such as 5 seconds, then change the connected test directory from another session and confirm the active remote pane refreshes. Disable the setting afterward.
+- **Remote initial loading state:** connect to a remote profile and confirm the remote pane shows a loading message during the first list instead of briefly claiming the folder is empty.
+- **Folder upload details:** upload a local folder with several files to the disposable remote test root. Expand Transfers and confirm the parent task shows completed/total files and a collapsible child list with running, pending, and completed file states.
+- **Transfer drawer redundancy:** expand Transfers and confirm the collapsed-bar summary is not duplicated in the expanded drawer header; All / Running / Failed / Done filters still work.
 
 ## V2.5 remote text edit MVP
 

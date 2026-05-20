@@ -79,7 +79,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.8.4 | v1.8.4 | Inspector and Remote Edit Polish — complete on dev |
 | V2.8.5 | v1.8.5 | File List Columns and Tab Chrome Polish — complete on dev |
 | V2.8.6 | v1.8.6 | Toolbar Capsule and Sticky Header Polish — complete on dev |
-| V2.8.7 | v1.8.7 | Creation Flow and Stale Connection Fixes — complete on dev |
+| V2.8.7 | v1.8.7 | Creation Flow, Remote Refresh, and Transfer Detail Fixes — complete on dev |
 
 ## Latest Completed Phase
 
@@ -193,7 +193,7 @@ V2.8.6 keeps the V12 layout stable while refining toolbar grouping and long-list
 - Refresh arrows have longer tails for clearer recognition.
 - File-list headers stay visible while scrolling long folders.
 
-### V2.8.7 / v1.8.7 — Creation Flow and Stale Connection Fixes
+### V2.8.7 / v1.8.7 — Creation Flow, Remote Refresh, and Transfer Detail Fixes
 
 V2.8.7 fixes hands-on workflow issues found after the toolbar polish:
 
@@ -201,6 +201,11 @@ V2.8.7 fixes hands-on workflow issues found after the toolbar polish:
 - New Folder selects the default name immediately on dialog open.
 - New Text File uses the same explicit naming dialog as New Folder.
 - Stale SFTP sessions caused by sleep/idle disconnects are detected and the remote pane leaves misleading Connected state.
+- Inspector uses `Kind` consistently and includes Owner.
+- Read-only remote preview reuses the same local cache path for the same remote file within a session.
+- Optional remote pane auto-refresh can be enabled in Preferences.
+- Remote list responsiveness is improved by caching owner lookups and bounding slow owner resolution.
+- Transfer drawer avoids duplicate summary text and shows collapsible child-file progress for local folder uploads.
 
 See **`docs/dev/V2.8.7_PLAN.md`**.
 

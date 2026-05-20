@@ -12,12 +12,18 @@ No user-facing changes since **v1.8.7**.
 
 ## v1.8.7 — Product milestone V2.8.7
 
-V2.8.7 is a small reliability and creation-flow bugfix release.
+V2.8.7 is a workflow reliability release covering creation flow, stale remote sessions, remote preview cache reuse, optional auto-refresh, and transfer drawer clarity.
 
 - Clicking the file-list blank area below rows now clears selection, matching blank-space behavior beside row metadata columns.
 - New Folder dialogs now select the default name on open for immediate replacement typing.
 - New Text File now uses the same naming dialog flow as New Folder for both local and remote panes.
 - SFTP connections use keepalive and stale-connection cleanup; list/open failures caused by dropped sleep-idle connections now move the remote pane out of misleading Connected state.
+- Inspector metadata now consistently uses `Kind`, matching the file-list column label, and always shows an Owner row with `—` when unavailable.
+- Reopening a changed remote text/image preview now reuses the same local cache path within the session instead of creating a second temporary file.
+- Preferences can optionally auto-refresh the active remote pane at a configured interval; the setting is off by default and defaults to 60 seconds when enabled.
+- Remote directory listing avoids repeated slow owner-name lookups by caching resolved owner names and timing out slow lookups.
+- Initial remote listing shows a loading state instead of briefly presenting an empty remote folder.
+- The transfer drawer removes duplicate queue summary text and can show a collapsible per-file list for local folder uploads, including current file and completed/total file count.
 
 ## v1.8.6 — Product milestone V2.8.6
 
