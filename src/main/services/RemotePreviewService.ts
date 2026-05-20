@@ -75,16 +75,11 @@ export class RemotePreviewService {
       return { opened: true, localPath: existing.localPath, kind: existing.kind };
     }
 
-    const localPath = await this.allocateLocalPath(request.tabId, request.remotePath);
-    await downloadRemoteFile(client, request.remotePath, localPath);
-    const sample = await readSample(localPath);
-    const kind = sniffPreviewKind(sample);
+    const localPath = existing?.localPath ?? await this.allocateLocalPath(request.tabId, request.remotePath);
+    const kind = await downloadSniffedPreview(client, request.remotePath, localPath, existing !== undefined);
     if (!kind) {
-      await fs.unlink(localPath).catch(() => {});
+      if (!existing) await fs.unlink(localPath).catch(() => {});
       throw new RemotePreviewError("REMOTE_PREVIEW_UNSUPPORTED", "Remote preview supports sniffed text and common image files only.");
-    }
-    if (existing?.localPath && existing.localPath !== localPath) {
-      await fs.unlink(existing.localPath).catch(() => {});
     }
     await makeCachedPreviewReadOnly(localPath);
     const localStat = await fs.stat(localPath);
@@ -138,6 +133,31 @@ export class RemotePreviewService {
     await fs.chmod(dir, 0o755).catch(() => {});
     const base = sanitizeFileName(path.posix.basename(remotePath) || "remote-file");
     return path.join(dir, `${safeHash(remotePath).slice(0, 16)}-${randomUUID().slice(0, 8)}-${base}`);
+  }
+}
+
+async function downloadSniffedPreview(
+  client: RemotePreviewClient,
+  remotePath: string,
+  localPath: string,
+  preserveExisting: boolean
+): Promise<PreviewKind | null> {
+  const tempPath = `${localPath}.download-${randomUUID().slice(0, 8)}`;
+  await fs.mkdir(path.dirname(localPath), { recursive: true });
+  await fs.chmod(path.dirname(localPath), 0o755).catch(() => {});
+  try {
+    await downloadRemoteFile(client, remotePath, tempPath);
+    const sample = await readSample(tempPath);
+    const kind = sniffPreviewKind(sample);
+    if (!kind) return null;
+    await makeCachePathWritable(localPath).catch(() => {});
+    await fs.rename(tempPath, localPath);
+    return kind;
+  } catch (error) {
+    throw error;
+  } finally {
+    await fs.unlink(tempPath).catch(() => {});
+    if (!preserveExisting) await fs.chmod(path.dirname(localPath), 0o755).catch(() => {});
   }
 }
 

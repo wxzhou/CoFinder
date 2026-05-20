@@ -102,8 +102,38 @@ describe("RemotePreviewService", () => {
 
     const second = await service.openPreview({ tabId: "tab", connectionId: "c1", remotePath: "/note" });
     expect(downloadCount).toBe(2);
+    expect(second.localPath).toBe(first.localPath);
     expect(await fs.readFile(second.localPath, "utf8")).toBe("remote text\n");
     expect(spawnMock).toHaveBeenCalledWith("open", ["-t", expect.any(String)], { stdio: "ignore" });
+
+    await service.clearAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("reuses the same local preview path when the remote file changes", async () => {
+    const { RemotePreviewService } = await import("../src/main/services/RemotePreviewService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-preview-test-"));
+    let remoteVersion = 1;
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 14, modifyTime: remoteVersion })),
+      fastGet: vi.fn(async (_remote: string, local: string) => {
+        await fs.writeFile(local, `remote text ${remoteVersion}\n`, "utf8");
+      })
+    };
+    const service = new RemotePreviewService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+
+    const first = await service.openPreview({ tabId: "tab", connectionId: "c1", remotePath: "/note" });
+    remoteVersion = 2;
+    const second = await service.openPreview({ tabId: "tab", connectionId: "c1", remotePath: "/note" });
+
+    expect(second.localPath).toBe(first.localPath);
+    expect(client.fastGet).toHaveBeenCalledTimes(2);
+    expect(await fs.readFile(second.localPath, "utf8")).toBe("remote text 2\n");
 
     await service.clearAll();
     await fs.rm(dir, { recursive: true, force: true });

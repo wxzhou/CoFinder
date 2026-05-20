@@ -102,7 +102,7 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                 <h3>Metadata</h3>
                 <ul className="v12m-insp-kv">
                   <li>
-                    <span>Type</span>
+                    <span>Kind</span>
                     <span>{pathInfoKindLabel(props.info.type)}</span>
                   </li>
                   <li>
@@ -135,12 +135,10 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                       <span className="v12m-mono">{props.info.permissions}</span>
                     </li>
                   ) : null}
-                  {props.info.owner ? (
-                    <li>
-                      <span>Owner</span>
-                      <span>{props.info.owner}</span>
-                    </li>
-                  ) : null}
+                  <li>
+                    <span>Owner</span>
+                    <span>{props.info.owner || "—"}</span>
+                  </li>
                   {props.info.group ? (
                     <li>
                       <span>Group</span>
