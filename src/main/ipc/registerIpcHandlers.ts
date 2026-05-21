@@ -194,6 +194,17 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.compressGzip, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:compressGzip request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const compressedPath = await localFileService.compressFileGzip(targetPath);
+      return ok({ compressed: true as const, path: compressedPath });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_COMPRESS_FAILED", "Failed to compress local file.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.local.getInfo, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:getInfo request.");
@@ -345,6 +356,18 @@ export function registerIpcHandlers(): void {
       return ok({ created: true as const, path: createdPath });
     } catch (error) {
       return toIpcError(error, "REMOTE_CREATE_FILE_FAILED", "Failed to create remote text file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.compressGzip, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:compressGzip request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const compressedPath = await remoteFileService.compressFileGzip(connectionId, targetPath);
+      return ok({ compressed: true as const, path: compressedPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_COMPRESS_FAILED", "Failed to compress remote file.");
     }
   });
 

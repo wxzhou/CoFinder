@@ -1,8 +1,11 @@
 import fs from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { pipeline } from "node:stream/promises";
+import { createGzip } from "node:zlib";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
 import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo } from "../../shared/types/ipc";
@@ -150,6 +153,22 @@ export class LocalFileService {
     }
   }
 
+  async compressFileGzip(targetPath: string): Promise<string> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const destinationPath = normalizeLocalPath(`${normalizedPath}.gz`);
+    try {
+      const stats = await fs.lstat(normalizedPath);
+      if (!stats.isFile()) throw new LocalFileServiceError("COMPRESS_FAILED", "Only files can be compressed as gzip.");
+      await pipeline(createReadStream(normalizedPath), createGzip(), createWriteStream(destinationPath, { flags: "wx" }));
+      return destinationPath;
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      if (code !== "EEXIST") await fs.rm(destinationPath, { force: true }).catch(() => {});
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapCompressError(error, normalizedPath);
+    }
+  }
+
   async getPathInfo(targetPath: string, options?: { includeDirectorySize?: boolean }): Promise<PathInfo> {
     const normalizedPath = normalizeLocalPath(targetPath);
     try {
@@ -227,6 +246,14 @@ export class LocalFileService {
       return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
     }
     return new LocalFileServiceError("INFO_FAILED", `Failed to get path info: ${requestedPath}`);
+  }
+
+  private mapCompressError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    if (code === "EEXIST") return new LocalFileServiceError("COMPRESS_FAILED", "Gzip target already exists.");
+    return new LocalFileServiceError("COMPRESS_FAILED", `Failed to compress path: ${requestedPath}`);
   }
 
   private async getDirectorySize(dirPath: string): Promise<number> {

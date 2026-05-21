@@ -25,6 +25,7 @@ V2.8.7 is a workflow reliability release covering creation flow, stale remote se
 - Initial remote listing shows a loading state instead of briefly presenting an empty remote folder.
 - The transfer drawer removes duplicate queue summary text and can show a collapsible per-file list for local folder uploads, including current file and completed/total file count.
 - Follow-up fixes keep remote Owner values as usernames instead of sticky UID fallbacks, fill Inspector Owner from the parent listing when SFTP `stat` omits it, group the remote auto-refresh checkbox and interval field in Preferences, and collapse the transfer drawer header/filter/actions into one row.
+- Context menus now separate selected-item actions from current-folder background actions, clamp to the visible window when opened near the bottom edge, and add single-file gzip compression for local and remote files without overwriting an existing `.gz` target.
 
 ## v1.8.6 — Product milestone V2.8.6
 

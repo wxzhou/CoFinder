@@ -1,4 +1,9 @@
+import fs from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { pipeline } from "node:stream/promises";
+import { createGzip } from "node:zlib";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
 import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse } from "../../shared/types/ipc";
 import { ConnectionManager } from "./ConnectionManager";
@@ -23,6 +28,12 @@ type RemoteStatItem = {
   owner?: number | string;
   group?: number | string;
   mode?: number;
+};
+type RemoteCompressClient = {
+  stat: (path: string) => Promise<RemoteStatItem>;
+  fastGet?: (remotePath: string, localPath: string) => Promise<unknown>;
+  get?: (remotePath: string, localPath?: string) => Promise<unknown>;
+  put: (input: string | Buffer | NodeJS.ReadableStream, path: string) => Promise<unknown>;
 };
 
 export type RemoteDirectorySizeOptions = {
@@ -278,6 +289,41 @@ export class RemoteFileService {
     } catch (error) {
       if (error instanceof RemoteServiceError) throw error;
       throw this.mapDuplicateError(error);
+    }
+  }
+
+  async compressFileGzip(connectionId: string, targetPath: string): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const destinationPath = this.normalizeRemotePath(`${normalizedPath}.gz`);
+    const client = connection.client as unknown as RemoteCompressClient;
+    let tempDir = "";
+    try {
+      const sourceStat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      if (resolveRemoteType(sourceStat) !== "file") {
+        throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only remote files can be compressed as gzip.");
+      }
+      try {
+        await client.stat(destinationPath);
+        throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Gzip target already exists.");
+      } catch (error) {
+        if (error instanceof RemoteServiceError) throw error;
+        const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : "";
+        if (!/No such file|ENOENT|no such path|does not exist/i.test(message)) throw error;
+      }
+      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-remote-gzip-"));
+      const localSource = path.join(tempDir, "source");
+      const localGzip = path.join(tempDir, "source.gz");
+      await downloadRemoteFile(client, normalizedPath, localSource);
+      await pipeline(createReadStream(localSource), createGzip(), createWriteStream(localGzip, { flags: "wx" }));
+      await client.put(localGzip, destinationPath);
+      return destinationPath;
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapCompressError(error);
+    } finally {
+      if (tempDir) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
     }
   }
 
@@ -648,6 +694,24 @@ export class RemoteFileService {
     return new RemoteServiceError("REMOTE_DUPLICATE_FAILED", "Failed to duplicate remote file.", message);
   }
 
+  private mapCompressError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote gzip compression failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/already exists|EEXIST/i.test(message)) {
+      return new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Gzip target already exists.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Failed to compress remote file.", message);
+  }
+
   private extractRawError(error: unknown): { name: string; code: string; message: string } {
     const err = error as { name?: unknown; code?: unknown; message?: unknown };
     return {
@@ -689,6 +753,19 @@ function unique(items: string[]): string[] {
     out.push(item);
   }
   return out;
+}
+
+async function downloadRemoteFile(client: RemoteCompressClient, remotePath: string, localPath: string): Promise<void> {
+  if (typeof client.fastGet === "function") {
+    await client.fastGet(remotePath, localPath);
+    return;
+  }
+  if (typeof client.get === "function") {
+    const result = await client.get(remotePath, localPath);
+    if (Buffer.isBuffer(result)) await fs.writeFile(localPath, result);
+    return;
+  }
+  throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote download is unavailable for gzip compression.");
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {

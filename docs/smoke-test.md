@@ -179,6 +179,9 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Remote initial loading state:** connect to a remote profile and confirm the remote pane shows a loading message during the first list instead of briefly claiming the folder is empty.
 - **Folder upload details:** upload a local folder with several files to the disposable remote test root. Expand Transfers and confirm the parent task shows folder completed/total files, current file name, current file progress/speed/ETA, and a collapsible child list with running, pending, and completed file states.
 - **Transfer drawer redundancy:** expand Transfers and confirm title, active/queued summary, All / Running / Failed / Done filters, Pin/Clear/Retry failed, and Hide are consolidated into one top row.
+- **Context menu split:** right-click a selected local file and confirm only item actions appear. Right-click blank local list space while the file remains selected and confirm only current-folder actions appear. Repeat for remote.
+- **Context menu placement:** right-click a row near the lower edge of the file list and confirm the menu moves upward enough to remain fully visible.
+- **Gzip compression:** right-click a single local file and choose Compress as gzip; confirm `<name>.gz` appears and a second attempt reports that the gzip target already exists. Repeat on a single remote file in the disposable remote test root. Confirm folders and multi-selection do not show the gzip action.
 
 ## V2.5 remote text edit MVP
 

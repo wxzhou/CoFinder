@@ -206,6 +206,7 @@ V2.8.7 fixes hands-on workflow issues found after the toolbar polish:
 - Optional remote pane auto-refresh can be enabled in Preferences.
 - Remote list responsiveness is improved by caching owner lookups and bounding slow owner resolution.
 - Transfer drawer avoids duplicate summary text and shows collapsible child-file progress for local folder uploads.
+- Context menus distinguish selected-item actions from background current-folder actions, stay within the viewport, and offer single-file gzip compression.
 
 See **`docs/dev/V2.8.7_PLAN.md`**.
 

@@ -1,10 +1,13 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { gunzip } from "node:zlib";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { LocalFileService } from "../src/main/services/LocalFileService";
 
 const tempDirs: string[] = [];
+const gunzipAsync = promisify(gunzip);
 
 afterEach(async () => {
   await Promise.all(tempDirs.map((dir) => fs.rm(dir, { recursive: true, force: true })));
@@ -100,6 +103,26 @@ describe("LocalFileService creation", () => {
 
     await expect(service.makeDirectory(dir, "bad/name")).rejects.toMatchObject({ code: "UNKNOWN" });
     await expect(service.createTextFile(dir, "../bad.txt")).rejects.toMatchObject({ code: "UNKNOWN" });
+  });
+});
+
+describe("LocalFileService compressFileGzip", () => {
+  it("compresses a single local file without overwriting existing gzip target", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "data.txt");
+    await fs.writeFile(source, "hello gzip\n");
+
+    const compressed = await service.compressFileGzip(source);
+    expect(compressed).toBe(`${source}.gz`);
+    await expect(gunzipAsync(await fs.readFile(compressed))).resolves.toEqual(Buffer.from("hello gzip\n"));
+    await expect(service.compressFileGzip(source)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
+  });
+
+  it("rejects local directories for gzip compression", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    await expect(service.compressFileGzip(dir)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
   });
 });
 

@@ -8,6 +8,7 @@ export const IPC_CHANNELS = {
     delete: "local:delete",
     mkdir: "local:mkdir",
     createTextFile: "local:createTextFile",
+    compressGzip: "local:compressGzip",
     getInfo: "local:getInfo"
   },
   remote: {
@@ -20,6 +21,7 @@ export const IPC_CHANNELS = {
     getInfo: "remote:getInfo",
     mkdir: "remote:mkdir",
     createTextFile: "remote:createTextFile",
+    compressGzip: "remote:compressGzip",
     chmod: "remote:chmod",
     duplicate: "remote:duplicate",
     directorySizeStart: "remote:directorySizeStart",

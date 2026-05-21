@@ -1,6 +1,13 @@
 import { EventEmitter } from "node:events";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { gunzip } from "node:zlib";
+import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 import { RemoteFileService } from "../src/main/services/RemoteFileService";
+
+const gunzipAsync = promisify(gunzip);
 
 function mockExecClient(names: Record<string, string>) {
   const client = { ready: true };
@@ -291,6 +298,63 @@ describe("RemoteFileService path/list behavior", () => {
     expect(info.permissions).toBe("rw-r-----");
     expect(info.owner).toBe("alice");
     expect(info.group).toBe("100");
+  });
+
+  it("compresses a remote file to gzip without overwriting target", async () => {
+    const remoteFiles = new Map<string, Buffer>([
+      ["/a/file.txt", Buffer.from("remote gzip\n")]
+    ]);
+    const stat = vi.fn(async (target: string) => {
+      if (!remoteFiles.has(target)) throw new Error("No such file");
+      return { type: "-", size: remoteFiles.get(target)?.length ?? 0, modifyTime: Date.now() };
+    });
+    const get = vi.fn(async (remotePath: string, localPath?: string) => {
+      const data = remoteFiles.get(remotePath);
+      if (!data) throw new Error("No such file");
+      if (localPath) {
+        await fs.writeFile(localPath, data);
+        return undefined;
+      }
+      return data;
+    });
+    const put = vi.fn(async (localPath: string, remotePath: string) => {
+      remoteFiles.set(remotePath, await fs.readFile(localPath));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, get, put }
+      })
+    } as any);
+
+    const compressedPath = await service.compressFileGzip("c1", "/a/file.txt");
+    expect(compressedPath).toBe("/a/file.txt.gz");
+    expect(await gunzipAsync(remoteFiles.get("/a/file.txt.gz")!)).toEqual(Buffer.from("remote gzip\n"));
+    await expect(service.compressFileGzip("c1", "/a/file.txt")).rejects.toMatchObject({ code: "REMOTE_COMPRESS_FAILED" });
+  });
+
+  it("cleans remote gzip temp files after compression", async () => {
+    const before = new Set(await fs.readdir(os.tmpdir()));
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/a/file.txt") return { type: "-", size: 1, modifyTime: Date.now() };
+      throw new Error("No such file");
+    });
+    const get = vi.fn(async (_remotePath: string, localPath?: string) => {
+      if (localPath) await fs.writeFile(localPath, "x");
+    });
+    const put = vi.fn().mockResolvedValue(undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, get, put }
+      })
+    } as any);
+
+    await service.compressFileGzip("c1", "/a/file.txt");
+    const after = await fs.readdir(os.tmpdir());
+    expect(after.filter((item) => item.startsWith("cofinder-remote-gzip-") && !before.has(item))).toHaveLength(0);
   });
 
   it("fills path info owner from parent listing when stat omits owner", async () => {

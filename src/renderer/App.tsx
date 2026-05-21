@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -292,6 +293,8 @@ export function App(props: AppProps = {}) {
     readRemoteRecentPathsByProfile()
   );
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ x: number; y: number } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement | null>(null);
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
   const [createFolderDialog, setCreateFolderDialog] = useState<CreateFolderDialogState | null>(null);
@@ -558,6 +561,7 @@ export function App(props: AppProps = {}) {
 
   useEffect(() => {
     if (!contextMenu) return;
+    setContextMenuPosition({ x: contextMenu.x, y: contextMenu.y });
     const onClick = () => setContextMenu(null);
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setContextMenu(null);
@@ -568,6 +572,16 @@ export function App(props: AppProps = {}) {
       window.removeEventListener("click", onClick);
       window.removeEventListener("keydown", onKeyDown);
     };
+  }, [contextMenu]);
+
+  useLayoutEffect(() => {
+    if (!contextMenu || !contextMenuRef.current) return;
+    const margin = 8;
+    const rect = contextMenuRef.current.getBoundingClientRect();
+    setContextMenuPosition({
+      x: Math.max(margin, Math.min(contextMenu.x, window.innerWidth - rect.width - margin)),
+      y: Math.max(margin, Math.min(contextMenu.y, window.innerHeight - rect.height - margin))
+    });
   }, [contextMenu]);
 
   useEffect(() => {
@@ -3014,6 +3028,48 @@ export function App(props: AppProps = {}) {
     );
   }
 
+  async function compressLocalSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.localPane.selectedFullPaths[0];
+    if (!tab || !targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
+    const entry = tab.localPane.entries.find((item) => item.fullPath === targetPath);
+    if (entry?.type !== "file") return;
+    const result = await window.cofinder.local.compressGzip({ path: targetPath });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+      return;
+    }
+    await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId
+          ? { ...item, localPane: { ...item.localPane, selectedFullPaths: [result.data.path], selectionAnchorFullPath: result.data.path } }
+          : item
+      )
+    );
+  }
+
+  async function compressRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const entry = tab.remotePane.entries.find((item) => item.fullPath === targetPath);
+    if (entry?.type !== "file") return;
+    const result = await window.cofinder.remote.compressGzip({ connectionId: tab.remotePane.connectionId, path: targetPath });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId
+          ? { ...item, remotePane: { ...item.remotePane, selectedFullPaths: [result.data.path], selectionAnchorFullPath: result.data.path } }
+          : item
+      )
+    );
+  }
+
   async function openTerminalHere(tabId: string, pane: "local" | "remote", targetPath?: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
@@ -4929,6 +4985,21 @@ export function App(props: AppProps = {}) {
     />
   ) : null;
 
+  const contextTab = contextMenu ? tabs.find((item) => item.id === contextMenu.tabId) : undefined;
+  const contextPaneState = contextMenu?.pane === "local" ? contextTab?.localPane : contextMenu?.pane === "remote" ? contextTab?.remotePane : undefined;
+  const contextSelectedPaths = contextMenu?.scope === "row" ? contextPaneState?.selectedFullPaths ?? [] : [];
+  const contextSelectedEntries =
+    contextMenu?.scope === "row" && contextMenu.pane === "local"
+      ? contextTab?.localPane.entries.filter((entry) => contextSelectedPaths.includes(entry.fullPath)) ?? []
+      : contextMenu?.scope === "row" && contextMenu.pane === "remote"
+        ? contextTab?.remotePane.entries.filter((entry) => contextSelectedPaths.includes(entry.fullPath)) ?? []
+        : [];
+  const contextSingleEntry = contextSelectedEntries.length === 1 ? contextSelectedEntries[0] : undefined;
+  const contextHasSelection = contextSelectedPaths.length > 0;
+  const contextSingleSelection = contextSelectedPaths.length === 1;
+  const contextSingleFile = contextSingleEntry?.type === "file";
+  const contextMenuStyle = contextMenuPosition ?? (contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null);
+
   return (
     <div className={`${uiShell === "v12" ? "app-shell app-shell--v12" : "app-shell"} density-${appSettings.appearance.rowDensity}`}>
       {uiShell === "v11" ? (
@@ -5308,345 +5379,293 @@ export function App(props: AppProps = {}) {
       ) : null}
       {contextMenu ? (
         <div
+          ref={contextMenuRef}
           className="context-menu"
-          style={{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }}
+          style={{ left: `${contextMenuStyle?.x ?? contextMenu.x}px`, top: `${contextMenuStyle?.y ?? contextMenu.y}px` }}
           onClick={(event) => event.stopPropagation()}
         >
           {contextMenu.pane === "local" ? (
             <>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={() => {
-                  openInlineRename(contextMenu.tabId, "local");
-                  setContextMenu(null);
-                }}
-              >
-                Rename
-                <span className="context-shortcut">F2</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) === 0}
-                onClick={() => {
-                  openDeleteConfirm(contextMenu.tabId, "local");
-                  setContextMenu(null);
-                }}
-              >
-                Delete
-                <span className="context-shortcut">Del</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await openInfoDialog(contextMenu.tabId, "local");
-                  setContextMenu(null);
-                }}
-              >
-                Show Inspector
-                <span className="context-shortcut">⌘I</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await quickLookSelection(contextMenu.tabId, "local");
-                  setContextMenu(null);
-                }}
-              >
-                Quick Look
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  const tab = tabs.find((t) => t.id === contextMenu.tabId);
-                  const target = tab?.localPane.selectedFullPaths[0];
-                  if (target) {
-                    const result = await window.cofinder.local.openPath({ path: target });
-                    if (!result.ok) setQueueError(result.error.message);
-                  }
-                  setContextMenu(null);
-                }}
-              >
-                Open
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await createLocalDirectory(contextMenu.tabId);
-                  setContextMenu(null);
-                }}
-              >
-                New Folder
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await createTextFile(contextMenu.tabId, "local");
-                  setContextMenu(null);
-                }}
-              >
-                New Text File
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={
-                  (tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) === 0 ||
-                  !(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.connectionId ?? null)
-                }
-                onClick={async () => {
-                  await enqueueUpload(contextMenu.tabId);
-                  setContextMenu(null);
-                }}
-              >
-                Upload
-                <span className="context-shortcut">⌘U</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  const tab = tabs.find((t) => t.id === contextMenu.tabId);
-                  const target = tab?.localPane.selectedFullPaths[0];
-                  if (target) {
-                    const result = await window.cofinder.local.revealPath({ path: target });
-                    if (!result.ok) setQueueError(result.error.message);
-                  }
-                  setContextMenu(null);
-                }}
-              >
-                Reveal in Finder
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await copySelection(contextMenu.tabId, "local", "name");
-                  setContextMenu(null);
-                }}
-              >
-                Copy Name
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await copySelection(contextMenu.tabId, "local", "path");
-                  setContextMenu(null);
-                }}
-              >
-                Copy Full Path
-                <span className="context-shortcut">⌘⇧C</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await openTerminalHere(contextMenu.tabId, "local", contextMenu.terminalPath);
-                  setContextMenu(null);
-                }}
-              >
-                Open Terminal Here
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  const tab = tabs.find((t) => t.id === contextMenu.tabId);
-                  if (tab) await navigateLocal(contextMenu.tabId, tab.localPane.currentPath, "replace");
-                  setContextMenu(null);
-                }}
-              >
-                Refresh
-                <span className="context-shortcut">⌘R</span>
-              </button>
+              {contextMenu.scope === "row" && contextHasSelection ? (
+                <>
+                  {contextSingleSelection ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      const target = contextTab?.localPane.selectedFullPaths[0];
+                      if (target) {
+                        const result = await window.cofinder.local.openPath({ path: target });
+                        if (!result.ok) setQueueError(result.error.message);
+                      }
+                      setContextMenu(null);
+                    }}>
+                      Open
+                    </button>
+                  ) : null}
+                  {contextSingleSelection ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      await quickLookSelection(contextMenu.tabId, "local");
+                      setContextMenu(null);
+                    }}>
+                      Quick Look
+                    </button>
+                  ) : null}
+                  <button type="button" className="context-item" onClick={async () => {
+                    await openInfoDialog(contextMenu.tabId, "local");
+                    setContextMenu(null);
+                  }}>
+                    Show Inspector
+                    <span className="context-shortcut">⌘I</span>
+                  </button>
+                  {contextSingleSelection ? (
+                    <button type="button" className="context-item" onClick={() => {
+                      openInlineRename(contextMenu.tabId, "local");
+                      setContextMenu(null);
+                    }}>
+                      Rename
+                      <span className="context-shortcut">F2</span>
+                    </button>
+                  ) : null}
+                  <button type="button" className="context-item" onClick={() => {
+                    openDeleteConfirm(contextMenu.tabId, "local");
+                    setContextMenu(null);
+                  }}>
+                    Delete
+                    <span className="context-shortcut">Del</span>
+                  </button>
+                  {contextSingleFile ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      await compressLocalSelection(contextMenu.tabId);
+                      setContextMenu(null);
+                    }}>
+                      Compress as gzip
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="context-item"
+                    disabled={!contextTab?.remotePane.connectionId}
+                    onClick={async () => {
+                      await enqueueUpload(contextMenu.tabId);
+                      setContextMenu(null);
+                    }}
+                  >
+                    Upload
+                    <span className="context-shortcut">⌘U</span>
+                  </button>
+                  {contextSingleSelection ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      const target = contextTab?.localPane.selectedFullPaths[0];
+                      if (target) {
+                        const result = await window.cofinder.local.revealPath({ path: target });
+                        if (!result.ok) setQueueError(result.error.message);
+                      }
+                      setContextMenu(null);
+                    }}>
+                      Reveal in Finder
+                    </button>
+                  ) : null}
+                  <button type="button" className="context-item" onClick={async () => {
+                    await copySelection(contextMenu.tabId, "local", "name");
+                    setContextMenu(null);
+                  }}>
+                    Copy Name
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await copySelection(contextMenu.tabId, "local", "path");
+                    setContextMenu(null);
+                  }}>
+                    Copy Full Path
+                    <span className="context-shortcut">⌘⇧C</span>
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    if (contextTab) await navigateLocal(contextMenu.tabId, contextTab.localPane.currentPath, "replace");
+                    setContextMenu(null);
+                  }}>
+                    Refresh
+                    <span className="context-shortcut">⌘R</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await createLocalDirectory(contextMenu.tabId);
+                    setContextMenu(null);
+                  }}>
+                    New Folder
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await createTextFile(contextMenu.tabId, "local");
+                    setContextMenu(null);
+                  }}>
+                    New Text File
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await openTerminalHere(contextMenu.tabId, "local", contextMenu.terminalPath);
+                    setContextMenu(null);
+                  }}>
+                    Open Terminal Here
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await copyCurrentPath("local");
+                    setContextMenu(null);
+                  }}>
+                    Copy Current Path
+                    <span className="context-shortcut">⌘⌥C</span>
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    if (contextTab) await navigateLocal(contextMenu.tabId, contextTab.localPane.currentPath, "replace");
+                    setContextMenu(null);
+                  }}>
+                    Refresh
+                    <span className="context-shortcut">⌘R</span>
+                  </button>
+                </>
+              )}
             </>
           ) : (
             <>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await previewRemoteSelection(contextMenu.tabId);
-                  setContextMenu(null);
-                }}
-              >
-                Open
-                <span className="context-shortcut">double-click</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await quickLookSelection(contextMenu.tabId, "remote");
-                  setContextMenu(null);
-                }}
-              >
-                Quick Look
-                <span className="context-shortcut">Space</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await editRemoteSelection(contextMenu.tabId);
-                  setContextMenu(null);
-                }}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={
-                  (tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) === 0 ||
-                  !(tabs.find((t) => t.id === contextMenu.tabId)?.localPane.currentPath ?? "")
-                }
-                onClick={async () => {
-                  await enqueueDownload(contextMenu.tabId);
-                  setContextMenu(null);
-                }}
-              >
-                Download
-                <span className="context-shortcut">⌘D</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await createRemoteDirectory(contextMenu.tabId);
-                  setContextMenu(null);
-                }}
-              >
-                New Folder
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await createTextFile(contextMenu.tabId, "remote");
-                  setContextMenu(null);
-                }}
-              >
-                New Text File
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) === 0}
-                onClick={() => {
-                  openDeleteConfirm(contextMenu.tabId, "remote");
-                  setContextMenu(null);
-                }}
-              >
-                Delete
-                <span className="context-shortcut">Del</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await openInfoDialog(contextMenu.tabId, "remote");
-                  setContextMenu(null);
-                }}
-              >
-                Show Inspector
-                <span className="context-shortcut">⌘I</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={() => {
-                  openInlineRename(contextMenu.tabId, "remote");
-                  setContextMenu(null);
-                }}
-              >
-                Rename
-                <span className="context-shortcut">F2</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await chmodRemoteSelection(contextMenu.tabId);
-                  setContextMenu(null);
-                }}
-              >
-                Change Permissions
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                disabled={(tabs.find((t) => t.id === contextMenu.tabId)?.remotePane.selectedFullPaths.length ?? 0) !== 1}
-                onClick={async () => {
-                  await duplicateRemoteSelection(contextMenu.tabId);
-                  setContextMenu(null);
-                }}
-              >
-                Duplicate File
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await copySelection(contextMenu.tabId, "remote", "name");
-                  setContextMenu(null);
-                }}
-              >
-                Copy Name
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await copySelection(contextMenu.tabId, "remote", "path");
-                  setContextMenu(null);
-                }}
-              >
-                Copy Full Path
-                <span className="context-shortcut">⌘⇧C</span>
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  await openTerminalHere(contextMenu.tabId, "remote", contextMenu.terminalPath);
-                  setContextMenu(null);
-                }}
-              >
-                Open SSH Terminal Here
-              </button>
-              <button
-                type="button"
-                className="context-item"
-                onClick={async () => {
-                  const tab = tabs.find((t) => t.id === contextMenu.tabId);
-                  if (tab?.remotePane.connectionId) {
-                    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", contextMenu.tabId);
-                  }
-                  setContextMenu(null);
-                }}
-              >
-                Refresh
-                <span className="context-shortcut">⌘R</span>
-              </button>
+              {contextMenu.scope === "row" && contextHasSelection ? (
+                <>
+                  {contextSingleSelection ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      await previewRemoteSelection(contextMenu.tabId);
+                      setContextMenu(null);
+                    }}>
+                      Open
+                      <span className="context-shortcut">double-click</span>
+                    </button>
+                  ) : null}
+                  {contextSingleSelection ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      await quickLookSelection(contextMenu.tabId, "remote");
+                      setContextMenu(null);
+                    }}>
+                      Quick Look
+                      <span className="context-shortcut">Space</span>
+                    </button>
+                  ) : null}
+                  {contextSingleSelection ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      await editRemoteSelection(contextMenu.tabId);
+                      setContextMenu(null);
+                    }}>
+                      Edit
+                    </button>
+                  ) : null}
+                  <button type="button" className="context-item" onClick={async () => {
+                    await openInfoDialog(contextMenu.tabId, "remote");
+                    setContextMenu(null);
+                  }}>
+                    Show Inspector
+                    <span className="context-shortcut">⌘I</span>
+                  </button>
+                  {contextSingleSelection ? (
+                    <button type="button" className="context-item" onClick={() => {
+                      openInlineRename(contextMenu.tabId, "remote");
+                      setContextMenu(null);
+                    }}>
+                      Rename
+                      <span className="context-shortcut">F2</span>
+                    </button>
+                  ) : null}
+                  <button type="button" className="context-item" onClick={() => {
+                    openDeleteConfirm(contextMenu.tabId, "remote");
+                    setContextMenu(null);
+                  }}>
+                    Delete
+                    <span className="context-shortcut">Del</span>
+                  </button>
+                  {contextSingleFile ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      await compressRemoteSelection(contextMenu.tabId);
+                      setContextMenu(null);
+                    }}>
+                      Compress as gzip
+                    </button>
+                  ) : null}
+                  <button type="button" className="context-item" disabled={!contextTab?.localPane.currentPath} onClick={async () => {
+                    await enqueueDownload(contextMenu.tabId);
+                    setContextMenu(null);
+                  }}>
+                    Download
+                    <span className="context-shortcut">⌘D</span>
+                  </button>
+                  {contextSingleSelection ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      await chmodRemoteSelection(contextMenu.tabId);
+                      setContextMenu(null);
+                    }}>
+                      Change Permissions
+                    </button>
+                  ) : null}
+                  {contextSingleFile ? (
+                    <button type="button" className="context-item" onClick={async () => {
+                      await duplicateRemoteSelection(contextMenu.tabId);
+                      setContextMenu(null);
+                    }}>
+                      Duplicate File
+                    </button>
+                  ) : null}
+                  <button type="button" className="context-item" onClick={async () => {
+                    await copySelection(contextMenu.tabId, "remote", "name");
+                    setContextMenu(null);
+                  }}>
+                    Copy Name
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await copySelection(contextMenu.tabId, "remote", "path");
+                    setContextMenu(null);
+                  }}>
+                    Copy Full Path
+                    <span className="context-shortcut">⌘⇧C</span>
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    if (contextTab?.remotePane.connectionId) {
+                      await listRemotePath(contextTab.remotePane.connectionId, contextTab.remotePane.currentPath, "replace", contextMenu.tabId);
+                    }
+                    setContextMenu(null);
+                  }}>
+                    Refresh
+                    <span className="context-shortcut">⌘R</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await createRemoteDirectory(contextMenu.tabId);
+                    setContextMenu(null);
+                  }}>
+                    New Folder
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await createTextFile(contextMenu.tabId, "remote");
+                    setContextMenu(null);
+                  }}>
+                    New Text File
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await openTerminalHere(contextMenu.tabId, "remote", contextMenu.terminalPath);
+                    setContextMenu(null);
+                  }}>
+                    Open SSH Terminal Here
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await copyCurrentPath("remote");
+                    setContextMenu(null);
+                  }}>
+                    Copy Current Path
+                    <span className="context-shortcut">⌘⌥C</span>
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    if (contextTab?.remotePane.connectionId) {
+                      await listRemotePath(contextTab.remotePane.connectionId, contextTab.remotePane.currentPath, "replace", contextMenu.tabId);
+                    }
+                    setContextMenu(null);
+                  }}>
+                    Refresh
+                    <span className="context-shortcut">⌘R</span>
+                  </button>
+                </>
+              )}
             </>
           )}
         </div>
