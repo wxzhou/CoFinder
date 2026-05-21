@@ -4,11 +4,16 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.8.7.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest active development release: v1.8.8.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-No user-facing changes since **v1.8.7**.
+Development target: **v1.8.8 / V2.8.8**.
+
+- Planned: the Transfer drawer becomes a unified Jobs pane for upload, download, delete, and gzip work.
+- Planned: delete and gzip run as visible jobs rather than blocking pane interaction.
+- Planned: gzip source deletion becomes an explicit Preference, off by default.
+- Planned: remote gzip runs on the remote side and preserves the source unless the preference is enabled and the job succeeds.
 
 ## v1.8.7 — Product milestone V2.8.7
 

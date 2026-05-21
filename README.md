@@ -2,17 +2,17 @@
 
 CoFinder is a macOS-only Electron file manager inspired by WinSCP. It provides a Finder-like dual-pane interface for local and SFTP remote browsing, rsync-based transfers, remote text editing, and personal daily file-management workflows.
 
-Current development version: **v1.8.7** (`package.json` version `1.8.7`).
+Current development version: **v1.8.8** (`package.json` version `1.8.8`).
 
 ## Current Capabilities
 
 - Dual-pane local / remote browsing with tabs, sorting, filtering, breadcrumbs, history, recents, and favorites.
 - SFTP connection profiles, optional password saving through Electron `safeStorage`, and per-profile remote favorites.
-- rsync upload/download queue with conflict handling, retry, progress/status, folder-upload file detail, and drag-and-drop between panes.
+- Unified Jobs pane for rsync upload/download plus delete/gzip work, with conflict handling, retry, progress/status, folder-upload file detail, and drag-and-drop between panes.
 - Local and remote file operations: rename, delete, new folder, new text file, gzip single-file compression, basic metadata/Inspector, and selected remote operations such as octal chmod and small-file duplicate.
 - Local Quick Look plus read-only remote preview / Quick Look for sniffed text and image files.
 - Remote text edit workflow: edit sniffed remote text files in a configured local editor, watch saves, upload back, and surface conflicts safely.
-- Pane-scoped V12 UI with compact toolbars, breadcrumb copy buttons, resizable sidebar/panes, Inspector, transfer drawer, remote auto-refresh preference, diagnostics, and macOS menu integration.
+- Pane-scoped V12 UI with compact toolbars, breadcrumb copy buttons, resizable sidebar/panes, Inspector, Jobs pane, remote auto-refresh preference, diagnostics, and macOS menu integration.
 
 ## Scope
 
@@ -25,7 +25,7 @@ Remote editing is intentionally scoped to text files. Binary/document edit auto-
 The project uses two names:
 
 - **Product milestones** (`V2.8`, `V2.8.1`, etc.) describe planning and development scope.
-- **Release versions** (`v1.8.7`, etc.) are semver versions used by `package.json`, tags, GitHub Releases, and build artifacts.
+- **Release versions** (`v1.8.8`, etc.) are semver versions used by `package.json`, tags, GitHub Releases, and build artifacts.
 
 The full history lives in [CHANGELOG.md](CHANGELOG.md). The high-level roadmap lives in [docs/roadmap.md](docs/roadmap.md).
 
@@ -69,7 +69,7 @@ npm run package   # unpacked macOS app bundle
 npm run dist      # dmg + zip
 ```
 
-Build artifacts are generated under `release/`. For v1.8.7, expected artifact names are `CoFinder-1.8.7-arm64.dmg` and `CoFinder-1.8.7-arm64.zip`.
+Build artifacts are generated under `release/`. For v1.8.8, expected artifact names are `CoFinder-1.8.8-arm64.dmg` and `CoFinder-1.8.8-arm64.zip`.
 
 Local builds may be unsigned. Public distribution should state signing/notarization status honestly.
 

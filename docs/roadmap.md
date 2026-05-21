@@ -36,6 +36,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.8.5 | v1.8.5 | Complete on dev |
 | V2.8.6 | v1.8.6 | Complete on dev |
 | V2.8.7 | v1.8.7 | Complete on dev |
+| V2.8.8 | v1.8.8 | In development on dev |
 
 ## Shipped phases (summary)
 
@@ -80,6 +81,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.8.5 | v1.8.5 | File List Columns and Tab Chrome Polish — complete on dev |
 | V2.8.6 | v1.8.6 | Toolbar Capsule and Sticky Header Polish — complete on dev |
 | V2.8.7 | v1.8.7 | Creation Flow, Remote Refresh, and Transfer Detail Fixes — complete on dev |
+| V2.8.8 | v1.8.8 | Unified Jobs Pane and Destructive Task Queue — in development on dev |
 
 ## Latest Completed Phase
 
@@ -210,6 +212,17 @@ V2.8.7 fixes hands-on workflow issues found after the toolbar polish:
 
 See **`docs/dev/V2.8.7_PLAN.md`**.
 
+### V2.8.8 / v1.8.8 — Unified Jobs Pane and Destructive Task Queue
+
+V2.8.8 turns long-running work into explicit jobs:
+
+- The Transfer drawer becomes a Jobs pane for upload, download, delete, and gzip work.
+- Delete and gzip operations enqueue as visible jobs instead of blocking the pane interaction.
+- Remote gzip runs remotely and preserves the source by default.
+- Preferences controls whether gzip deletes the source after successful compression; the default is to keep the source.
+
+See **`docs/dev/V2.8.8_PLAN.md`**.
+
 ### V2.4 / v1.4.0 — Pane-Scoped Toolbar and Finder Visual Polish
 
 V2.4 addresses V12 command ownership and visible polish before larger remote-edit work:
@@ -276,4 +289,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.8.7 / v1.8.7 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.8.8 / v1.8.8 is the current development target on `dev`; publish status still depends on completion, tagging, and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

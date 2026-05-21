@@ -12,7 +12,7 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 - **Pane toolbars:** local and remote toolbar buttons operate on their own pane without needing active-pane preselection; Copy Path appears once per pane on the breadcrumb row.
 - **Remote (M4):** disconnected pane shows embedded connect + profile list + **Open Site Manager**; connect and failures surface in-pane; connected list matches M2 behavior.
 - **Inspector (M3):** single-click selection timing, double-click folder navigation, Cmd/Ctrl+A immediate reveal — no inspector flash regressions.
-- **Transfers (M5):** enqueue from context menu or toolbar; drawer shows live tasks, **Pin** / **Clear** / expand; cancel pending / stop running.
+- **Jobs (M5):** enqueue from context menu or toolbar; drawer shows live upload/download/delete/gzip jobs, **Pin** / **Clear** / expand; cancel pending / stop running transfer jobs.
 - **Then:** run **Local / Remote / Tabs / Transfer / Multi-select / Quick Look / Selection regression** sections below on the same v12 session (behavior must match V1.1).
 
 ## V1.1 baseline (still required for classic UI and v12 parity)
@@ -232,6 +232,18 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - Try a non-existent remote path and verify current directory state remains usable.
 - Disconnect and reconnect from Site Manager.
 - For V1.8 remote operation tests, use only `/mnt/gpfs1/Users/zhouwenxiong/CoFinder_test` on `sge` or another isolated disposable test root.
+
+## V2.8.8 Jobs pane and destructive task queue
+
+- **Jobs pane identity:** enqueue one upload, one download, one delete, and one gzip job; confirm the bottom drawer is labeled Jobs and shows each type with a matching icon/text label.
+- **Delete jobs:** delete a disposable local file/folder and a disposable remote file/folder. Confirm the confirmation dialog closes immediately after confirmation and the delete appears as a job while the panes remain usable.
+- **Gzip jobs:** gzip a disposable local file and remote file. Confirm `.gz` appears after success and the job is visible in Jobs.
+- **Gzip no overwrite:** create a matching `.gz` target first, run gzip, and confirm the job fails without overwriting the target.
+- **Gzip source preference:** with the new preference off, confirm source files remain after successful gzip. Enable the preference on disposable files only and confirm source deletion happens only after success.
+- **Remote gzip locality:** run remote gzip on a disposable remote file and confirm the app does not create a download-compress-upload transfer pair; it appears as a single remote gzip job.
+- **Job navigation safety:** start a slow delete/gzip in an isolated folder, navigate elsewhere, refresh panes, and confirm the job continues independently.
+- **Filters/actions:** confirm All / Running / Failed / Done filters include all job types; retry failed and clear completed still work.
+- **Auto-hide:** leave Jobs unpinned after successful jobs and confirm it auto-hides according to the queue auto-hide delay preference.
 
 ## Tabs Smoke (M3)
 
