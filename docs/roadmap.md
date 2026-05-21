@@ -36,7 +36,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.8.5 | v1.8.5 | Complete on dev |
 | V2.8.6 | v1.8.6 | Complete on dev |
 | V2.8.7 | v1.8.7 | Complete on dev |
-| V2.8.8 | v1.8.8 | In development on dev |
+| V2.8.8 | v1.8.8 | Complete on dev |
 
 ## Shipped phases (summary)
 
@@ -81,7 +81,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.8.5 | v1.8.5 | File List Columns and Tab Chrome Polish — complete on dev |
 | V2.8.6 | v1.8.6 | Toolbar Capsule and Sticky Header Polish — complete on dev |
 | V2.8.7 | v1.8.7 | Creation Flow, Remote Refresh, and Transfer Detail Fixes — complete on dev |
-| V2.8.8 | v1.8.8 | Unified Jobs Pane and Destructive Task Queue — in development on dev |
+| V2.8.8 | v1.8.8 | Unified Jobs Pane and Destructive Task Queue — complete on dev |
 
 ## Latest Completed Phase
 
@@ -289,4 +289,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.8.8 / v1.8.8 is the current development target on `dev`; publish status still depends on completion, tagging, and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.8.8 / v1.8.8 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.

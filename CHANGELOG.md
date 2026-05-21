@@ -4,16 +4,23 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest active development release: v1.8.8.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.8.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
-Development target: **v1.8.8 / V2.8.8**.
+No user-facing changes since **v1.8.8**.
 
-- Planned: the Transfer drawer becomes a unified Jobs pane for upload, download, delete, and gzip work.
-- Planned: delete and gzip run as visible jobs rather than blocking pane interaction.
-- Planned: gzip source deletion becomes an explicit Preference, off by default.
-- Planned: remote gzip runs on the remote side and preserves the source unless the preference is enabled and the job succeeds.
+## v1.8.8 — Product milestone V2.8.8
+
+V2.8.8 is a job visibility and destructive-operation safety release.
+
+- The bottom Transfer drawer is now a unified Jobs pane for upload, download, delete, and gzip work.
+- Local and remote delete operations now enqueue as visible jobs after confirmation, so pane navigation/refresh can continue while deletion runs.
+- Local and remote gzip operations now enqueue as visible jobs and fail without overwriting an existing `.gz` target.
+- Remote gzip now runs on the remote side through the active SSH/SFTP connection instead of download-compress-upload.
+- Preferences now includes `Delete source file after gzip compression`, off by default.
+- Gzip source deletion only happens after successful compression; failed jobs preserve the source.
+- Jobs show type-specific labels and icons for upload, download, gzip, and delete while preserving existing filters, retry failed, clear completed, pin, and auto-hide behavior.
 
 ## v1.8.7 — Product milestone V2.8.7
 

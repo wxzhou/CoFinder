@@ -8,7 +8,7 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 
 **Legacy classic UI:** use **`?ui=v11`**, **`?legacy=1`**, **`COFINDER_LEGACY_UI=1`**, or a build with **`VITE_COFINDER_LEGACY_UI=1`** — then run overlapping **V1.1 baseline** checks below for parity.
 
-- **Layout:** sidebar, tab strip, dual panes, per-pane toolbars, and bottom transfer drawer render without overlap; inactive pane reads visually cooler than the focused pane.
+- **Layout:** sidebar, tab strip, dual panes, per-pane toolbars, and bottom Jobs pane render without overlap; inactive pane reads visually cooler than the focused pane.
 - **Pane toolbars:** local and remote toolbar buttons operate on their own pane without needing active-pane preselection; Copy Path appears once per pane on the breadcrumb row.
 - **Remote (M4):** disconnected pane shows embedded connect + profile list + **Open Site Manager**; connect and failures surface in-pane; connected list matches M2 behavior.
 - **Inspector (M3):** single-click selection timing, double-click folder navigation, Cmd/Ctrl+A immediate reveal — no inspector flash regressions.
@@ -148,7 +148,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Disconnect placement:** connect to a remote profile and confirm Disconnect is absent from the remote toolbar. Open the Connected status menu beside the remote title and confirm Disconnect is available there.
 - **Delete separation:** confirm the remote toolbar Delete button is no longer adjacent to any Disconnect control.
 - **Progressive folder Inspector:** select a large local folder and a large remote folder. Confirm the Inspector appears quickly, Size / Files / Folders show loading while directory details are calculated, and update in place when done.
-- **Remote edit completion:** edit and save a remote text file. Confirm successful upload completion appears in Transfers and auto-hides like a normal successful transfer, while the Remote edits panel does not keep a persistent uploaded row.
+- **Remote edit completion:** edit and save a remote text file. Confirm successful upload completion appears in Jobs and auto-hides like a normal successful transfer, while the Remote edits panel does not keep a persistent uploaded row.
 
 ## V2.8.5 file-list columns and tab chrome
 
@@ -177,8 +177,8 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Remote preview cache reuse:** open a remote text file, update the remote file from another session, then open it again while the editor remains open. Confirm the same local cache path is reused and refreshed rather than creating a second temporary preview path.
 - **Remote auto-refresh preference:** open Preferences and confirm the Auto-refresh checkbox, interval field, and `seconds` label are grouped together. With the checkbox off, confirm the interval field appears disabled/grey. Enable it, set a short interval such as 5 seconds, then change the connected test directory from another session and confirm the active remote pane refreshes. Disable the setting afterward.
 - **Remote initial loading state:** connect to a remote profile and confirm the remote pane shows a loading message during the first list instead of briefly claiming the folder is empty.
-- **Folder upload details:** upload a local folder with several files to the disposable remote test root. Expand Transfers and confirm the parent task shows folder completed/total files, current file name, current file progress/speed/ETA, and a collapsible child list with running, pending, and completed file states.
-- **Transfer drawer redundancy:** expand Transfers and confirm title, active/queued summary, All / Running / Failed / Done filters, Pin/Clear/Retry failed, and Hide are consolidated into one top row.
+- **Folder upload details:** upload a local folder with several files to the disposable remote test root. Expand Jobs and confirm the parent task shows folder completed/total files, current file name, current file progress/speed/ETA, and a collapsible child list with running, pending, and completed file states.
+- **Jobs pane redundancy:** expand Jobs and confirm title, active/queued summary, All / Running / Failed / Done filters, Pin/Clear/Retry failed, and Hide are consolidated into one top row.
 - **Context menu split:** right-click a selected local file and confirm only item actions appear. Right-click blank local list space while the file remains selected and confirm only current-folder actions appear. Repeat for remote.
 - **Context menu placement:** right-click a row near the lower edge of the file list and confirm the menu moves upward enough to remain fully visible.
 - **Gzip compression:** right-click a single local file and choose Compress as gzip; confirm `<name>.gz` appears and a second attempt reports that the gzip target already exists. Repeat on a single remote file in the disposable remote test root. Confirm folders and multi-selection do not show the gzip action.
@@ -194,7 +194,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 ## V2.7 V12 UI regression
 
-- **Task filters:** expand the transfer drawer and switch All / Running / Failed / Done. Confirm filtering does not clear unresolved failed tasks.
+- **Task filters:** expand the Jobs pane and switch All / Running / Failed / Done. Confirm filtering does not clear unresolved failed tasks.
 - **Empty panes:** open empty local and remote directories and confirm the empty state is visible and not mistaken for a broken list.
 - **Inspector density:** open Inspector on local and remote single selections and confirm metadata remains scannable without auto-opening on ordinary single click.
 - **Layout checklist:** run `docs/dev/v12-layout-regression-checks.md` before release candidates.
