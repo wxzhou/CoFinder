@@ -37,7 +37,9 @@ import { RemotePreviewService } from "../services/RemotePreviewService";
 import { RemoteEditService } from "../services/RemoteEditService";
 import { buildSshTerminalCommand } from "./sshTerminalCommand";
 import type {
+  EnqueueDeleteRequest,
   EnqueueDownloadRequest,
+  EnqueueGzipRequest,
   EnqueueUploadRequest,
   IpcResponse,
   ProfileUpsertPayload,
@@ -56,7 +58,12 @@ import type { EntryType, ServerProfile } from "../../shared/types/models";
 const localFileService = new LocalFileService();
 const connectionManager = new ConnectionManager();
 const remoteFileService = new RemoteFileService(connectionManager);
-const transferQueueService = new TransferQueueService();
+const transferQueueService = new TransferQueueService({
+  localDelete: (paths) => localFileService.deletePaths(paths),
+  remoteDelete: (connectionId, paths) => remoteFileService.deletePaths(connectionId, paths),
+  localGzip: (targetPath, options) => localFileService.compressFileGzip(targetPath, options),
+  remoteGzip: (connectionId, targetPath, options) => remoteFileService.compressFileGzip(connectionId, targetPath, options)
+});
 const userData = app.getPath("userData");
 const mainLogFilePath = path.join(userData, "main.log");
 const settingsService = new SettingsService(defaultSettingsPath(userData));
@@ -652,6 +659,34 @@ export function registerIpcHandlers(): void {
     }
   );
 
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueDelete,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueDelete request.");
+        const req = parseDeleteRequest(body);
+        const data = await transferQueueService.enqueueDelete(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
+      }
+    }
+  );
+
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueGzip,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueGzip request.");
+        const req = parseGzipRequest(body, (await settingsService.get()).transfer.deleteSourceAfterGzip);
+        const data = await transferQueueService.enqueueGzip(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
+      }
+    }
+  );
+
   registerChannel(IPC_CHANNELS.transfer.cancel, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:cancel request.");
@@ -1194,6 +1229,35 @@ function parseDownloadRequest(body: Record<string, unknown>): EnqueueDownloadReq
     conflictPolicy: parseConflictPolicy(body.conflictPolicy),
     preserveTimestamps: optionalBoolean(body.preserveTimestamps),
     localTargetOverrides: parseStringMap(body.localTargetOverrides, "localTargetOverrides")
+  };
+}
+
+function parseDeleteRequest(body: Record<string, unknown>): EnqueueDeleteRequest {
+  const pane = body.pane === "remote" ? "remote" : "local";
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    pane,
+    connectionId: optionalString(body.connectionId),
+    paths: Array.isArray(body.paths)
+      ? body.paths.map((v) =>
+          pane === "remote"
+            ? normalizeRemotePathInput(v, "TRANSFER_INVALID_REQUEST", "path")
+            : validateLocalPathInput(v, "TRANSFER_INVALID_REQUEST", "path")
+        )
+      : []
+  };
+}
+
+function parseGzipRequest(body: Record<string, unknown>, defaultDeleteSourceAfterSuccess: boolean): EnqueueGzipRequest {
+  const pane = body.pane === "remote" ? "remote" : "local";
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    pane,
+    connectionId: optionalString(body.connectionId),
+    path: pane === "remote"
+      ? normalizeRemotePathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
+      : validateLocalPathInput(body.path, "TRANSFER_INVALID_REQUEST", "path"),
+    deleteSourceAfterSuccess: optionalBoolean(body.deleteSourceAfterSuccess) ?? defaultDeleteSourceAfterSuccess
   };
 }
 

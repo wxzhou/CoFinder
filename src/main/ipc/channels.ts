@@ -46,6 +46,8 @@ export const IPC_CHANNELS = {
     checkDownloadConflicts: "transfer:checkDownloadConflicts",
     enqueueUpload: "transfer:enqueueUpload",
     enqueueDownload: "transfer:enqueueDownload",
+    enqueueDelete: "transfer:enqueueDelete",
+    enqueueGzip: "transfer:enqueueGzip",
     cancel: "transfer:cancel",
     stop: "transfer:stop",
     retry: "transfer:retry",

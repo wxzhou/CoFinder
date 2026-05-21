@@ -165,6 +165,21 @@ export type EnqueueDownloadRequest = {
   localTargetOverrides?: Record<string, string>;
 };
 
+export type EnqueueDeleteRequest = {
+  tabId: string;
+  pane: "local" | "remote";
+  paths: string[];
+  connectionId?: string;
+};
+
+export type EnqueueGzipRequest = {
+  tabId: string;
+  pane: "local" | "remote";
+  path: string;
+  connectionId?: string;
+  deleteSourceAfterSuccess?: boolean;
+};
+
 export type TransferConflictPolicy = "prompt" | "overwrite" | "skip" | "rename" | "cancel";
 
 export type AppSettings = {
@@ -181,6 +196,7 @@ export type AppSettings = {
     defaultConflictPolicy: Exclude<TransferConflictPolicy, "cancel">;
     queueAutoHideDelayMs: number;
     preserveTimestamps: boolean;
+    deleteSourceAfterGzip: boolean;
   };
   remote: {
     autoRefreshEnabled: boolean;
@@ -325,6 +341,8 @@ export interface IpcApi {
     checkDownloadConflicts: (request: EnqueueDownloadRequest) => Promise<IpcResponse<TransferConflictCheckResponse>>;
     enqueueUpload: (request: EnqueueUploadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     enqueueDownload: (request: EnqueueDownloadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueDelete: (request: EnqueueDeleteRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueGzip: (request: EnqueueGzipRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     cancel: (request: { taskId: string }) => Promise<IpcResponse<{ canceled: true }>>;
     stop: (request: { taskId: string }) => Promise<IpcResponse<{ stopped: true }>>;
     retry: (request: { taskId: string }) => Promise<IpcResponse<{ retried: true }>>;

@@ -43,6 +43,10 @@ function createService(options?: {
   pathExists?: boolean;
   localPathKind?: "file" | "directory" | "other";
   localDirectoryFiles?: TransferTaskItem[];
+  localDelete?: (paths: string[]) => Promise<number>;
+  remoteDelete?: (connectionId: string, paths: string[]) => Promise<number>;
+  localGzip?: (path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
+  remoteGzip?: (connectionId: string, path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
 }) {
   const procs = options?.procs ?? [new FakeProc()];
   const spawnProcess = vi.fn(() => procs.shift() as unknown as ChildProcess);
@@ -60,7 +64,11 @@ function createService(options?: {
     },
     pathExists: async () => options?.pathExists ?? true,
     localPathKind: async () => options?.localPathKind ?? "file",
-    localDirectoryFiles: async () => options?.localDirectoryFiles ?? []
+    localDirectoryFiles: async () => options?.localDirectoryFiles ?? [],
+    localDelete: options?.localDelete,
+    remoteDelete: options?.remoteDelete,
+    localGzip: options?.localGzip,
+    remoteGzip: options?.remoteGzip
   });
 
   return { service, spawnProcess, runCommand };
@@ -324,5 +332,61 @@ describe("TransferQueueService state machine", () => {
       expect(task.rawLog.join("\n")).not.toContain("password");
       expect(snapshots.length).toBeGreaterThan(1);
     });
+  });
+
+  it("runs local delete as a visible queued job without spawning rsync", async () => {
+    const localDelete = vi.fn(async () => 2);
+    const { service, spawnProcess } = createService({ localDelete });
+
+    await service.enqueueDelete({ tabId: "tab-a", pane: "local", paths: ["/tmp/a.txt", "/tmp/b.txt"] });
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("delete");
+      expect(task.status).toBe("success");
+      expect(task.progressText).toBe("Deleted 2 items.");
+    });
+    expect(localDelete).toHaveBeenCalledWith(["/tmp/a.txt", "/tmp/b.txt"]);
+    expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("runs remote gzip as a job and forwards delete-source preference", async () => {
+    const remoteGzip = vi.fn(async () => "/remote/sample.txt.gz");
+    const { service, spawnProcess } = createService({ remoteGzip });
+
+    await service.enqueueGzip({
+      tabId: "tab-a",
+      pane: "remote",
+      connectionId: "c1",
+      path: "/remote/sample.txt",
+      deleteSourceAfterSuccess: true
+    });
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("gzip");
+      expect(task.status).toBe("success");
+      expect(task.destination).toBe("/remote/sample.txt.gz");
+      expect(task.progressText).toBe("Compressed and deleted source.");
+    });
+    expect(remoteGzip).toHaveBeenCalledWith("c1", "/remote/sample.txt", { deleteSourceAfterSuccess: true });
+    expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("keeps failed gzip jobs visible and does not retry destructive work automatically", async () => {
+    const localGzip = vi.fn(async () => {
+      throw new Error("Gzip target already exists.");
+    });
+    const { service } = createService({ localGzip });
+
+    await service.enqueueGzip({ tabId: "tab-a", pane: "local", path: "/tmp/source.txt" });
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("gzip");
+      expect(task.status).toBe("failed");
+      expect(task.error).toBe("Gzip target already exists.");
+    });
+    expect(localGzip).toHaveBeenCalledTimes(1);
   });
 });

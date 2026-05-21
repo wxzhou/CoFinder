@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { posix as posixPath } from "node:path";
-import type { EnqueueDownloadRequest, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
+import type { EnqueueDeleteRequest, EnqueueDownloadRequest, EnqueueGzipRequest, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
 import type { TransferErrorCategory, TransferTask, TransferTaskItem } from "../../shared/types/models";
 import { redactSensitivePlaintext } from "../security/redactSensitive";
 import { buildProcessEnv } from "../utils/processEnv";
@@ -27,6 +27,10 @@ type TransferQueueDeps = {
   pathExists: (fullPath: string) => Promise<boolean>;
   localPathKind: (fullPath: string) => Promise<"file" | "directory" | "other">;
   localDirectoryFiles: (fullPath: string) => Promise<TransferTaskItem[]>;
+  localDelete: (paths: string[]) => Promise<number>;
+  remoteDelete: (connectionId: string, paths: string[]) => Promise<number>;
+  localGzip: (path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
+  remoteGzip: (connectionId: string, path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
 };
 
 export class TransferQueueService {
@@ -43,7 +47,11 @@ export class TransferQueueService {
       spawnProcess: deps?.spawnProcess ?? defaultSpawnProcess,
       pathExists: deps?.pathExists ?? defaultPathExists,
       localPathKind: deps?.localPathKind ?? defaultLocalPathKind,
-      localDirectoryFiles: deps?.localDirectoryFiles ?? defaultLocalDirectoryFiles
+      localDirectoryFiles: deps?.localDirectoryFiles ?? defaultLocalDirectoryFiles,
+      localDelete: deps?.localDelete ?? defaultUnavailableLocalDelete,
+      remoteDelete: deps?.remoteDelete ?? defaultUnavailableRemoteDelete,
+      localGzip: deps?.localGzip ?? defaultUnavailableLocalGzip,
+      remoteGzip: deps?.remoteGzip ?? defaultUnavailableRemoteGzip
     };
   }
 
@@ -75,6 +83,7 @@ export class TransferQueueService {
           : destinationPath;
       const task = this.makeTask({
         tabId: request.tabId,
+        kind: "upload",
         direction: "upload",
         profileId: request.profileId,
         connectionId: request.connectionId,
@@ -121,6 +130,7 @@ export class TransferQueueService {
       validateLocalPath(localPath);
       const task = this.makeTask({
         tabId: request.tabId,
+        kind: "download",
         direction: "download",
         profileId: request.profileId,
         connectionId: request.connectionId,
@@ -141,6 +151,71 @@ export class TransferQueueService {
     this.emit();
     void this.pump();
     return { queued: true, taskIds };
+  }
+
+  async enqueueDelete(request: EnqueueDeleteRequest): Promise<{ queued: true; taskIds: string[] }> {
+    validateOperationRequest(request);
+    if (request.paths.length === 0) throw transferError("TRANSFER_INVALID_REQUEST", "Select at least one path to delete.");
+    if (request.pane === "remote" && !request.connectionId?.trim()) {
+      throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required for delete.");
+    }
+    const paths = unique(request.paths.map((item) => validateOperationPath(item)));
+    const lockKey = operationLockKey("delete", request.pane, request.connectionId, paths);
+    this.assertNoConflictingOperation(lockKey, "A delete job is already queued or running for this path.");
+    const label = paths.length === 1 ? paths[0] : `${paths.length} items`;
+    const task = this.makeTask({
+      tabId: request.tabId,
+      kind: "delete",
+      pane: request.pane,
+      source: label,
+      destination: "",
+      sourceDisplay: request.pane === "remote" ? `Remote delete: ${label}` : `Local delete: ${label}`,
+      destinationDisplay: "",
+      connectionId: request.connectionId,
+      host: "",
+      port: 0,
+      username: "",
+      remotePath: request.pane === "remote" ? label : "",
+      localPath: request.pane === "local" ? label : "",
+      operationPaths: paths,
+      operationLockKey: lockKey
+    });
+    this.tasks.push(task);
+    this.emit();
+    void this.pump();
+    return { queued: true, taskIds: [task.id] };
+  }
+
+  async enqueueGzip(request: EnqueueGzipRequest): Promise<{ queued: true; taskIds: string[] }> {
+    validateOperationRequest(request);
+    const sourcePath = validateOperationPath(request.path);
+    if (request.pane === "remote" && !request.connectionId?.trim()) {
+      throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required for gzip.");
+    }
+    const destinationPath = `${sourcePath}.gz`;
+    const lockKey = operationLockKey("gzip", request.pane, request.connectionId, [sourcePath]);
+    this.assertNoConflictingOperation(lockKey, "A gzip job is already queued or running for this path.");
+    const task = this.makeTask({
+      tabId: request.tabId,
+      kind: "gzip",
+      pane: request.pane,
+      source: sourcePath,
+      destination: destinationPath,
+      sourceDisplay: request.pane === "remote" ? `Remote gzip: ${sourcePath}` : `Local gzip: ${sourcePath}`,
+      destinationDisplay: destinationPath,
+      connectionId: request.connectionId,
+      host: "",
+      port: 0,
+      username: "",
+      remotePath: request.pane === "remote" ? sourcePath : "",
+      localPath: request.pane === "local" ? sourcePath : "",
+      deleteSourceAfterSuccess: !!request.deleteSourceAfterSuccess,
+      operationLockKey: lockKey
+    });
+    this.tasks.push(task);
+    this.emit();
+    void this.pump();
+    return { queued: true, taskIds: [task.id] };
   }
 
   async cancel(taskId: string): Promise<{ canceled: true }> {
@@ -261,6 +336,11 @@ export class TransferQueueService {
     task.error = undefined;
     this.emit();
 
+    if (task.kind === "delete" || task.kind === "gzip") {
+      await this.runOperationTask(task);
+      return;
+    }
+
     const rsyncCheck = await this.deps.runCommand("rsync", ["--version"], "rsync is not installed or not found in PATH");
     if (!rsyncCheck.ok) {
       this.failTask(task, rsyncCheck.message, rsyncCheck.detail);
@@ -327,6 +407,47 @@ export class TransferQueueService {
         resolve();
       });
     });
+  }
+
+  private async runOperationTask(task: TransferTask): Promise<void> {
+    try {
+      if (task.kind === "delete") {
+        const paths = task.operationPaths?.length ? task.operationPaths : [task.source];
+        task.currentFile = paths.length === 1 ? paths[0] : `${paths.length} items`;
+        task.progressText = "Deleting...";
+        this.emit();
+        const deleted = task.pane === "remote"
+          ? await this.deps.remoteDelete(requiredConnectionId(task), paths)
+          : await this.deps.localDelete(paths);
+        task.status = "success";
+        task.finishedAt = this.deps.now();
+        task.progressText = `Deleted ${deleted} ${deleted === 1 ? "item" : "items"}.`;
+        this.appendLog(task, task.progressText);
+        this.emit();
+        return;
+      }
+
+      task.currentFile = task.source;
+      task.progressText = "Compressing...";
+      this.emit();
+      const output = task.pane === "remote"
+        ? await this.deps.remoteGzip(requiredConnectionId(task), task.source, { deleteSourceAfterSuccess: !!task.deleteSourceAfterSuccess })
+        : await this.deps.localGzip(task.source, { deleteSourceAfterSuccess: !!task.deleteSourceAfterSuccess });
+      task.status = "success";
+      task.destination = output;
+      task.destinationDisplay = output;
+      task.finishedAt = this.deps.now();
+      task.progressText = task.deleteSourceAfterSuccess ? "Compressed and deleted source." : "Compressed; source kept.";
+      this.appendLog(task, `Gzip completed: ${output}`);
+      this.emit();
+    } catch (error) {
+      task.status = "failed";
+      task.finishedAt = this.deps.now();
+      task.error = error instanceof Error ? error.message : "Job failed.";
+      task.errorCode = classifyTransferFailure(task.error);
+      this.appendLog(task, redactSensitivePlaintext(task.error));
+      this.emit();
+    }
   }
 
   private consumeProgressLine(task: TransferTask, line: string): void {
@@ -416,6 +537,13 @@ export class TransferQueueService {
     }));
   }
 
+  private assertNoConflictingOperation(lockKey: string, message: string): void {
+    const conflict = this.tasks.find((task) =>
+      task.operationLockKey === lockKey && (task.status === "pending" || task.status === "running")
+    );
+    if (conflict) throw transferError("TRANSFER_INVALID_REQUEST", message);
+  }
+
 }
 
 function classifyTransferFailure(text: string): TransferErrorCategory {
@@ -469,6 +597,32 @@ function validateCommonRequest(request: {
   if (!Number.isInteger(request.port) || request.port <= 0 || request.port > 65535) {
     throw transferError("TRANSFER_INVALID_REQUEST", "Port must be between 1 and 65535.");
   }
+}
+
+function validateOperationRequest(request: {
+  tabId: string;
+  pane: "local" | "remote";
+}): void {
+  if (!request.tabId.trim()) throw transferError("TRANSFER_INVALID_REQUEST", "Tab id is required.");
+  if (request.pane !== "local" && request.pane !== "remote") {
+    throw transferError("TRANSFER_INVALID_REQUEST", "Pane must be local or remote.");
+  }
+}
+
+function validateOperationPath(input: string): string {
+  const value = (input ?? "").trim();
+  if (!value) throw transferError("TRANSFER_INVALID_REQUEST", "Path is required.");
+  if (/\u0000|\n|\r/.test(value)) throw transferError("TRANSFER_INVALID_REQUEST", "Path contains unsupported characters.");
+  return value;
+}
+
+function operationLockKey(kind: "delete" | "gzip", pane: "local" | "remote", connectionId: string | undefined, paths: string[]): string {
+  return `${kind}\u0000${pane}\u0000${connectionId ?? ""}\u0000${paths.slice().sort().join("\u0000")}`;
+}
+
+function requiredConnectionId(task: TransferTask): string {
+  if (!task.connectionId) throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required.");
+  return task.connectionId;
 }
 
 function validateLocalPath(fullPath: string): void {
@@ -589,6 +743,33 @@ async function defaultLocalDirectoryFiles(rootPath: string): Promise<TransferTas
   const out: TransferTaskItem[] = [];
   await walkLocalDirectory(rootPath, "", out);
   out.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return out;
+}
+
+async function defaultUnavailableLocalDelete(): Promise<number> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Local delete job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteDelete(): Promise<number> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Remote delete job support is unavailable.");
+}
+
+async function defaultUnavailableLocalGzip(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Local gzip job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteGzip(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Remote gzip job support is unavailable.");
+}
+
+function unique(items: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
   return out;
 }
 

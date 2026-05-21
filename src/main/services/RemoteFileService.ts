@@ -1,9 +1,5 @@
-import fs from "node:fs/promises";
-import { createReadStream, createWriteStream } from "node:fs";
-import os from "node:os";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { pipeline } from "node:stream/promises";
-import { createGzip } from "node:zlib";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
 import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse } from "../../shared/types/ipc";
 import { ConnectionManager } from "./ConnectionManager";
@@ -31,9 +27,9 @@ type RemoteStatItem = {
 };
 type RemoteCompressClient = {
   stat: (path: string) => Promise<RemoteStatItem>;
-  fastGet?: (remotePath: string, localPath: string) => Promise<unknown>;
-  get?: (remotePath: string, localPath?: string) => Promise<unknown>;
-  put: (input: string | Buffer | NodeJS.ReadableStream, path: string) => Promise<unknown>;
+  client?: {
+    exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
+  };
 };
 
 export type RemoteDirectorySizeOptions = {
@@ -292,13 +288,12 @@ export class RemoteFileService {
     }
   }
 
-  async compressFileGzip(connectionId: string, targetPath: string): Promise<string> {
+  async compressFileGzip(connectionId: string, targetPath: string, options?: { deleteSourceAfterSuccess?: boolean }): Promise<string> {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
     const normalizedPath = this.normalizeRemotePath(targetPath);
     const destinationPath = this.normalizeRemotePath(`${normalizedPath}.gz`);
     const client = connection.client as unknown as RemoteCompressClient;
-    let tempDir = "";
     try {
       const sourceStat = (await client.stat(normalizedPath)) as RemoteStatItem;
       if (resolveRemoteType(sourceStat) !== "file") {
@@ -312,18 +307,15 @@ export class RemoteFileService {
         const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : "";
         if (!/No such file|ENOENT|no such path|does not exist/i.test(message)) throw error;
       }
-      tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-remote-gzip-"));
-      const localSource = path.join(tempDir, "source");
-      const localGzip = path.join(tempDir, "source.gz");
-      await downloadRemoteFile(client, normalizedPath, localSource);
-      await pipeline(createReadStream(localSource), createGzip(), createWriteStream(localGzip, { flags: "wx" }));
-      await client.put(localGzip, destinationPath);
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote command execution is unavailable for gzip.");
+      const tempPath = `${destinationPath}.cofinder-${Date.now()}-${randomUUID().slice(0, 8)}.tmp`;
+      const command = buildRemoteGzipCommand(normalizedPath, destinationPath, tempPath, !!options?.deleteSourceAfterSuccess);
+      await execRemoteCommand(exec, command);
       return destinationPath;
     } catch (error) {
       if (error instanceof RemoteServiceError) throw error;
       throw this.mapCompressError(error);
-    } finally {
-      if (tempDir) await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
     }
   }
 
@@ -755,17 +747,52 @@ function unique(items: string[]): string[] {
   return out;
 }
 
-async function downloadRemoteFile(client: RemoteCompressClient, remotePath: string, localPath: string): Promise<void> {
-  if (typeof client.fastGet === "function") {
-    await client.fastGet(remotePath, localPath);
-    return;
-  }
-  if (typeof client.get === "function") {
-    const result = await client.get(remotePath, localPath);
-    if (Buffer.isBuffer(result)) await fs.writeFile(localPath, result);
-    return;
-  }
-  throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote download is unavailable for gzip compression.");
+type RemoteExec = (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
+
+function buildRemoteGzipCommand(sourcePath: string, destinationPath: string, tempPath: string, deleteSourceAfterSuccess: boolean): string {
+  const src = shellQuote(sourcePath);
+  const dst = shellQuote(destinationPath);
+  const tmp = shellQuote(tempPath);
+  const removeSource = deleteSourceAfterSuccess ? ` && rm -- ${src}` : "";
+  return [
+    `rm -f -- ${tmp}`,
+    `gzip -c -- ${src} > ${tmp}`,
+    `mv -- ${tmp} ${dst}${removeSource}`
+  ].join(" && ");
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+async function execRemoteCommand(exec: RemoteExec, command: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let stderr = "";
+    try {
+      exec(command, (error, stream) => {
+        if (error || !stream || typeof stream !== "object") {
+          reject(error ?? new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote command execution failed."));
+          return;
+        }
+        const readable = stream as {
+          on: (event: string, listener: (...args: unknown[]) => void) => unknown;
+          stderr?: { on: (event: string, listener: (...args: unknown[]) => void) => unknown };
+        };
+        readable.stderr?.on("data", (chunk) => {
+          stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+        });
+        readable.on("close", (code) => {
+          if (code === 0) resolve();
+          else reject(new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote gzip command failed.", stderr.trim().slice(0, 400) || undefined));
+        });
+        readable.on("error", (streamError) => {
+          reject(streamError instanceof Error ? streamError : new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote gzip command failed."));
+        });
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {

@@ -718,10 +718,35 @@
   color: #1f7a3a;
 }
 
-.cfv12-root .v12m-tq-dir {
+.cfv12-root .v12m-tq-kind {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-weight: 600;
   color: var(--m-fg-dim, rgba(60, 60, 67, 0.72));
+}
+
+.cfv12-root .v12m-tq-kind svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.cfv12-root .v12m-tq-kind--upload {
+  color: #248a3d;
+}
+
+.cfv12-root .v12m-tq-kind--download {
+  color: var(--m-accent, #0a5fff);
+}
+
+.cfv12-root .v12m-tq-kind--gzip {
+  color: #c46b00;
+}
+
+.cfv12-root .v12m-tq-kind--delete {
+  color: #b42318;
 }
 
 .cfv12-root .v12m-tq-path {

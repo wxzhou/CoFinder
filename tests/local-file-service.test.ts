@@ -124,6 +124,17 @@ describe("LocalFileService compressFileGzip", () => {
     const dir = await makeTempDir();
     await expect(service.compressFileGzip(dir)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
   });
+
+  it("deletes the local source after gzip only when requested", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "delete-after.txt");
+    await fs.writeFile(source, "remove me after gzip\n");
+
+    const compressed = await service.compressFileGzip(source, { deleteSourceAfterSuccess: true });
+    await expect(gunzipAsync(await fs.readFile(compressed))).resolves.toEqual(Buffer.from("remove me after gzip\n"));
+    await expect(fs.stat(source)).rejects.toBeTruthy();
+  });
 });
 
 describe("LocalFileService listDirectory metadata", () => {

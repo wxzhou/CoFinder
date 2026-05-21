@@ -16,7 +16,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   transfer: {
     defaultConflictPolicy: "prompt",
     queueAutoHideDelayMs: 10_000,
-    preserveTimestamps: true
+    preserveTimestamps: true,
+    deleteSourceAfterGzip: false
   },
   remote: {
     autoRefreshEnabled: false,
@@ -77,7 +78,8 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
           ? conflict
           : base.transfer.defaultConflictPolicy,
       queueAutoHideDelayMs: numberInRange(transfer.queueAutoHideDelayMs, base.transfer.queueAutoHideDelayMs, 0, 60_000),
-      preserveTimestamps: bool(transfer.preserveTimestamps, base.transfer.preserveTimestamps)
+      preserveTimestamps: bool(transfer.preserveTimestamps, base.transfer.preserveTimestamps),
+      deleteSourceAfterGzip: bool(transfer.deleteSourceAfterGzip, base.transfer.deleteSourceAfterGzip)
     },
     remote: {
       autoRefreshEnabled: bool(remote.autoRefreshEnabled, base.remote.autoRefreshEnabled),

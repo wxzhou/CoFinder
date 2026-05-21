@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from "react";
 import type { TransferTask } from "../../shared/types/models";
 import { formatTransferTaskMetaLine } from "./v12TransferRowSummary";
+import { V12TbIcon } from "./shared/V12Icons";
 
 export type V12DrawerQueueState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
 
@@ -37,7 +38,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
     done: props.tasks.filter((task) => task.status === "success" || task.status === "canceled" || task.status === "stopped").length
   };
   const filterChips = (
-    <div className="v12m-tq-filters" role="tablist" aria-label="Transfer task filters" onClick={(event) => event.stopPropagation()}>
+    <div className="v12m-tq-filters" role="tablist" aria-label="Job filters" onClick={(event) => event.stopPropagation()}>
       {(["all", "running", "failed", "done"] as const).map((item) => (
         <button
           key={item}
@@ -83,7 +84,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
           }
         }}
       >
-        <span className="v12m-drawer-title">Transfers</span>
+        <span className="v12m-drawer-title">Jobs</span>
         <span className="v12m-drawer-sum">{props.summary}</span>
         {expanded ? filterChips : null}
         {actionButtons}
@@ -104,7 +105,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
             {props.error ? <div className="cfv12p-error v12m-tq-err">{props.error}</div> : null}
             <div className="v12m-tq-list">
               {filteredTasks.length === 0 ? (
-                <div className="v12m-tq-empty">No transfer tasks.</div>
+                <div className="v12m-tq-empty">No jobs.</div>
               ) : (
                 filteredTasks.map((task) => (
                   <div
@@ -113,7 +114,10 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
                   >
                     <div className="v12m-tq-row-main">
                       <span className={`v12m-tq-badge v12m-tq-badge--${task.status}`}>{task.status}</span>
-                      <span className="v12m-tq-dir">{task.direction}</span>
+                      <span className={`v12m-tq-kind v12m-tq-kind--${task.kind}`}>
+                        <JobKindIcon task={task} />
+                        {jobKindLabel(task)}
+                      </span>
                       <span className="v12m-tq-path" title={`${task.sourceDisplay} → ${task.destinationDisplay}`}>
                         {task.sourceDisplay} → {task.destinationDisplay}
                       </span>
@@ -149,7 +153,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
                           Cancel
                         </button>
                       ) : null}
-                      {task.status === "running" ? (
+                      {task.status === "running" && (task.kind === "upload" || task.kind === "download") ? (
                         <button type="button" className="v12m-tq-act" onClick={() => void props.onStopTask(task.id)}>
                           Stop
                         </button>
@@ -176,6 +180,26 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function jobKindLabel(task: TransferTask): string {
+  if (task.kind === "upload") return "Upload";
+  if (task.kind === "download") return "Download";
+  if (task.kind === "gzip") return "Gzip";
+  return "Delete";
+}
+
+function JobKindIcon(props: { task: TransferTask }): ReactElement {
+  if (props.task.kind === "upload") return <V12TbIcon name="arrow-up-tray" />;
+  if (props.task.kind === "download") return <V12TbIcon name="arrow-down-tray" />;
+  if (props.task.kind === "delete") return <V12TbIcon name="trash" />;
+  return (
+    <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5.4 5.1h7.7c.75 0 1.35.6 1.35 1.35v3.15H6.75c-.75 0-1.35-.6-1.35-1.35V5.1z" />
+      <path d="M4.85 9.3h7.75c.75 0 1.35.6 1.35 1.35v4.25H6.2c-.75 0-1.35-.6-1.35-1.35V9.3z" />
+      <path d="M7.3 5.1v4.5M6.75 9.3v5.6" />
+    </svg>
   );
 }
 

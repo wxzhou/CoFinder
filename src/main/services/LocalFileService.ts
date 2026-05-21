@@ -153,13 +153,14 @@ export class LocalFileService {
     }
   }
 
-  async compressFileGzip(targetPath: string): Promise<string> {
+  async compressFileGzip(targetPath: string, options?: { deleteSourceAfterSuccess?: boolean }): Promise<string> {
     const normalizedPath = normalizeLocalPath(targetPath);
     const destinationPath = normalizeLocalPath(`${normalizedPath}.gz`);
     try {
       const stats = await fs.lstat(normalizedPath);
       if (!stats.isFile()) throw new LocalFileServiceError("COMPRESS_FAILED", "Only files can be compressed as gzip.");
       await pipeline(createReadStream(normalizedPath), createGzip(), createWriteStream(destinationPath, { flags: "wx" }));
+      if (options?.deleteSourceAfterSuccess) await fs.rm(normalizedPath, { force: false });
       return destinationPath;
     } catch (error) {
       const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";

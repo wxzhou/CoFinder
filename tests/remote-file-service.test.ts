@@ -1,8 +1,7 @@
 import { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import { gunzip } from "node:zlib";
+import { gzipSync, gunzip } from "node:zlib";
 import { promisify } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 import { RemoteFileService } from "../src/main/services/RemoteFileService";
@@ -308,23 +307,24 @@ describe("RemoteFileService path/list behavior", () => {
       if (!remoteFiles.has(target)) throw new Error("No such file");
       return { type: "-", size: remoteFiles.get(target)?.length ?? 0, modifyTime: Date.now() };
     });
-    const get = vi.fn(async (remotePath: string, localPath?: string) => {
-      const data = remoteFiles.get(remotePath);
-      if (!data) throw new Error("No such file");
-      if (localPath) {
-        await fs.writeFile(localPath, data);
-        return undefined;
-      }
-      return data;
-    });
-    const put = vi.fn(async (localPath: string, remotePath: string) => {
-      remoteFiles.set(remotePath, await fs.readFile(localPath));
-    });
+    const execClient = {
+      exec: vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+        const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+        stream.stderr = new EventEmitter();
+        callback(undefined, stream);
+        queueMicrotask(() => {
+          expect(command).toContain("gzip -c -- '/a/file.txt'");
+          expect(command).toContain("mv -- ");
+          remoteFiles.set("/a/file.txt.gz", gzipSync(remoteFiles.get("/a/file.txt")!));
+          stream.emit("close", 0);
+        });
+      })
+    };
     const service = new RemoteFileService({
       getConnection: () => ({
         id: "c1",
         homePath: "/",
-        client: { stat, get, put }
+        client: { stat, client: execClient }
       })
     } as any);
 
@@ -334,27 +334,70 @@ describe("RemoteFileService path/list behavior", () => {
     await expect(service.compressFileGzip("c1", "/a/file.txt")).rejects.toMatchObject({ code: "REMOTE_COMPRESS_FAILED" });
   });
 
-  it("cleans remote gzip temp files after compression", async () => {
-    const before = new Set(await fs.readdir(os.tmpdir()));
+  it("deletes the remote source after gzip only when requested", async () => {
+    const remoteFiles = new Map<string, Buffer>([
+      ["/a/remove.txt", Buffer.from("remote delete source\n")]
+    ]);
     const stat = vi.fn(async (target: string) => {
-      if (target === "/a/file.txt") return { type: "-", size: 1, modifyTime: Date.now() };
-      throw new Error("No such file");
+      if (!remoteFiles.has(target)) throw new Error("No such file");
+      return { type: "-", size: remoteFiles.get(target)?.length ?? 0, modifyTime: Date.now() };
     });
-    const get = vi.fn(async (_remotePath: string, localPath?: string) => {
-      if (localPath) await fs.writeFile(localPath, "x");
-    });
-    const put = vi.fn().mockResolvedValue(undefined);
+    const execClient = {
+      exec: vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+        const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+        stream.stderr = new EventEmitter();
+        callback(undefined, stream);
+        queueMicrotask(() => {
+          expect(command).toContain("&& rm -- '/a/remove.txt'");
+          remoteFiles.set("/a/remove.txt.gz", gzipSync(remoteFiles.get("/a/remove.txt")!));
+          remoteFiles.delete("/a/remove.txt");
+          stream.emit("close", 0);
+        });
+      })
+    };
     const service = new RemoteFileService({
       getConnection: () => ({
         id: "c1",
         homePath: "/",
-        client: { stat, get, put }
+        client: { stat, client: execClient }
       })
     } as any);
 
-    await service.compressFileGzip("c1", "/a/file.txt");
-    const after = await fs.readdir(os.tmpdir());
-    expect(after.filter((item) => item.startsWith("cofinder-remote-gzip-") && !before.has(item))).toHaveLength(0);
+    await service.compressFileGzip("c1", "/a/remove.txt", { deleteSourceAfterSuccess: true });
+    expect(remoteFiles.has("/a/remove.txt")).toBe(false);
+    expect(await gunzipAsync(remoteFiles.get("/a/remove.txt.gz")!)).toEqual(Buffer.from("remote delete source\n"));
+  });
+
+  it("preserves the remote source when the remote gzip command fails", async () => {
+    const remoteFiles = new Map<string, Buffer>([
+      ["/a/fail.txt", Buffer.from("keep me\n")]
+    ]);
+    const stat = vi.fn(async (target: string) => {
+      if (!remoteFiles.has(target)) throw new Error("No such file");
+      return { type: "-", size: remoteFiles.get(target)?.length ?? 0, modifyTime: Date.now() };
+    });
+    const execClient = {
+      exec: vi.fn((_command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+        const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+        stream.stderr = new EventEmitter();
+        callback(undefined, stream);
+        queueMicrotask(() => {
+          stream.stderr.emit("data", "No space left on device");
+          stream.emit("close", 1);
+        });
+      })
+    };
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, client: execClient }
+      })
+    } as any);
+
+    await expect(service.compressFileGzip("c1", "/a/fail.txt", { deleteSourceAfterSuccess: true })).rejects.toMatchObject({ code: "REMOTE_COMPRESS_FAILED" });
+    expect(remoteFiles.has("/a/fail.txt")).toBe(true);
+    expect(remoteFiles.has("/a/fail.txt.gz")).toBe(false);
   });
 
   it("fills path info owner from parent listing when stat omits owner", async () => {
