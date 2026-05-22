@@ -106,7 +106,7 @@ docs/
 ## Troubleshooting
 
 - **rsync not found:** install rsync and make sure it is in `PATH`. Packaged builds add a fallback PATH including `/opt/homebrew/bin` and `/usr/local/bin`.
-- **SFTP connects but rsync transfer fails:** verify `ssh -o BatchMode=yes -p <port> user@host true` works in Terminal.
+- **SFTP connects but upload fails:** verify `ssh -o BatchMode=yes -p <port> user@host true` works in Terminal. Downloads fall back to SFTP when this non-interactive rsync SSH path cannot authenticate.
 - **safeStorage unavailable:** password saving is disabled, but session password input can still connect.
 - **Packaged app blank:** rebuild with the current Vite config (`base: './'`) and repackage.
 - **Main log:** `~/Library/Application Support/CoFinder/main.log`.

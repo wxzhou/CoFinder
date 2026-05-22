@@ -602,8 +602,10 @@ function humanTransferError(category: TransferErrorCategory, exitCode: number): 
 }
 
 function shouldFallbackToSftpDownload(exitCode: number, category: TransferErrorCategory, recentLog: string): boolean {
-  if (category === "path_not_found" || category === "permission_denied" || category === "no_space_left") return false;
-  return exitCode === 255 || category === "ssh_batchmode_failed" || /Permission denied \(publickey\)|BatchMode|Host key verification failed/i.test(recentLog);
+  if (category === "path_not_found" || category === "no_space_left") return false;
+  if (exitCode === 255) return true;
+  if (category === "permission_denied") return /Permission denied \((publickey|password|keyboard-interactive|publickey,password)[^)]*\)|Permission denied, please try again/i.test(recentLog);
+  return category === "ssh_batchmode_failed" || /Permission denied \(publickey\)|BatchMode|Host key verification failed/i.test(recentLog);
 }
 
 function parseRsyncItemPath(line: string): string | null {

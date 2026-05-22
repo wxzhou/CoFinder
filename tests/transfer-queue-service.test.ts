@@ -410,4 +410,42 @@ describe("TransferQueueService state machine", () => {
     });
     expect(remoteDownloadFallback).toHaveBeenCalledWith("c1", "/remote/source.txt", "/tmp/source.txt");
   });
+
+  it("falls back to SFTP download when rsync BatchMode reports generic permission denied", async () => {
+    const p1 = new FakeProc();
+    const remoteDownloadFallback = vi.fn(async () => undefined);
+    const { service, spawnProcess } = createService({ procs: [p1], remoteDownloadFallback });
+
+    await service.enqueueDownload({ ...baseDownload, connectionId: "c1" });
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1));
+    p1.stderr.emit("data", Buffer.from("Permission denied, please try again.\n"));
+    p1.emit("close", 255, null);
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("download");
+      expect(task.status).toBe("success");
+      expect(task.progressText).toBe("Downloaded over SFTP.");
+    });
+    expect(remoteDownloadFallback).toHaveBeenCalledWith("c1", "/remote/source.txt", "/tmp/source.txt");
+  });
+
+  it("keeps real rsync file permission failures as failures", async () => {
+    const p1 = new FakeProc();
+    const remoteDownloadFallback = vi.fn(async () => undefined);
+    const { service, spawnProcess } = createService({ procs: [p1], remoteDownloadFallback });
+
+    await service.enqueueDownload({ ...baseDownload, connectionId: "c1" });
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1));
+    p1.stderr.emit("data", Buffer.from("rsync: [sender] open \"/remote/source.txt\" failed: Permission denied (13)\n"));
+    p1.emit("close", 23, null);
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("download");
+      expect(task.status).toBe("failed");
+      expect(task.errorCode).toBe("permission_denied");
+    });
+    expect(remoteDownloadFallback).not.toHaveBeenCalled();
+  });
 });
