@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
 import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse } from "../../shared/types/ipc";
@@ -30,6 +31,12 @@ type RemoteCompressClient = {
   client?: {
     exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
   };
+};
+type RemoteDownloadClient = {
+  stat: (path: string) => Promise<RemoteStatItem>;
+  list: (path: string) => Promise<RemoteListItem[]>;
+  fastGet?: (remotePath: string, localPath: string) => Promise<unknown>;
+  get?: (remotePath: string, localPath?: string) => Promise<unknown>;
 };
 
 export type RemoteDirectorySizeOptions = {
@@ -319,6 +326,18 @@ export class RemoteFileService {
     }
   }
 
+  async downloadPathToLocal(connectionId: string, remotePath: string, localTargetPath: string): Promise<void> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedRemotePath = this.normalizeRemotePath(remotePath);
+    const normalizedLocalPath = path.resolve(localTargetPath);
+    try {
+      await this.downloadRemotePathRecursive(connection.client as unknown as RemoteDownloadClient, normalizedRemotePath, normalizedLocalPath);
+    } catch (error) {
+      throw this.mapDownloadError(error);
+    }
+  }
+
   async getPathInfo(connectionId: string, targetPath: string, options?: { includeDirectorySize?: boolean }): Promise<PathInfo> {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
@@ -549,6 +568,22 @@ export class RemoteFileService {
     return { fileCount, folderCount };
   }
 
+  private async downloadRemotePathRecursive(client: RemoteDownloadClient, remotePath: string, localTargetPath: string): Promise<void> {
+    const stat = (await client.stat(remotePath)) as RemoteStatItem;
+    if (resolveRemoteType(stat) === "directory") {
+      await fs.mkdir(localTargetPath, { recursive: true });
+      const entries = (await client.list(remotePath)) as RemoteListItem[];
+      for (const entry of entries) {
+        if (entry.name === "." || entry.name === "..") continue;
+        const childRemotePath = remotePath === "/" ? `/${entry.name}` : posixPath.join(remotePath, entry.name);
+        await this.downloadRemotePathRecursive(client, childRemotePath, path.join(localTargetPath, entry.name));
+      }
+      return;
+    }
+    await fs.mkdir(path.dirname(localTargetPath), { recursive: true });
+    await downloadRemoteFileToLocal(client, remotePath, localTargetPath);
+  }
+
   private async getRemoteDirectorySizeLimited(
     client: RemoteDeleteClient,
     targetPath: string,
@@ -704,6 +739,21 @@ export class RemoteFileService {
     return new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Failed to compress remote file.", message);
   }
 
+  private mapDownloadError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote download failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "Failed to download remote path.", message);
+  }
+
   private extractRawError(error: unknown): { name: string; code: string; message: string } {
     const err = error as { name?: unknown; code?: unknown; message?: unknown };
     return {
@@ -763,6 +813,19 @@ function buildRemoteGzipCommand(sourcePath: string, destinationPath: string, tem
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+async function downloadRemoteFileToLocal(client: RemoteDownloadClient, remotePath: string, localPath: string): Promise<void> {
+  if (typeof client.fastGet === "function") {
+    await client.fastGet(remotePath, localPath);
+    return;
+  }
+  if (typeof client.get === "function") {
+    const result = await client.get(remotePath, localPath);
+    if (Buffer.isBuffer(result)) await fs.writeFile(localPath, result);
+    return;
+  }
+  throw new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "SFTP download is unavailable for this connection.");
 }
 
 async function execRemoteCommand(exec: RemoteExec, command: string): Promise<void> {

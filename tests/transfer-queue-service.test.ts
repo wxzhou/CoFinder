@@ -47,6 +47,7 @@ function createService(options?: {
   remoteDelete?: (connectionId: string, paths: string[]) => Promise<number>;
   localGzip?: (path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
   remoteGzip?: (connectionId: string, path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
+  remoteDownloadFallback?: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
 }) {
   const procs = options?.procs ?? [new FakeProc()];
   const spawnProcess = vi.fn(() => procs.shift() as unknown as ChildProcess);
@@ -68,7 +69,8 @@ function createService(options?: {
     localDelete: options?.localDelete,
     remoteDelete: options?.remoteDelete,
     localGzip: options?.localGzip,
-    remoteGzip: options?.remoteGzip
+    remoteGzip: options?.remoteGzip,
+    remoteDownloadFallback: options?.remoteDownloadFallback
   });
 
   return { service, spawnProcess, runCommand };
@@ -388,5 +390,24 @@ describe("TransferQueueService state machine", () => {
       expect(task.error).toBe("Gzip target already exists.");
     });
     expect(localGzip).toHaveBeenCalledTimes(1);
+  });
+
+  it("falls back to SFTP download when rsync exits with SSH code 255", async () => {
+    const p1 = new FakeProc();
+    const remoteDownloadFallback = vi.fn(async () => undefined);
+    const { service, spawnProcess } = createService({ procs: [p1], remoteDownloadFallback });
+
+    await service.enqueueDownload({ ...baseDownload, connectionId: "c1" });
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1));
+    p1.stderr.emit("data", Buffer.from("Permission denied (publickey).\n"));
+    p1.emit("close", 255, null);
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("download");
+      expect(task.status).toBe("success");
+      expect(task.progressText).toBe("Downloaded over SFTP.");
+    });
+    expect(remoteDownloadFallback).toHaveBeenCalledWith("c1", "/remote/source.txt", "/tmp/source.txt");
   });
 });

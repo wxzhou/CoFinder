@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { gzipSync, gunzip } from "node:zlib";
 import { promisify } from "node:util";
@@ -7,6 +8,12 @@ import { describe, expect, it, vi } from "vitest";
 import { RemoteFileService } from "../src/main/services/RemoteFileService";
 
 const gunzipAsync = promisify(gunzip);
+
+type TestRemoteStat = {
+  type: string | number;
+  size?: number;
+  modifyTime?: number;
+};
 
 function mockExecClient(names: Record<string, string>) {
   const client = { ready: true };
@@ -398,6 +405,80 @@ describe("RemoteFileService path/list behavior", () => {
     await expect(service.compressFileGzip("c1", "/a/fail.txt", { deleteSourceAfterSuccess: true })).rejects.toMatchObject({ code: "REMOTE_COMPRESS_FAILED" });
     expect(remoteFiles.has("/a/fail.txt")).toBe(true);
     expect(remoteFiles.has("/a/fail.txt.gz")).toBe(false);
+  });
+
+  it("downloads a remote file to a local target over SFTP", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-remote-download-"));
+    const localTarget = path.join(dir, "file.txt");
+    const stat = vi.fn(async () => ({ type: "-", size: 11, modifyTime: Date.now() }));
+    const fastGet = vi.fn(async (_remotePath: string, targetPath: string) => {
+      await fs.writeFile(targetPath, "hello sftp\n");
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, fastGet, list: vi.fn() }
+      })
+    } as any);
+
+    try {
+      await service.downloadPathToLocal("c1", "/a/file.txt", localTarget);
+      await expect(fs.readFile(localTarget, "utf8")).resolves.toBe("hello sftp\n");
+      expect(fastGet).toHaveBeenCalledWith("/a/file.txt", localTarget);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("downloads a remote directory recursively over SFTP", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-remote-download-dir-"));
+    const localTarget = path.join(dir, "folder");
+    const stats = new Map<string, TestRemoteStat>([
+      ["/a/folder", { type: "d", size: 0, modifyTime: Date.now() }],
+      ["/a/folder/one.txt", { type: "-", size: 4, modifyTime: Date.now() }],
+      ["/a/folder/sub", { type: "d", size: 0, modifyTime: Date.now() }],
+      ["/a/folder/sub/two.txt", { type: "-", size: 4, modifyTime: Date.now() }]
+    ]);
+    const list = vi.fn(async (target: string) => {
+      if (target === "/a/folder") {
+        return [
+          { name: "one.txt", type: "-", size: 4, modifyTime: Date.now() },
+          { name: "sub", type: "d", size: 0, modifyTime: Date.now() }
+        ];
+      }
+      if (target === "/a/folder/sub") {
+        return [{ name: "two.txt", type: "-", size: 4, modifyTime: Date.now() }];
+      }
+      return [];
+    });
+    const fastGet = vi.fn(async (remotePath: string, targetPath: string) => {
+      await fs.writeFile(targetPath, remotePath.endsWith("one.txt") ? "one\n" : "two\n");
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: {
+          stat: vi.fn(async (target: string) => {
+            const stat = stats.get(target);
+            if (!stat) throw new Error("No such file");
+            return stat;
+          }),
+          list,
+          fastGet
+        }
+      })
+    } as any);
+
+    try {
+      await service.downloadPathToLocal("c1", "/a/folder", localTarget);
+      await expect(fs.readFile(path.join(localTarget, "one.txt"), "utf8")).resolves.toBe("one\n");
+      await expect(fs.readFile(path.join(localTarget, "sub", "two.txt"), "utf8")).resolves.toBe("two\n");
+      expect(fastGet).toHaveBeenCalledTimes(2);
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
   });
 
   it("fills path info owner from parent listing when stat omits owner", async () => {

@@ -36,7 +36,7 @@ The full history lives in [CHANGELOG.md](CHANGELOG.md). The high-level roadmap l
 - `ssh` in `PATH`
 - `rsync` in `PATH`
 
-Remote browsing uses SFTP password authentication. Transfers use rsync over SSH and currently require SSH key or passwordless SSH (`BatchMode`) for the transfer path. CoFinder does not use `sshpass` and does not pass saved passwords to rsync.
+Remote browsing uses SFTP password authentication. Transfers use rsync over SSH first. If a download cannot start because the rsync SSH channel requires passwordless login, CoFinder falls back to the active SFTP connection for that download. Uploads still require SSH key or passwordless SSH (`BatchMode`) for the rsync path. CoFinder does not use `sshpass` and does not pass saved passwords to rsync.
 
 ## Development
 
