@@ -36,7 +36,7 @@ The full history lives in [CHANGELOG.md](CHANGELOG.md). The high-level roadmap l
 - `ssh` in `PATH`
 - `rsync` in `PATH`
 
-Remote browsing uses SFTP password authentication. Transfers use rsync over SSH first. If a download cannot start because the rsync SSH channel requires passwordless login, CoFinder falls back to the active SFTP connection for that download. Uploads still require SSH key or passwordless SSH (`BatchMode`) for the rsync path. CoFinder does not use `sshpass` and does not pass saved passwords to rsync.
+Remote browsing uses SFTP password authentication. Transfers use rsync over SSH first. If an upload or download cannot start because the rsync SSH channel requires passwordless login, CoFinder falls back to the active SFTP connection for that transfer. CoFinder does not use `sshpass` and does not pass saved passwords to rsync.
 
 ## Development
 
@@ -106,7 +106,7 @@ docs/
 ## Troubleshooting
 
 - **rsync not found:** install rsync and make sure it is in `PATH`. Packaged builds add a fallback PATH including `/opt/homebrew/bin` and `/usr/local/bin`.
-- **SFTP connects but upload fails:** verify `ssh -o BatchMode=yes -p <port> user@host true` works in Terminal. Downloads fall back to SFTP when this non-interactive rsync SSH path cannot authenticate.
+- **SFTP connects but rsync cannot authenticate:** verify `ssh -o BatchMode=yes -p <port> user@host true` works in Terminal if you want the faster rsync path. Uploads and downloads fall back to SFTP when this non-interactive rsync SSH path cannot authenticate.
 - **safeStorage unavailable:** password saving is disabled, but session password input can still connect.
 - **Packaged app blank:** rebuild with the current Vite config (`base: './'`) and repackage.
 - **Main log:** `~/Library/Application Support/CoFinder/main.log`.

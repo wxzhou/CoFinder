@@ -31,6 +31,7 @@ type TransferQueueDeps = {
   remoteDelete: (connectionId: string, paths: string[]) => Promise<number>;
   localGzip: (path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
   remoteGzip: (connectionId: string, path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
+  remoteUploadFallback: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
   remoteDownloadFallback: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
 };
 
@@ -53,6 +54,7 @@ export class TransferQueueService {
       remoteDelete: deps?.remoteDelete ?? defaultUnavailableRemoteDelete,
       localGzip: deps?.localGzip ?? defaultUnavailableLocalGzip,
       remoteGzip: deps?.remoteGzip ?? defaultUnavailableRemoteGzip,
+      remoteUploadFallback: deps?.remoteUploadFallback ?? defaultUnavailableRemoteUploadFallback,
       remoteDownloadFallback: deps?.remoteDownloadFallback ?? defaultUnavailableRemoteDownloadFallback
     };
   }
@@ -399,7 +401,12 @@ export class TransferQueueService {
         } else {
           const recent = task.rawLog.slice(-20).join("\n");
           const category = classifyTransferFailure(recent);
-          if (task.kind === "download" && task.connectionId && shouldFallbackToSftpDownload(code ?? -1, category, recent)) {
+          if (task.kind === "upload" && task.connectionId && shouldFallbackToSftpTransfer(code ?? -1, category, recent)) {
+            this.running = null;
+            void this.runSftpUploadFallback(task, recent).then(resolve);
+            return;
+          }
+          if (task.kind === "download" && task.connectionId && shouldFallbackToSftpTransfer(code ?? -1, category, recent)) {
             this.running = null;
             void this.runSftpDownloadFallback(task, recent).then(resolve);
             return;
@@ -415,6 +422,33 @@ export class TransferQueueService {
         resolve();
       });
     });
+  }
+
+  private async runSftpUploadFallback(task: TransferTask, recentRsyncLog: string): Promise<void> {
+    task.progressText = "rsync SSH failed; uploading over SFTP...";
+    this.appendLog(task, "rsync SSH failed; falling back to SFTP upload.");
+    if (recentRsyncLog.trim()) this.appendLog(task, redactSensitivePlaintext(recentRsyncLog.trim().slice(0, 400)));
+    this.emit();
+    try {
+      await this.deps.remoteUploadFallback(requiredConnectionId(task), task.localPath, task.destination);
+      task.status = "success";
+      task.error = undefined;
+      task.errorCode = undefined;
+      task.finishedAt = this.deps.now();
+      task.percent = 100;
+      task.progressText = "Uploaded over SFTP.";
+      this.completeTaskItems(task);
+      this.appendLog(task, "SFTP upload completed successfully.");
+      this.emit();
+    } catch (error) {
+      task.status = "failed";
+      this.failRunningTaskItem(task);
+      task.finishedAt = this.deps.now();
+      task.error = error instanceof Error ? error.message : "SFTP upload fallback failed.";
+      task.errorCode = classifyTransferFailure(task.error);
+      this.appendLog(task, redactSensitivePlaintext(task.error));
+      this.emit();
+    }
   }
 
   private async runSftpDownloadFallback(task: TransferTask, recentRsyncLog: string): Promise<void> {
@@ -601,7 +635,7 @@ function humanTransferError(category: TransferErrorCategory, exitCode: number): 
   return `rsync exited with code ${exitCode}.`;
 }
 
-function shouldFallbackToSftpDownload(exitCode: number, category: TransferErrorCategory, recentLog: string): boolean {
+function shouldFallbackToSftpTransfer(exitCode: number, category: TransferErrorCategory, recentLog: string): boolean {
   if (category === "path_not_found" || category === "no_space_left") return false;
   if (exitCode === 255) return true;
   if (category === "permission_denied") return /Permission denied \((publickey|password|keyboard-interactive|publickey,password)[^)]*\)|Permission denied, please try again/i.test(recentLog);
@@ -802,6 +836,10 @@ async function defaultUnavailableLocalGzip(): Promise<string> {
 
 async function defaultUnavailableRemoteGzip(): Promise<string> {
   throw transferError("TRANSFER_INVALID_REQUEST", "Remote gzip job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteUploadFallback(): Promise<void> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "SFTP upload fallback is unavailable.");
 }
 
 async function defaultUnavailableRemoteDownloadFallback(): Promise<void> {

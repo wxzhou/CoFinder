@@ -47,6 +47,7 @@ function createService(options?: {
   remoteDelete?: (connectionId: string, paths: string[]) => Promise<number>;
   localGzip?: (path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
   remoteGzip?: (connectionId: string, path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
+  remoteUploadFallback?: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
   remoteDownloadFallback?: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
 }) {
   const procs = options?.procs ?? [new FakeProc()];
@@ -70,6 +71,7 @@ function createService(options?: {
     remoteDelete: options?.remoteDelete,
     localGzip: options?.localGzip,
     remoteGzip: options?.remoteGzip,
+    remoteUploadFallback: options?.remoteUploadFallback,
     remoteDownloadFallback: options?.remoteDownloadFallback
   });
 
@@ -409,6 +411,39 @@ describe("TransferQueueService state machine", () => {
       expect(task.progressText).toBe("Downloaded over SFTP.");
     });
     expect(remoteDownloadFallback).toHaveBeenCalledWith("c1", "/remote/source.txt", "/tmp/source.txt");
+  });
+
+  it("falls back to SFTP upload when rsync exits with SSH code 255", async () => {
+    const p1 = new FakeProc();
+    const remoteUploadFallback = vi.fn(async () => undefined);
+    const { service, spawnProcess } = createService({ procs: [p1], remoteUploadFallback });
+
+    await service.enqueueUpload({ ...baseUpload, connectionId: "c1" });
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1));
+    p1.stderr.emit("data", Buffer.from("Permission denied, please try again.\n"));
+    p1.emit("close", 255, null);
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("upload");
+      expect(task.status).toBe("success");
+      expect(task.progressText).toBe("Uploaded over SFTP.");
+    });
+    expect(remoteUploadFallback).toHaveBeenCalledWith("c1", "/tmp/source.txt", "/remote/source.txt");
+  });
+
+  it("uses the final destination path for SFTP directory upload fallback", async () => {
+    const p1 = new FakeProc();
+    const remoteUploadFallback = vi.fn(async () => undefined);
+    const { service, spawnProcess } = createService({ procs: [p1], localPathKind: "directory", remoteUploadFallback });
+
+    await service.enqueueUpload({ ...baseUpload, connectionId: "c1", localSources: ["/tmp/xyz"], remoteDestinationDir: "/path1/path2" });
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(1));
+    p1.stderr.emit("data", Buffer.from("Permission denied, please try again.\n"));
+    p1.emit("close", 255, null);
+
+    await vi.waitFor(() => expect(service.list()[0].status).toBe("success"));
+    expect(remoteUploadFallback).toHaveBeenCalledWith("c1", "/tmp/xyz", "/path1/path2/xyz");
   });
 
   it("falls back to SFTP download when rsync BatchMode reports generic permission denied", async () => {

@@ -63,6 +63,7 @@ const transferQueueService = new TransferQueueService({
   remoteDelete: (connectionId, paths) => remoteFileService.deletePaths(connectionId, paths),
   localGzip: (targetPath, options) => localFileService.compressFileGzip(targetPath, options),
   remoteGzip: (connectionId, targetPath, options) => remoteFileService.compressFileGzip(connectionId, targetPath, options),
+  remoteUploadFallback: (connectionId, localPath, remotePath) => remoteFileService.uploadPathToRemote(connectionId, localPath, remotePath),
   remoteDownloadFallback: (connectionId, remotePath, localPath) => remoteFileService.downloadPathToLocal(connectionId, remotePath, localPath)
 });
 const userData = app.getPath("userData");

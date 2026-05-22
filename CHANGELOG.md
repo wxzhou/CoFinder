@@ -8,7 +8,7 @@
 
 ## Unreleased
 
-- Downloads now fall back to the active SFTP connection when rsync cannot start because the SSH transfer channel requires passwordless login, including generic SSH `Permission denied` BatchMode failures.
+- Uploads and downloads now fall back to the active SFTP connection when rsync cannot start because the SSH transfer channel requires passwordless login, including generic SSH `Permission denied` BatchMode failures.
 
 ## v1.8.8 — Product milestone V2.8.8
 

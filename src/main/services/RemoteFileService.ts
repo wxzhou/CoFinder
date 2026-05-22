@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
@@ -37,6 +38,11 @@ type RemoteDownloadClient = {
   list: (path: string) => Promise<RemoteListItem[]>;
   fastGet?: (remotePath: string, localPath: string) => Promise<unknown>;
   get?: (remotePath: string, localPath?: string) => Promise<unknown>;
+};
+type RemoteUploadClient = {
+  mkdir: (path: string, recursive?: boolean) => Promise<unknown>;
+  fastPut?: (localPath: string, remotePath: string) => Promise<unknown>;
+  put?: (input: Buffer | NodeJS.ReadableStream | string, path: string) => Promise<unknown>;
 };
 
 export type RemoteDirectorySizeOptions = {
@@ -338,6 +344,18 @@ export class RemoteFileService {
     }
   }
 
+  async uploadPathToRemote(connectionId: string, localPath: string, remoteTargetPath: string): Promise<void> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedLocalPath = path.resolve(localPath);
+    const normalizedRemotePath = this.normalizeRemotePath(remoteTargetPath);
+    try {
+      await this.uploadLocalPathRecursive(connection.client as unknown as RemoteUploadClient, normalizedLocalPath, normalizedRemotePath);
+    } catch (error) {
+      throw this.mapUploadError(error);
+    }
+  }
+
   async getPathInfo(connectionId: string, targetPath: string, options?: { includeDirectorySize?: boolean }): Promise<PathInfo> {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
@@ -584,6 +602,21 @@ export class RemoteFileService {
     await downloadRemoteFileToLocal(client, remotePath, localTargetPath);
   }
 
+  private async uploadLocalPathRecursive(client: RemoteUploadClient, localPath: string, remoteTargetPath: string): Promise<void> {
+    const stat = await fs.stat(localPath);
+    if (stat.isDirectory()) {
+      await ensureRemoteDirectory(client, remoteTargetPath);
+      const entries = await fs.readdir(localPath, { withFileTypes: true });
+      for (const entry of entries) {
+        await this.uploadLocalPathRecursive(client, path.join(localPath, entry.name), posixPath.join(remoteTargetPath, entry.name));
+      }
+      return;
+    }
+    if (!stat.isFile()) throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only files and folders can be uploaded over SFTP.");
+    await ensureRemoteDirectory(client, posixPath.dirname(remoteTargetPath));
+    await uploadLocalFileToRemote(client, localPath, remoteTargetPath);
+  }
+
   private async getRemoteDirectorySizeLimited(
     client: RemoteDeleteClient,
     targetPath: string,
@@ -754,6 +787,22 @@ export class RemoteFileService {
     return new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "Failed to download remote path.", message);
   }
 
+  private mapUploadError(error: unknown): RemoteServiceError {
+    if (error instanceof RemoteServiceError) return error;
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote upload failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Local or remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied|permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "Failed to upload local path.", message);
+  }
+
   private extractRawError(error: unknown): { name: string; code: string; message: string } {
     const err = error as { name?: unknown; code?: unknown; message?: unknown };
     return {
@@ -826,6 +875,23 @@ async function downloadRemoteFileToLocal(client: RemoteDownloadClient, remotePat
     return;
   }
   throw new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "SFTP download is unavailable for this connection.");
+}
+
+async function ensureRemoteDirectory(client: RemoteUploadClient, remotePath: string): Promise<void> {
+  if (!remotePath || remotePath === "." || remotePath === "/") return;
+  await client.mkdir(remotePath, true);
+}
+
+async function uploadLocalFileToRemote(client: RemoteUploadClient, localPath: string, remotePath: string): Promise<void> {
+  if (typeof client.fastPut === "function") {
+    await client.fastPut(localPath, remotePath);
+    return;
+  }
+  if (typeof client.put === "function") {
+    await client.put(createReadStream(localPath), remotePath);
+    return;
+  }
+  throw new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "SFTP upload is unavailable for this connection.");
 }
 
 async function execRemoteCommand(exec: RemoteExec, command: string): Promise<void> {

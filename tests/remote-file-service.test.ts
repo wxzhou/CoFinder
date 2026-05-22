@@ -481,6 +481,56 @@ describe("RemoteFileService path/list behavior", () => {
     }
   });
 
+  it("uploads a local file to a remote target over SFTP", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-remote-upload-"));
+    const localSource = path.join(dir, "file.txt");
+    await fs.writeFile(localSource, "hello upload\n");
+    const mkdir = vi.fn(async () => undefined);
+    const fastPut = vi.fn(async () => undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { mkdir, fastPut }
+      })
+    } as any);
+
+    try {
+      await service.uploadPathToRemote("c1", localSource, "/a/file.txt");
+      expect(mkdir).toHaveBeenCalledWith("/a", true);
+      expect(fastPut).toHaveBeenCalledWith(localSource, "/a/file.txt");
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("uploads a local directory recursively over SFTP", async () => {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-remote-upload-dir-"));
+    const localSource = path.join(dir, "folder");
+    await fs.mkdir(path.join(localSource, "sub"), { recursive: true });
+    await fs.writeFile(path.join(localSource, "one.txt"), "one\n");
+    await fs.writeFile(path.join(localSource, "sub", "two.txt"), "two\n");
+    const mkdir = vi.fn(async () => undefined);
+    const fastPut = vi.fn(async () => undefined);
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { mkdir, fastPut }
+      })
+    } as any);
+
+    try {
+      await service.uploadPathToRemote("c1", localSource, "/a/folder");
+      expect(mkdir).toHaveBeenCalledWith("/a/folder", true);
+      expect(mkdir).toHaveBeenCalledWith("/a/folder/sub", true);
+      expect(fastPut).toHaveBeenCalledWith(path.join(localSource, "one.txt"), "/a/folder/one.txt");
+      expect(fastPut).toHaveBeenCalledWith(path.join(localSource, "sub", "two.txt"), "/a/folder/sub/two.txt");
+    } finally {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("fills path info owner from parent listing when stat omits owner", async () => {
     const execClient = mockExecClient({ "1007": "zhouwenxiong" });
     const stat = vi.fn().mockResolvedValue({
