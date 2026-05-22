@@ -1,7 +1,12 @@
-import { useState, type ReactElement } from "react";
+import { useState, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
 import type { TransferTask } from "../../shared/types/models";
 import { formatTransferTaskMetaLine } from "./v12TransferRowSummary";
 import { V12TbIcon } from "./shared/V12Icons";
+
+const JOBS_PANE_HEIGHT_KEY = "cofinder.v12JobsPaneHeight";
+const DEFAULT_JOBS_PANE_HEIGHT = 180;
+const MIN_JOBS_PANE_HEIGHT = 96;
+const MAX_JOBS_PANE_HEIGHT = 560;
 
 export type V12DrawerQueueState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
 
@@ -25,6 +30,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
   const expanded = props.state === "expanded" || props.state === "autoHidePending";
   const [filter, setFilter] = useState<"all" | "running" | "failed" | "done">("all");
   const [collapsedTasks, setCollapsedTasks] = useState<Record<string, boolean>>({});
+  const [paneHeight, setPaneHeight] = useState(() => readJobsPaneHeight());
   const filteredTasks = props.tasks.filter((task) => {
     if (filter === "running") return task.status === "running" || task.status === "pending";
     if (filter === "failed") return task.status === "failed";
@@ -68,9 +74,69 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
       </button>
     </div>
   ) : null;
+  const setAndStorePaneHeight = (next: number) => {
+    const clamped = clampJobsPaneHeight(next);
+    setPaneHeight(clamped);
+    writeJobsPaneHeight(clamped);
+  };
+  const beginPaneResize = (event: MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startY = event.clientY;
+    const startHeight = paneHeight;
+    const previousCursor = document.body.style.cursor;
+    const previousUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "ns-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (moveEvent: globalThis.MouseEvent) => {
+      setAndStorePaneHeight(startHeight + startY - moveEvent.clientY);
+    };
+    const onUp = () => {
+      document.body.style.cursor = previousCursor;
+      document.body.style.userSelect = previousUserSelect;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+  const handleResizeKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown" && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.key === "Home") {
+      setAndStorePaneHeight(MIN_JOBS_PANE_HEIGHT);
+      return;
+    }
+    if (event.key === "End") {
+      setAndStorePaneHeight(maxJobsPaneHeight());
+      return;
+    }
+    setAndStorePaneHeight(paneHeight + (event.key === "ArrowUp" ? 16 : -16));
+  };
 
   return (
     <div className={`v12m-drawer ${expanded ? "is-open" : "is-collapsed"}`}>
+      {expanded ? (
+        <div
+          className="v12m-drawer-resizer"
+          role="separator"
+          tabIndex={0}
+          aria-label="Resize Jobs pane"
+          aria-orientation="horizontal"
+          aria-valuemin={MIN_JOBS_PANE_HEIGHT}
+          aria-valuemax={maxJobsPaneHeight()}
+          aria-valuenow={paneHeight}
+          title="Drag to resize Jobs pane. Double-click to reset."
+          onMouseDown={beginPaneResize}
+          onDoubleClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            setAndStorePaneHeight(DEFAULT_JOBS_PANE_HEIGHT);
+          }}
+          onKeyDown={handleResizeKey}
+        />
+      ) : null}
       <div
         className="v12m-drawer-bar"
         role="button"
@@ -100,7 +166,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
         </button>
       </div>
       {expanded ? (
-        <div className="v12m-drawer-panel">
+        <div className="v12m-drawer-panel" style={{ height: `${paneHeight}px`, maxHeight: "none" }}>
           <div className="v12m-tq-panel">
             {props.error ? <div className="cfv12p-error v12m-tq-err">{props.error}</div> : null}
             <div className="v12m-tq-list">
@@ -181,6 +247,33 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
       ) : null}
     </div>
   );
+}
+
+function readJobsPaneHeight(): number {
+  try {
+    const stored = window.localStorage.getItem(JOBS_PANE_HEIGHT_KEY);
+    return stored === null ? DEFAULT_JOBS_PANE_HEIGHT : clampJobsPaneHeight(Number(stored));
+  } catch {
+    return DEFAULT_JOBS_PANE_HEIGHT;
+  }
+}
+
+function writeJobsPaneHeight(value: number): void {
+  try {
+    window.localStorage.setItem(JOBS_PANE_HEIGHT_KEY, String(value));
+  } catch {
+    // Ignore storage failures; resizing should still work for the session.
+  }
+}
+
+function clampJobsPaneHeight(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_JOBS_PANE_HEIGHT;
+  return Math.max(MIN_JOBS_PANE_HEIGHT, Math.min(maxJobsPaneHeight(), Math.round(value)));
+}
+
+function maxJobsPaneHeight(): number {
+  if (typeof window === "undefined") return MAX_JOBS_PANE_HEIGHT;
+  return Math.max(160, Math.min(MAX_JOBS_PANE_HEIGHT, Math.round(window.innerHeight * 0.6)));
 }
 
 function jobKindLabel(task: TransferTask): string {

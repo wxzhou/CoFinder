@@ -485,11 +485,25 @@
 }
 
 /* M5: compact transfer drawer rows */
+.cfv12-root .v12m-drawer-resizer {
+  top: -3px;
+  height: 6px;
+}
+
+.cfv12-root .v12m-drawer-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 96px;
+  max-height: none;
+  overflow: hidden;
+}
+
 .cfv12-root .v12m-tq-panel {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: min(52vh, 420px);
+  height: 100%;
+  max-height: none;
 }
 
 .cfv12-root .v12m-drawer-bar {

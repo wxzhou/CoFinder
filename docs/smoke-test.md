@@ -244,6 +244,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Remote gzip locality:** run remote gzip on a disposable remote file and confirm the app does not create a download-compress-upload transfer pair; it appears as a single remote gzip job.
 - **Job navigation safety:** start a slow delete/gzip in an isolated folder, navigate elsewhere, refresh panes, and confirm the job continues independently.
 - **Filters/actions:** confirm All / Running / Failed / Done filters include all job types; retry failed and clear completed still work.
+- **Jobs pane resize:** expand Jobs, drag the top edge upward/downward, and confirm the pane height changes while the header row stays usable; double-click the edge to reset height.
 - **Auto-hide:** leave Jobs unpinned after successful jobs and confirm it auto-hides according to the queue auto-hide delay preference.
 
 ## Tabs Smoke (M3)
