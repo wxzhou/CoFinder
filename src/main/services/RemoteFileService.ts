@@ -964,10 +964,12 @@ async function execRemoteCommand(
           on: (event: string, listener: (...args: unknown[]) => void) => unknown;
           stderr?: { on: (event: string, listener: (...args: unknown[]) => void) => unknown };
         };
-        readable.stderr?.on("data", (chunk) => {
-          stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
-        });
-        readable.on("close", (code) => {
+        let settled = false;
+        let exitCode: unknown;
+        const settle = (rawCode: unknown) => {
+          if (settled) return;
+          settled = true;
+          const code = typeof rawCode === "number" ? rawCode : 0;
           if (code === 0) {
             resolve();
             return;
@@ -978,8 +980,23 @@ async function execRemoteCommand(
             return;
           }
           reject(new RemoteServiceError(failure.code, failure.message, detail));
+        };
+        readable.on("data", () => {
+          // Drain stdout so long-running remote commands cannot block on a full channel buffer.
+        });
+        readable.stderr?.on("data", (chunk) => {
+          stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+        });
+        readable.on("exit", (code) => {
+          exitCode = code;
+          settle(code);
+        });
+        readable.on("close", (code) => {
+          settle(typeof code === "number" ? code : exitCode);
         });
         readable.on("error", (streamError) => {
+          if (settled) return;
+          settled = true;
           reject(streamError instanceof Error ? streamError : new RemoteServiceError(failure.code, failure.message));
         });
       });

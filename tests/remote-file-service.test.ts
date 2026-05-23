@@ -256,6 +256,24 @@ describe("RemoteFileService path/list behavior", () => {
     expect(rmdir).not.toHaveBeenCalled();
   });
 
+  it("completes server-side remote delete when exec emits exit without close", async () => {
+    const exec = vi.fn((_command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("exit", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat: vi.fn(), list: vi.fn(), delete: vi.fn(), rmdir: vi.fn(), client: { exec } }
+      })
+    } as any);
+
+    await expect(service.deletePaths("c1", ["/deep/tree"])).resolves.toBe(1);
+  });
+
   it("maps server-side remote delete missing path to REMOTE_NOT_FOUND", async () => {
     const exec = vi.fn((_command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
       const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
