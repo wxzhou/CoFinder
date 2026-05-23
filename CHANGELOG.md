@@ -9,6 +9,7 @@
 ## Unreleased
 
 - Uploads and downloads now fall back to the active SFTP connection when rsync cannot start because the SSH transfer channel requires passwordless login, including generic SSH `Permission denied` BatchMode failures.
+- Remote delete now uses a server-side delete command when available, making large/deep folder deletes more reliable than recursive SFTP traversal.
 
 ## v1.8.8 — Product milestone V2.8.8
 

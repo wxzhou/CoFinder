@@ -238,6 +238,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Jobs pane identity:** enqueue one upload, one download, one delete, and one gzip job; confirm the bottom drawer is labeled Jobs and shows each type with a matching icon/text label.
 - **SFTP fallback:** with a password-auth SFTP connection that can browse remotely but lacks passwordless rsync SSH, upload and download disposable files/folders and confirm each job succeeds over SFTP instead of staying failed with rsync exit code 255.
 - **Delete jobs:** delete a disposable local file/folder and a disposable remote file/folder. Confirm the confirmation dialog closes immediately after confirmation and the delete appears as a job while the panes remain usable.
+- **Large remote delete:** create a disposable deep remote folder tree under the isolated test root, delete the top folder, and confirm the job succeeds without reporting a false missing path.
 - **Gzip jobs:** gzip a disposable local file and remote file. Confirm `.gz` appears after success and the job is visible in Jobs.
 - **Gzip no overwrite:** create a matching `.gz` target first, run gzip, and confirm the job fails without overwriting the target.
 - **Gzip source preference:** with the new preference off, confirm source files remain after successful gzip. Enable the preference on disposable files only and confirm source deletion happens only after success.

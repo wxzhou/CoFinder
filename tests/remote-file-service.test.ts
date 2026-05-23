@@ -228,6 +228,90 @@ describe("RemoteFileService path/list behavior", () => {
     expect(rmdir).toHaveBeenCalledWith("/dir");
   });
 
+  it("deletes remote paths with a server-side command when available", async () => {
+    const stat = vi.fn();
+    const list = vi.fn();
+    const del = vi.fn();
+    const rmdir = vi.fn();
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("close", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, list, delete: del, rmdir, client: { exec } }
+      })
+    } as any);
+
+    await expect(service.deletePaths("c1", ["/deep/tree"])).resolves.toBe(1);
+    expect(exec).toHaveBeenCalledTimes(1);
+    expect(exec.mock.calls[0][0]).toContain("rm -rf -- '/deep/tree'");
+    expect(stat).not.toHaveBeenCalled();
+    expect(list).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
+    expect(rmdir).not.toHaveBeenCalled();
+  });
+
+  it("maps server-side remote delete missing path to REMOTE_NOT_FOUND", async () => {
+    const exec = vi.fn((_command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        stream.stderr.emit("data", "__COFINDER_REMOTE_DELETE_NOT_FOUND__\n");
+        stream.emit("close", 66);
+      });
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat: vi.fn(), list: vi.fn(), delete: vi.fn(), rmdir: vi.fn(), client: { exec } }
+      })
+    } as any);
+
+    await expect(service.deletePaths("c1", ["/missing"])).rejects.toMatchObject({ code: "REMOTE_NOT_FOUND" });
+  });
+
+  it("maps server-side remote delete permission errors", async () => {
+    const exec = vi.fn((_command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        stream.stderr.emit("data", "rm: cannot remove '/locked': Permission denied\n");
+        stream.emit("close", 1);
+      });
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat: vi.fn(), list: vi.fn(), delete: vi.fn(), rmdir: vi.fn(), client: { exec } }
+      })
+    } as any);
+
+    await expect(service.deletePaths("c1", ["/locked"])).rejects.toMatchObject({ code: "REMOTE_PERMISSION_DENIED" });
+  });
+
+  it("refuses to delete the remote root", async () => {
+    const exec = vi.fn();
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat: vi.fn(), list: vi.fn(), delete: vi.fn(), rmdir: vi.fn(), client: { exec } }
+      })
+    } as any);
+
+    await expect(service.deletePaths("c1", ["/"])).rejects.toMatchObject({ code: "REMOTE_INVALID_INPUT" });
+    expect(exec).not.toHaveBeenCalled();
+  });
+
   it("creates a unique remote text file without overwriting existing files", async () => {
     const stat = vi.fn(async (target: string) => {
       if (target === "/work/Untitled.txt") return { type: "-", size: 3, modifyTime: Date.now() };

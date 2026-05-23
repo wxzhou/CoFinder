@@ -33,6 +33,11 @@ type RemoteCompressClient = {
     exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
   };
 };
+type RemoteCommandClient = {
+  client?: {
+    exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
+  };
+};
 type RemoteDownloadClient = {
   stat: (path: string) => Promise<RemoteStatItem>;
   list: (path: string) => Promise<RemoteListItem[]>;
@@ -222,9 +227,10 @@ export class RemoteFileService {
 
     const normalizedPaths = unique(paths.map((item) => this.normalizeRemotePath(item)));
     let deleted = 0;
+    const client = connection.client as unknown as RemoteDeleteClient;
     for (const targetPath of normalizedPaths) {
       try {
-        await this.deleteRemotePathRecursive(connection.client as unknown as RemoteDeleteClient, targetPath);
+        await this.deleteRemotePath(client, targetPath);
         deleted += 1;
       } catch (error) {
         throw this.mapDeleteError(error);
@@ -536,6 +542,22 @@ export class RemoteFileService {
     return new RemoteServiceError("REMOTE_RENAME_FAILED", "Failed to rename remote path.", message);
   }
 
+  private async deleteRemotePath(client: RemoteDeleteClient, targetPath: string): Promise<void> {
+    assertSafeRemoteDeletePath(targetPath);
+    if (await this.deleteRemotePathWithCommandIfAvailable(client, targetPath)) return;
+    await this.deleteRemotePathRecursive(client, targetPath);
+  }
+
+  private async deleteRemotePathWithCommandIfAvailable(client: RemoteDeleteClient, targetPath: string): Promise<boolean> {
+    const exec = (client as RemoteCommandClient).client?.exec?.bind((client as RemoteCommandClient).client);
+    if (!exec) return false;
+    await execRemoteCommand(exec, buildRemoteDeleteCommand(targetPath), {
+      code: "REMOTE_DELETE_FAILED",
+      message: "Remote delete command failed."
+    });
+    return true;
+  }
+
   private async deleteRemotePathRecursive(client: RemoteDeleteClient, targetPath: string): Promise<void> {
     const stat = await client.stat(targetPath);
     if (resolveRemoteType(stat) === "directory") {
@@ -691,6 +713,19 @@ export class RemoteFileService {
   }
 
   private mapDeleteError(error: unknown): RemoteServiceError {
+    if (error instanceof RemoteServiceError) {
+      const detail = `${error.message}\n${error.detail ?? ""}`;
+      if (/No such file|ENOENT|no such path|does not exist/i.test(detail)) {
+        return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", detail);
+      }
+      if (/EACCES|Permission denied/i.test(detail)) {
+        return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", detail);
+      }
+      if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(detail)) {
+        return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", detail);
+      }
+      return error;
+    }
     const message =
       typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote delete failed";
     if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
@@ -847,6 +882,18 @@ function unique(items: string[]): string[] {
 }
 
 type RemoteExec = (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
+type RemoteCommandFailureOptions = {
+  code: RemoteErrorCode;
+  message: string;
+};
+
+const REMOTE_DELETE_NOT_FOUND_SENTINEL = "__COFINDER_REMOTE_DELETE_NOT_FOUND__";
+
+function buildRemoteDeleteCommand(targetPath: string): string {
+  const target = shellQuote(targetPath);
+  const sentinel = shellQuote(REMOTE_DELETE_NOT_FOUND_SENTINEL);
+  return `if [ ! -e ${target} ] && [ ! -L ${target} ]; then printf '%s\\n' ${sentinel} >&2; exit 66; fi; rm -rf -- ${target}`;
+}
 
 function buildRemoteGzipCommand(sourcePath: string, destinationPath: string, tempPath: string, deleteSourceAfterSuccess: boolean): string {
   const src = shellQuote(sourcePath);
@@ -862,6 +909,12 @@ function buildRemoteGzipCommand(sourcePath: string, destinationPath: string, tem
 
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function assertSafeRemoteDeletePath(targetPath: string): void {
+  if (!targetPath || targetPath === "/" || targetPath === "." || targetPath === "..") {
+    throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Refusing to delete unsafe remote path.");
+  }
 }
 
 async function downloadRemoteFileToLocal(client: RemoteDownloadClient, remotePath: string, localPath: string): Promise<void> {
@@ -894,13 +947,17 @@ async function uploadLocalFileToRemote(client: RemoteUploadClient, localPath: st
   throw new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "SFTP upload is unavailable for this connection.");
 }
 
-async function execRemoteCommand(exec: RemoteExec, command: string): Promise<void> {
+async function execRemoteCommand(
+  exec: RemoteExec,
+  command: string,
+  failure: RemoteCommandFailureOptions = { code: "REMOTE_COMPRESS_FAILED", message: "Remote gzip command failed." }
+): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     let stderr = "";
     try {
       exec(command, (error, stream) => {
         if (error || !stream || typeof stream !== "object") {
-          reject(error ?? new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote command execution failed."));
+          reject(error ?? new RemoteServiceError(failure.code, "Remote command execution failed."));
           return;
         }
         const readable = stream as {
@@ -911,11 +968,19 @@ async function execRemoteCommand(exec: RemoteExec, command: string): Promise<voi
           stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
         });
         readable.on("close", (code) => {
-          if (code === 0) resolve();
-          else reject(new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote gzip command failed.", stderr.trim().slice(0, 400) || undefined));
+          if (code === 0) {
+            resolve();
+            return;
+          }
+          const detail = stderr.trim().slice(0, 400) || undefined;
+          if (detail?.includes(REMOTE_DELETE_NOT_FOUND_SENTINEL)) {
+            reject(new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", detail));
+            return;
+          }
+          reject(new RemoteServiceError(failure.code, failure.message, detail));
         });
         readable.on("error", (streamError) => {
-          reject(streamError instanceof Error ? streamError : new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote gzip command failed."));
+          reject(streamError instanceof Error ? streamError : new RemoteServiceError(failure.code, failure.message));
         });
       });
     } catch (error) {
