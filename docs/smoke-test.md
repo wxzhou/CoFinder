@@ -252,6 +252,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 - **Requested toolbar glyphs:** confirm local and remote pane toolbars use the refreshed Home, Toggle Inspector, Upload/Download, and Delete icons.
 - **Layout stability:** confirm toolbar height, capsule grouping, button spacing, disabled states, and Delete danger coloring are unchanged from v1.8.8.
+- **Preferences tabs:** open Preferences and confirm General, Navigation, Jobs, Remote, Appearance, Shortcuts, and Diagnostics tabs switch without losing unsaved draft changes. Confirm Shortcuts is read-only reference text and Diagnostics actions still work.
 - **Transfer reliability carry-forward:** repeat the V2.8.8 SFTP fallback and large remote delete checks before packaging a v1.8.9 build.
 
 ## Tabs Smoke (M3)

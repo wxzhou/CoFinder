@@ -17,6 +17,7 @@ V2.8.9 is a focused toolbar icon and transfer-auth reliability polish release.
 - Uploads and downloads now fall back to the active SFTP connection when rsync cannot start because the SSH transfer channel requires passwordless login, including generic SSH `Permission denied` BatchMode failures.
 - Remote delete now uses a server-side delete command when available, making large/deep folder deletes more reliable than recursive SFTP traversal.
 - Pane toolbar icons for Home, Toggle Inspector, Upload, Download, and Delete are refreshed to match the requested visual direction while preserving the existing toolbar layout.
+- Preferences are organized into General, Navigation, Jobs, Remote, Appearance, Shortcuts, and Diagnostics tabs; Shortcuts is explicitly a read-only reference.
 
 ## v1.8.8 — Product milestone V2.8.8
 

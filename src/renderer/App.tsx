@@ -235,6 +235,8 @@ type PreferencesState = {
   error: string;
 };
 
+type PreferenceTab = "general" | "navigation" | "jobs" | "remote" | "appearance" | "shortcuts" | "diagnostics";
+
 type QueuePanelState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
 type PlainClickRecord = {
   pane: "local" | "remote";
@@ -286,6 +288,7 @@ export function App(props: AppProps = {}) {
     draft: DEFAULT_RENDERER_SETTINGS,
     error: ""
   });
+  const [activePreferenceTab, setActivePreferenceTab] = useState<PreferenceTab>("general");
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [diagnosticsStatus, setDiagnosticsStatus] = useState("");
   const [localRecentPaths, setLocalRecentPaths] = useState<RecentPath[]>(() => readRecentPathList(COFINDER_LOCAL_RECENTS_KEY));
@@ -4953,6 +4956,15 @@ export function App(props: AppProps = {}) {
   const contextSingleSelection = contextSelectedPaths.length === 1;
   const contextSingleFile = contextSingleEntry?.type === "file";
   const contextMenuStyle = contextMenuPosition ?? (contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null);
+  const preferenceTabs: Array<{ id: PreferenceTab; label: string }> = [
+    { id: "general", label: "General" },
+    { id: "navigation", label: "Navigation" },
+    { id: "jobs", label: "Jobs" },
+    { id: "remote", label: "Remote" },
+    { id: "appearance", label: "Appearance" },
+    { id: "shortcuts", label: "Shortcuts" },
+    { id: "diagnostics", label: "Diagnostics" }
+  ];
 
   return (
     <div className={`${uiShell === "v12" ? "app-shell app-shell--v12" : "app-shell"} density-${appSettings.appearance.rowDensity}`}>
@@ -5064,240 +5076,287 @@ export function App(props: AppProps = {}) {
               </button>
             </div>
             {preferences.error ? <div className="error-banner">{preferences.error}</div> : null}
-            <div className="preferences-grid">
-              <label>
-                Default local path
-                <input
-                  value={preferences.draft.general.defaultLocalPath}
-                  onChange={(e) =>
-                    setPreferences((p) => ({
-                      ...p,
-                      draft: { ...p.draft, general: { ...p.draft.general, defaultLocalPath: e.target.value } }
-                    }))
-                  }
-                  placeholder="Use macOS Home"
-                />
-              </label>
-              <label>
-                Text editor
-                <select
-                  value={["system", "TextEdit", "TextMate"].includes(preferences.draft.general.defaultTextEditor) ? preferences.draft.general.defaultTextEditor : "custom"}
-                  onChange={(e) =>
-                    setPreferences((p) => ({
-                      ...p,
-                      draft: {
-                        ...p.draft,
-                        general: {
-                          ...p.draft.general,
-                          defaultTextEditor: e.target.value === "custom" ? "" : e.target.value
+            <div className="preferences-body">
+              <nav className="preferences-tabs" aria-label="Preferences sections">
+                {preferenceTabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    className={`preferences-tab${activePreferenceTab === tab.id ? " is-active" : ""}`}
+                    onClick={() => setActivePreferenceTab(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </nav>
+              <section className="preferences-panel" aria-label={`${preferenceTabs.find((tab) => tab.id === activePreferenceTab)?.label ?? "Preferences"} settings`}>
+                {activePreferenceTab === "general" ? (
+                  <div className="preferences-grid">
+                    <label>
+                      Default local path
+                      <input
+                        value={preferences.draft.general.defaultLocalPath}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: { ...p.draft, general: { ...p.draft.general, defaultLocalPath: e.target.value } }
+                          }))
                         }
-                      }
-                    }))
-                  }
-                >
-                  <option value="system">System default</option>
-                  <option value="TextEdit">TextEdit</option>
-                  <option value="TextMate">TextMate</option>
-                  <option value="custom">Custom...</option>
-                </select>
-                {["system", "TextEdit", "TextMate"].includes(preferences.draft.general.defaultTextEditor) ? null : (
-                  <input
-                    value={preferences.draft.general.defaultTextEditor}
-                    onChange={(e) =>
-                      setPreferences((p) => ({
-                        ...p,
-                        draft: { ...p.draft, general: { ...p.draft.general, defaultTextEditor: e.target.value } }
-                      }))
-                    }
-                    placeholder="App name or /Applications/TextMate.app"
-                  />
-                )}
-              </label>
-              <label>
-                Conflict policy
-                <select
-                  value={preferences.draft.transfer.defaultConflictPolicy}
-                  onChange={(e) =>
-                    setPreferences((p) => ({
-                      ...p,
-                      draft: {
-                        ...p.draft,
-                        transfer: { ...p.draft.transfer, defaultConflictPolicy: e.target.value as AppSettings["transfer"]["defaultConflictPolicy"] }
-                      }
-                    }))
-                  }
-                >
-                  <option value="prompt">Ask every time</option>
-                  <option value="rename">Rename / keep both</option>
-                  <option value="skip">Skip conflicts</option>
-                  <option value="overwrite">Overwrite</option>
-                </select>
-              </label>
-              <label>
-                Queue auto-hide delay
-                <input
-                  type="number"
-                  min={0}
-                  max={60}
-                  value={Math.round(preferences.draft.transfer.queueAutoHideDelayMs / 1000)}
-                  onChange={(e) =>
-                    setPreferences((p) => ({
-                      ...p,
-                      draft: {
-                        ...p.draft,
-                        transfer: { ...p.draft.transfer, queueAutoHideDelayMs: Math.max(0, Math.min(60, Number(e.target.value))) * 1000 }
-                      }
-                    }))
-                  }
-                />
-              </label>
-              <div className={`preferences-inline-setting${preferences.draft.remote.autoRefreshEnabled ? "" : " is-disabled"}`}>
-                <label className="preferences-check">
-                  <input
-                    type="checkbox"
-                    checked={preferences.draft.remote.autoRefreshEnabled}
-                    onChange={(e) =>
-                      setPreferences((p) => ({
-                        ...p,
-                        draft: { ...p.draft, remote: { ...p.draft.remote, autoRefreshEnabled: e.target.checked } }
-                      }))
-                    }
-                  />
-                  Auto-refresh remote pane
-                </label>
-                <label>
-                  Every
-                  <input
-                    type="number"
-                    min={5}
-                    max={3600}
-                    disabled={!preferences.draft.remote.autoRefreshEnabled}
-                    value={preferences.draft.remote.autoRefreshIntervalSeconds}
-                    onChange={(e) =>
-                      setPreferences((p) => ({
-                        ...p,
-                        draft: {
-                          ...p.draft,
-                          remote: {
-                            ...p.draft.remote,
-                            autoRefreshIntervalSeconds: Math.max(5, Math.min(3600, Math.round(Number(e.target.value) || 60)))
+                        placeholder="Use macOS Home"
+                      />
+                    </label>
+                    <label>
+                      Text editor
+                      <select
+                        value={["system", "TextEdit", "TextMate"].includes(preferences.draft.general.defaultTextEditor) ? preferences.draft.general.defaultTextEditor : "custom"}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: {
+                              ...p.draft,
+                              general: {
+                                ...p.draft.general,
+                                defaultTextEditor: e.target.value === "custom" ? "" : e.target.value
+                              }
+                            }
+                          }))
+                        }
+                      >
+                        <option value="system">System default</option>
+                        <option value="TextEdit">TextEdit</option>
+                        <option value="TextMate">TextMate</option>
+                        <option value="custom">Custom...</option>
+                      </select>
+                      {["system", "TextEdit", "TextMate"].includes(preferences.draft.general.defaultTextEditor) ? null : (
+                        <input
+                          value={preferences.draft.general.defaultTextEditor}
+                          onChange={(e) =>
+                            setPreferences((p) => ({
+                              ...p,
+                              draft: { ...p.draft, general: { ...p.draft.general, defaultTextEditor: e.target.value } }
+                            }))
                           }
+                          placeholder="App name or /Applications/TextMate.app"
+                        />
+                      )}
+                    </label>
+                    {[
+                      ["Confirm before delete", "confirmBeforeDelete"],
+                      ["Show hidden files", "showHiddenFiles"]
+                    ].map(([label, key]) => (
+                      <label key={key} className="preferences-check">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(preferences.draft.general[key as keyof AppSettings["general"]])}
+                          onChange={(e) =>
+                            setPreferences((p) => ({
+                              ...p,
+                              draft: { ...p.draft, general: { ...p.draft.general, [key]: e.target.checked } }
+                            }))
+                          }
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+                {activePreferenceTab === "navigation" ? (
+                  <div className="preferences-grid">
+                    <label className="preferences-check">
+                      <input
+                        type="checkbox"
+                        checked={preferences.draft.general.restoreLastSession}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: { ...p.draft, general: { ...p.draft.general, restoreLastSession: e.target.checked } }
+                          }))
                         }
-                      }))
-                    }
-                  />
-                </label>
-                <span>seconds</span>
-              </div>
-              <label>
-                Row density
-                <select
-                  value={preferences.draft.appearance.rowDensity}
-                  onChange={(e) =>
-                    setPreferences((p) => ({
-                      ...p,
-                      draft: { ...p.draft, appearance: { ...p.draft.appearance, rowDensity: e.target.value as "compact" | "comfortable" } }
-                    }))
-                  }
-                >
-                  <option value="comfortable">Comfortable</option>
-                  <option value="compact">Compact</option>
-                </select>
-              </label>
-              <label>
-                Default pane ratio
-                <input
-                  type="number"
-                  min={25}
-                  max={75}
-                  value={Math.round(preferences.draft.appearance.defaultPaneRatio * 100)}
-                  onChange={(e) =>
-                    setPreferences((p) => ({
-                      ...p,
-                      draft: {
-                        ...p.draft,
-                        appearance: { ...p.draft.appearance, defaultPaneRatio: Math.max(25, Math.min(75, Number(e.target.value))) / 100 }
-                      }
-                    }))
-                  }
-                />
-              </label>
-              {[
-                ["Restore last local path and remote profile paths", "restoreLastSession"],
-                ["Confirm before delete", "confirmBeforeDelete"],
-                ["Show hidden files", "showHiddenFiles"]
-              ].map(([label, key]) => (
-                <label key={key} className="preferences-check">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(preferences.draft.general[key as keyof AppSettings["general"]])}
-                    onChange={(e) =>
-                      setPreferences((p) => ({
-                        ...p,
-                        draft: { ...p.draft, general: { ...p.draft.general, [key]: e.target.checked } }
-                      }))
-                    }
-                  />
-                  {label}
-                </label>
-              ))}
-              {[
-                ["Preserve timestamps", "preserveTimestamps"],
-                ["Delete source file after gzip compression", "deleteSourceAfterGzip"],
-              ].map(([label, key]) => (
-                <label key={key} className="preferences-check">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(preferences.draft.transfer[key as keyof AppSettings["transfer"]])}
-                    onChange={(e) =>
-                      setPreferences((p) => ({
-                        ...p,
-                        draft: { ...p.draft, transfer: { ...p.draft.transfer, [key]: e.target.checked } }
-                      }))
-                    }
-                  />
-                  {label}
-                </label>
-              ))}
-              {[
-                ["Show sidebar", "sidebarVisible"]
-              ].map(([label, key]) => (
-                <label key={key} className="preferences-check">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(preferences.draft.appearance[key as keyof AppSettings["appearance"]])}
-                    onChange={(e) =>
-                      setPreferences((p) => ({
-                        ...p,
-                        draft: { ...p.draft, appearance: { ...p.draft.appearance, [key]: e.target.checked } }
-                      }))
-                    }
-                  />
-                  {label}
-                </label>
-              ))}
-            </div>
-            <div className="preferences-shortcuts">
-              <strong>Shortcuts</strong>
-              <p>F2 rename · Delete remove · Cmd+I info · Cmd+Shift+C copy selected path · Cmd+Option+C copy current path · Cmd+R refresh · Cmd+U upload · Cmd+D download · Cmd+K Site Manager</p>
-            </div>
-            <div className="preferences-shortcuts">
-              <strong>Diagnostics</strong>
-              <div className="diagnostics-actions">
-                <button type="button" className="toolbar-button" onClick={() => void copyDiagnostics()}>
-                  Copy Diagnostics
-                </button>
-                <button type="button" className="toolbar-button" onClick={() => void openLogFolder()}>
-                  Open Log Folder
-                </button>
-                <button type="button" className="toolbar-button" onClick={() => void openLogFile()}>
-                  Open Log File
-                </button>
-                <button type="button" className="toolbar-button" onClick={() => void checkForUpdates()}>
-                  Check for Updates
-                </button>
-              </div>
-              <p>{diagnosticsStatus || "Diagnostics include app version, platform, userData path, log path, and ssh/rsync availability."}</p>
+                      />
+                      Restore last local path and remote profile paths
+                    </label>
+                  </div>
+                ) : null}
+                {activePreferenceTab === "jobs" ? (
+                  <div className="preferences-grid">
+                    <label>
+                      Conflict policy
+                      <select
+                        value={preferences.draft.transfer.defaultConflictPolicy}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: {
+                              ...p.draft,
+                              transfer: { ...p.draft.transfer, defaultConflictPolicy: e.target.value as AppSettings["transfer"]["defaultConflictPolicy"] }
+                            }
+                          }))
+                        }
+                      >
+                        <option value="prompt">Ask every time</option>
+                        <option value="rename">Rename / keep both</option>
+                        <option value="skip">Skip conflicts</option>
+                        <option value="overwrite">Overwrite</option>
+                      </select>
+                    </label>
+                    <label>
+                      Queue auto-hide delay
+                      <input
+                        type="number"
+                        min={0}
+                        max={60}
+                        value={Math.round(preferences.draft.transfer.queueAutoHideDelayMs / 1000)}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: {
+                              ...p.draft,
+                              transfer: { ...p.draft.transfer, queueAutoHideDelayMs: Math.max(0, Math.min(60, Number(e.target.value))) * 1000 }
+                            }
+                          }))
+                        }
+                      />
+                    </label>
+                    {[
+                      ["Preserve timestamps", "preserveTimestamps"],
+                      ["Delete source file after gzip compression", "deleteSourceAfterGzip"]
+                    ].map(([label, key]) => (
+                      <label key={key} className="preferences-check">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(preferences.draft.transfer[key as keyof AppSettings["transfer"]])}
+                          onChange={(e) =>
+                            setPreferences((p) => ({
+                              ...p,
+                              draft: { ...p.draft, transfer: { ...p.draft.transfer, [key]: e.target.checked } }
+                            }))
+                          }
+                        />
+                        {label}
+                      </label>
+                    ))}
+                  </div>
+                ) : null}
+                {activePreferenceTab === "remote" ? (
+                  <div className="preferences-grid">
+                    <div className={`preferences-inline-setting${preferences.draft.remote.autoRefreshEnabled ? "" : " is-disabled"}`}>
+                      <label className="preferences-check">
+                        <input
+                          type="checkbox"
+                          checked={preferences.draft.remote.autoRefreshEnabled}
+                          onChange={(e) =>
+                            setPreferences((p) => ({
+                              ...p,
+                              draft: { ...p.draft, remote: { ...p.draft.remote, autoRefreshEnabled: e.target.checked } }
+                            }))
+                          }
+                        />
+                        Auto-refresh remote pane
+                      </label>
+                      <label>
+                        Every
+                        <input
+                          type="number"
+                          min={5}
+                          max={3600}
+                          disabled={!preferences.draft.remote.autoRefreshEnabled}
+                          value={preferences.draft.remote.autoRefreshIntervalSeconds}
+                          onChange={(e) =>
+                            setPreferences((p) => ({
+                              ...p,
+                              draft: {
+                                ...p.draft,
+                                remote: {
+                                  ...p.draft.remote,
+                                  autoRefreshIntervalSeconds: Math.max(5, Math.min(3600, Math.round(Number(e.target.value) || 60)))
+                                }
+                              }
+                            }))
+                          }
+                        />
+                      </label>
+                      <span>seconds</span>
+                    </div>
+                  </div>
+                ) : null}
+                {activePreferenceTab === "appearance" ? (
+                  <div className="preferences-grid">
+                    <label>
+                      Row density
+                      <select
+                        value={preferences.draft.appearance.rowDensity}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: { ...p.draft, appearance: { ...p.draft.appearance, rowDensity: e.target.value as "compact" | "comfortable" } }
+                          }))
+                        }
+                      >
+                        <option value="comfortable">Comfortable</option>
+                        <option value="compact">Compact</option>
+                      </select>
+                    </label>
+                    <label>
+                      Default pane ratio
+                      <input
+                        type="number"
+                        min={25}
+                        max={75}
+                        value={Math.round(preferences.draft.appearance.defaultPaneRatio * 100)}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: {
+                              ...p.draft,
+                              appearance: { ...p.draft.appearance, defaultPaneRatio: Math.max(25, Math.min(75, Number(e.target.value))) / 100 }
+                            }
+                          }))
+                        }
+                      />
+                    </label>
+                    <label className="preferences-check">
+                      <input
+                        type="checkbox"
+                        checked={preferences.draft.appearance.sidebarVisible}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: { ...p.draft, appearance: { ...p.draft.appearance, sidebarVisible: e.target.checked } }
+                          }))
+                        }
+                      />
+                      Show sidebar
+                    </label>
+                  </div>
+                ) : null}
+                {activePreferenceTab === "shortcuts" ? (
+                  <div className="preferences-reference">
+                    <strong>Keyboard shortcuts</strong>
+                    <p>Shortcuts are currently a read-only reference. Custom shortcut editing is deferred because it needs conflict detection and text-field safety rules.</p>
+                    <p>F2 rename · Delete remove · Cmd+I info · Cmd+Shift+C copy selected path · Cmd+Option+C copy current path · Cmd+R refresh · Cmd+U upload · Cmd+D download · Cmd+K Site Manager</p>
+                  </div>
+                ) : null}
+                {activePreferenceTab === "diagnostics" ? (
+                  <div className="preferences-reference">
+                    <strong>Diagnostics</strong>
+                    <div className="diagnostics-actions">
+                      <button type="button" className="toolbar-button" onClick={() => void copyDiagnostics()}>
+                        Copy Diagnostics
+                      </button>
+                      <button type="button" className="toolbar-button" onClick={() => void openLogFolder()}>
+                        Open Log Folder
+                      </button>
+                      <button type="button" className="toolbar-button" onClick={() => void openLogFile()}>
+                        Open Log File
+                      </button>
+                      <button type="button" className="toolbar-button" onClick={() => void checkForUpdates()}>
+                        Check for Updates
+                      </button>
+                    </div>
+                    <p>{diagnosticsStatus || "Diagnostics include app version, platform, userData path, log path, and ssh/rsync availability."}</p>
+                  </div>
+                ) : null}
+              </section>
             </div>
             <div className="preferences-actions">
               <button type="button" className="toolbar-button" onClick={() => setPreferences((p) => ({ ...p, draft: appSettings, error: "" }))}>
