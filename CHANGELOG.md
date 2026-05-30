@@ -4,12 +4,19 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.8.8.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest completed development release: v1.8.9.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
 
+No user-facing changes since v1.8.9.
+
+## v1.8.9 — Product milestone V2.8.9
+
+V2.8.9 is a focused toolbar icon and transfer-auth reliability polish release.
+
 - Uploads and downloads now fall back to the active SFTP connection when rsync cannot start because the SSH transfer channel requires passwordless login, including generic SSH `Permission denied` BatchMode failures.
 - Remote delete now uses a server-side delete command when available, making large/deep folder deletes more reliable than recursive SFTP traversal.
+- Pane toolbar icons for Home, Toggle Inspector, Upload, Download, and Delete are refreshed to match the requested visual direction while preserving the existing toolbar layout.
 
 ## v1.8.8 — Product milestone V2.8.8
 

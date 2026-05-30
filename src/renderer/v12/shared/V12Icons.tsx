@@ -181,8 +181,9 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     case "home":
       return (
         <svg {...s}>
-          <path d="M4 9.5l6-5 6 5" />
-          <path d="M6 8.5v7h8v-7" />
+          <path d="M4.3 9.6l5.7-5 5.7 5" />
+          <path d="M6.1 8.8v6.8h7.8V8.8" />
+          <path d="M8.7 15.6v-4h2.6v4" />
         </svg>
       );
     case "arrow-clockwise":
@@ -194,13 +195,17 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     case "arrow-up-tray":
       return (
         <svg {...s}>
-          <path d="M4 14h12M6 10l4-4 4 4M10 6v8" />
+          <path d="M10 15.2V6" />
+          <path d="M6.9 9.1L10 6l3.1 3.1" />
+          <path d="M4.9 12.4v2.7c0 .45.36.8.8.8h8.6c.44 0 .8-.35.8-.8v-2.7" />
         </svg>
       );
     case "arrow-down-tray":
       return (
         <svg {...s}>
-          <path d="M4 14h12M6 10l4 4 4-4M10 6v8" />
+          <path d="M10 4.8V14" />
+          <path d="M6.9 10.9L10 14l3.1-3.1" />
+          <path d="M4.9 12.4v2.7c0 .45.36.8.8.8h8.6c.44 0 .8-.35.8-.8v-2.7" />
         </svg>
       );
     case "copy":
@@ -234,10 +239,11 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     case "trash":
       return (
         <svg {...s}>
-          <path d="M6.7 7.4l.5 8.2c.04.64.57 1.15 1.21 1.15h3.18c.64 0 1.17-.51 1.21-1.15l.5-8.2" />
-          <path d="M5 7.4h10" />
-          <path d="M8.2 5.7h3.6M9 4.2h2l.45 1.5h-2.9L9 4.2z" />
-          <path d="M9 9.4v4.7M11 9.4v4.7" />
+          <path d="M6.4 7.4h7.2l-.45 8.05c-.04.61-.55 1.1-1.16 1.1H8.01c-.61 0-1.12-.49-1.16-1.1L6.4 7.4z" />
+          <path d="M5.1 7.4h9.8" />
+          <path d="M8.3 5.6h3.4" />
+          <path d="M8.9 5.6l.35-1.1h1.5l.35 1.1" />
+          <path d="M8.7 9.7v4M11.3 9.7v4" />
         </svg>
       );
     case "info-circle":
@@ -301,8 +307,8 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     case "sidebar-right":
       return (
         <svg {...s}>
-          <rect x="4" y="4" width="7" height="12" rx="1" />
-          <path d="M13 4.5v11" />
+          <path d="M3.6 10s2.35-4.2 6.4-4.2 6.4 4.2 6.4 4.2-2.35 4.2-6.4 4.2S3.6 10 3.6 10z" />
+          <circle cx="10" cy="10" r="1.85" />
         </svg>
       );
     case "gear":

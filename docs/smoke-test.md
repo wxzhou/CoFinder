@@ -248,6 +248,12 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Jobs pane resize:** expand Jobs, drag the top edge upward/downward, and confirm the pane height changes while the header row stays usable; double-click the edge to reset height.
 - **Auto-hide:** leave Jobs unpinned after successful jobs and confirm it auto-hides according to the queue auto-hide delay preference.
 
+## V2.8.9 toolbar icon polish
+
+- **Requested toolbar glyphs:** confirm local and remote pane toolbars use the refreshed Home, Toggle Inspector, Upload/Download, and Delete icons.
+- **Layout stability:** confirm toolbar height, capsule grouping, button spacing, disabled states, and Delete danger coloring are unchanged from v1.8.8.
+- **Transfer reliability carry-forward:** repeat the V2.8.8 SFTP fallback and large remote delete checks before packaging a v1.8.9 build.
+
 ## Tabs Smoke (M3)
 
 - Tab A: connect and navigate to path X.
