@@ -186,7 +186,9 @@ export type AppSettings = {
   schemaVersion: 2;
   general: {
     defaultLocalPath: string;
-    restoreLastSession: boolean;
+    restoreLastLocalPathOnLaunch: boolean;
+    restoreLocalPathOnConnect: boolean;
+    restoreRemotePathOnConnect: boolean;
     confirmBeforeDelete: boolean;
     showHiddenFiles: boolean;
     firstRunOnboardingDismissed: boolean;

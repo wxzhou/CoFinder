@@ -187,6 +187,7 @@ type UiTabState = {
 const AUTO_HIDE_DELAY_MS = 10_000;
 const COFINDER_TRANSFER_MIME = "application/x-cofinder-transfer";
 const COFINDER_LAST_LOCAL_PATH_KEY = "cofinder.lastLocalPath";
+const COFINDER_PROFILE_PATH_PAIRS_KEY = "cofinder.profilePathPairs.v1";
 const COFINDER_LOCAL_RECENTS_KEY = "cofinder.recent.localPaths.v1";
 const COFINDER_REMOTE_RECENTS_KEY = "cofinder.recent.remotePathsByProfile.v1";
 const COFINDER_V12_COLUMNS_KEY = "cofinder.v12FileColumns.v2";
@@ -204,7 +205,9 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
   schemaVersion: 2,
   general: {
     defaultLocalPath: "",
-    restoreLastSession: false,
+    restoreLastLocalPathOnLaunch: false,
+    restoreLocalPathOnConnect: false,
+    restoreRemotePathOnConnect: false,
     confirmBeforeDelete: true,
     showHiddenFiles: false,
     firstRunOnboardingDismissed: false,
@@ -283,6 +286,10 @@ export function App(props: AppProps = {}) {
   const [queuePanelState, setQueuePanelState] = useState<QueuePanelState>("hidden");
   const [queuePinned, setQueuePinned] = useState<boolean>(false);
   const [transferTasks, setTransferTasks] = useState<TransferTask[]>([]);
+  const transferTasksRef = useRef<TransferTask[]>([]);
+  useEffect(() => {
+    transferTasksRef.current = transferTasks;
+  }, [transferTasks]);
   const jobRefreshStatusRef = useRef<Map<string, TransferTask["status"]>>(new Map());
   const [remoteEditTransferTasks, setRemoteEditTransferTasks] = useState<TransferTask[]>([]);
   const [remoteEditSessions, setRemoteEditSessions] = useState<RemoteEditSession[]>([]);
@@ -373,21 +380,38 @@ export function App(props: AppProps = {}) {
       setV12PaneRatio(settings.appearance.defaultPaneRatio);
       setV12LocalInspectorReveal(false);
       setV12RemoteInspectorReveal(false);
-      const restoredLocalPath = settings.general.restoreLastSession ? readLastLocalPath() : "";
+      const restoredLocalPath = settings.general.restoreLastLocalPathOnLaunch ? readLastLocalPath() : "";
       await initializeLocalHome(tabState.firstTabId, restoredLocalPath || settings.general.defaultLocalPath);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!appSettings.general.restoreLastSession) {
+    if (!appSettings.general.restoreLastLocalPathOnLaunch) {
       window.localStorage.removeItem(COFINDER_LAST_LOCAL_PATH_KEY);
       return;
     }
     if (localPane.currentPath) {
       window.localStorage.setItem(COFINDER_LAST_LOCAL_PATH_KEY, localPane.currentPath);
     }
-  }, [appSettings.general.restoreLastSession, localPane.currentPath]);
+  }, [appSettings.general.restoreLastLocalPathOnLaunch, localPane.currentPath]);
+
+  useEffect(() => {
+    if (
+      remotePane.connectionStatus !== "connected" ||
+      !remotePane.activeProfileId ||
+      !localPane.currentPath ||
+      !remotePane.currentPath
+    ) {
+      return;
+    }
+    writeProfilePathPair(remotePane.activeProfileId, {
+      localPath: localPane.currentPath,
+      remotePath: remotePane.currentPath,
+      tabId: activeTab.id,
+      updatedAt: Date.now()
+    });
+  }, [activeTab.id, localPane.currentPath, remotePane.activeProfileId, remotePane.connectionStatus, remotePane.currentPath]);
 
   useEffect(() => {
     if (!appSettings.remote.autoRefreshEnabled) return undefined;
@@ -1665,8 +1689,11 @@ export function App(props: AppProps = {}) {
     }
 
     const { connectionId, homePath } = connectResult.data;
+    const pairedPaths = profileId ? readProfilePathPair(profileId) : null;
     const restoredRemotePath =
-      appSettings.general.restoreLastSession && profileId ? remoteRecentPathsByProfile[profileId]?.[0]?.path : "";
+      appSettings.general.restoreRemotePathOnConnect && profileId
+        ? pairedPaths?.remotePath ?? remoteRecentPathsByProfile[profileId]?.[0]?.path ?? ""
+        : "";
     const initialPath = restoredRemotePath || attempt.defaultRemotePathTrimmed || homePath || "/";
 
     await finalizeRemoteConnection(tabId, connectionId, homePath, initialPath, attempt.aliasForTitle, profileId ?? null, {
@@ -1675,8 +1702,38 @@ export function App(props: AppProps = {}) {
       username: attempt.username.trim(),
       authType: "password"
     });
+    if (appSettings.general.restoreLocalPathOnConnect && pairedPaths?.localPath) {
+      await restoreLocalPathOnRemoteConnect(tabId, pairedPaths.localPath);
+    }
     await refreshV12EmbeddedRemoteCatalog();
     return { ok: true };
+  }
+
+  async function restoreLocalPathOnRemoteConnect(tabId: string, localPath: string): Promise<void> {
+    const tab = tabsRef.current.find((item) => item.id === tabId);
+    if (!tab || !localPath.trim() || tab.localPane.currentPath === localPath) return;
+    const activeLocalJob = transferTasksRef.current.some(
+      (task) =>
+        task.tabId === tabId &&
+        (task.status === "pending" || task.status === "running" || task.status === "checking" || task.status === "conflict")
+    );
+    if (tab.localPane.selectedFullPaths.length > 0 || activeLocalJob) {
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId
+            ? {
+                ...item,
+                localPane: {
+                  ...item.localPane,
+                  error: "Skipped restoring paired local path because the local pane has a selection or active job."
+                }
+              }
+            : item
+        )
+      );
+      return;
+    }
+    await navigateLocal(tabId, localPath, "replace");
   }
 
   function markConnectedRemoteConnectionsStale(): void {
@@ -5280,19 +5337,25 @@ export function App(props: AppProps = {}) {
                 ) : null}
                 {activePreferenceTab === "navigation" ? (
                   <div className="preferences-grid">
-                    <label className="preferences-check">
-                      <input
-                        type="checkbox"
-                        checked={preferences.draft.general.restoreLastSession}
-                        onChange={(e) =>
-                          setPreferences((p) => ({
-                            ...p,
-                            draft: { ...p.draft, general: { ...p.draft.general, restoreLastSession: e.target.checked } }
-                          }))
-                        }
-                      />
-                      Restore last local path and remote profile paths
-                    </label>
+                    {[
+                      ["Restore local path on launch", "restoreLastLocalPathOnLaunch"],
+                      ["Restore local path on connect", "restoreLocalPathOnConnect"],
+                      ["Restore remote path on connect", "restoreRemotePathOnConnect"]
+                    ].map(([label, key]) => (
+                      <label key={key} className="preferences-check">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(preferences.draft.general[key as keyof AppSettings["general"]])}
+                          onChange={(e) =>
+                            setPreferences((p) => ({
+                              ...p,
+                              draft: { ...p.draft, general: { ...p.draft.general, [key]: e.target.checked } }
+                            }))
+                          }
+                        />
+                        {label}
+                      </label>
+                    ))}
                   </div>
                 ) : null}
                 {activePreferenceTab === "jobs" ? (
@@ -6065,6 +6128,51 @@ function rwxToOctal(input: string): string {
 
 function readLastLocalPath(): string {
   return window.localStorage.getItem(COFINDER_LAST_LOCAL_PATH_KEY)?.trim() ?? "";
+}
+
+type ProfilePathPair = {
+  localPath: string;
+  remotePath: string;
+  tabId: string;
+  updatedAt: number;
+};
+
+function readProfilePathPairs(): Record<string, ProfilePathPair> {
+  try {
+    const raw = window.localStorage.getItem(COFINDER_PROFILE_PATH_PAIRS_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, ProfilePathPair> = {};
+    for (const [profileId, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!profileId.trim() || !value || typeof value !== "object" || Array.isArray(value)) continue;
+      const record = value as Record<string, unknown>;
+      const localPath = typeof record.localPath === "string" ? record.localPath.trim() : "";
+      const remotePath = typeof record.remotePath === "string" ? record.remotePath.trim() : "";
+      if (!localPath || !remotePath) continue;
+      out[profileId] = {
+        localPath,
+        remotePath,
+        tabId: typeof record.tabId === "string" ? record.tabId : "",
+        updatedAt: typeof record.updatedAt === "number" && Number.isFinite(record.updatedAt) ? record.updatedAt : 0
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+function readProfilePathPair(profileId: string): ProfilePathPair | null {
+  return readProfilePathPairs()[profileId] ?? null;
+}
+
+function writeProfilePathPair(profileId: string, pair: ProfilePathPair): void {
+  if (!profileId.trim()) return;
+  writeJsonLocalStorage(COFINDER_PROFILE_PATH_PAIRS_KEY, {
+    ...readProfilePathPairs(),
+    [profileId]: pair
+  });
 }
 
 function readRecentPathList(key: string): RecentPath[] {

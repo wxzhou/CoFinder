@@ -19,6 +19,7 @@ V2.8.9 is a focused toolbar icon and transfer-auth reliability polish release.
 - Pane toolbar icons for Home, Toggle Inspector, Upload, Download, and Delete are refreshed to match the requested visual direction while preserving the existing toolbar layout.
 - Preferences are organized into General, Navigation, Jobs, Remote, Appearance, Shortcuts, and Diagnostics tabs; Shortcuts is explicitly a read-only reference.
 - Remote sessions can be marked stale after macOS sleep or network resume and lazily reconnect on the next remote action before reporting failure.
+- Navigation restore settings are split into local-on-launch, local-on-connect, and remote-on-connect; paired local/remote paths are remembered per remote profile using the last active tab.
 
 ## v1.8.8 — Product milestone V2.8.8
 

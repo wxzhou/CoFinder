@@ -7,7 +7,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   schemaVersion: 2,
   general: {
     defaultLocalPath: "",
-    restoreLastSession: false,
+    restoreLastLocalPathOnLaunch: false,
+    restoreLocalPathOnConnect: false,
+    restoreRemotePathOnConnect: false,
     confirmBeforeDelete: true,
     showHiddenFiles: false,
     firstRunOnboardingDismissed: false,
@@ -63,11 +65,23 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
   const appearance = isRecord(root.appearance) ? root.appearance : {};
   const conflict = transfer.defaultConflictPolicy;
   const rowDensity = appearance.rowDensity;
+  const legacyRestoreLastSession = typeof general.restoreLastSession === "boolean" ? general.restoreLastSession : undefined;
   return {
     schemaVersion: 2,
     general: {
       defaultLocalPath: string(general.defaultLocalPath, base.general.defaultLocalPath),
-      restoreLastSession: bool(general.restoreLastSession, base.general.restoreLastSession),
+      restoreLastLocalPathOnLaunch: bool(
+        general.restoreLastLocalPathOnLaunch,
+        legacyRestoreLastSession ?? base.general.restoreLastLocalPathOnLaunch
+      ),
+      restoreLocalPathOnConnect: bool(
+        general.restoreLocalPathOnConnect,
+        legacyRestoreLastSession ?? base.general.restoreLocalPathOnConnect
+      ),
+      restoreRemotePathOnConnect: bool(
+        general.restoreRemotePathOnConnect,
+        legacyRestoreLastSession ?? base.general.restoreRemotePathOnConnect
+      ),
       confirmBeforeDelete: bool(general.confirmBeforeDelete, base.general.confirmBeforeDelete),
       showHiddenFiles: bool(general.showHiddenFiles, base.general.showHiddenFiles),
       firstRunOnboardingDismissed: bool(general.firstRunOnboardingDismissed, base.general.firstRunOnboardingDismissed),
