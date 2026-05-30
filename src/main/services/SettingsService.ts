@@ -21,7 +21,8 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   },
   remote: {
     autoRefreshEnabled: false,
-    autoRefreshIntervalSeconds: 60
+    autoRefreshIntervalSeconds: 60,
+    autoReconnectAfterSleep: true
   },
   appearance: {
     rowDensity: "comfortable",
@@ -85,7 +86,8 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
       autoRefreshEnabled: bool(remote.autoRefreshEnabled, base.remote.autoRefreshEnabled),
       autoRefreshIntervalSeconds: Math.round(
         numberInRange(remote.autoRefreshIntervalSeconds, base.remote.autoRefreshIntervalSeconds, 5, 3600)
-      )
+      ),
+      autoReconnectAfterSleep: bool(remote.autoReconnectAfterSleep, base.remote.autoReconnectAfterSleep)
     },
     appearance: {
       rowDensity: rowDensity === "compact" || rowDensity === "comfortable" ? rowDensity : base.appearance.rowDensity,

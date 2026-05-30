@@ -218,7 +218,8 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
   },
   remote: {
     autoRefreshEnabled: false,
-    autoRefreshIntervalSeconds: 60
+    autoRefreshIntervalSeconds: 60,
+    autoReconnectAfterSleep: true
   },
   appearance: {
     rowDensity: "comfortable",
@@ -264,6 +265,10 @@ export function App(props: AppProps = {}) {
   });
   const [tabs, setTabs] = useState<UiTabState[]>(tabState.tabs);
   const [activeTabId, setActiveTabId] = useState<string>(tabState.activeTabId);
+  const tabsRef = useRef<UiTabState[]>(tabState.tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
   const [siteManagerByTab, setSiteManagerByTab] = useState<Record<string, SiteManagerTabState>>({});
   const [v12EmbeddedRemoteCatalog, setV12EmbeddedRemoteCatalog] = useState<{
     profiles: ServerProfile[];
@@ -282,6 +287,8 @@ export function App(props: AppProps = {}) {
   const [remoteEditTransferTasks, setRemoteEditTransferTasks] = useState<TransferTask[]>([]);
   const [remoteEditSessions, setRemoteEditSessions] = useState<RemoteEditSession[]>([]);
   const [queueError, setQueueError] = useState<string>("");
+  const staleRemoteConnectionIdsRef = useRef(new Set<string>());
+  const reconnectingRemoteTabsRef = useRef(new Set<string>());
   const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_RENDERER_SETTINGS);
   const [preferences, setPreferences] = useState<PreferencesState>({
     open: false,
@@ -403,6 +410,20 @@ export function App(props: AppProps = {}) {
     remotePane.connectionStatus,
     remotePane.currentPath
   ]);
+
+  useEffect(() => {
+    if (!appSettings.remote.autoReconnectAfterSleep) {
+      staleRemoteConnectionIdsRef.current.clear();
+      return undefined;
+    }
+    const markStale = () => markConnectedRemoteConnectionsStale();
+    const cleanupResume = window.cofinder.system.onSystemResume(markStale);
+    window.addEventListener("online", markStale);
+    return () => {
+      cleanupResume();
+      window.removeEventListener("online", markStale);
+    };
+  }, [appSettings.remote.autoReconnectAfterSleep]);
 
   useEffect(() => {
     void (async () => {
@@ -1658,6 +1679,83 @@ export function App(props: AppProps = {}) {
     return { ok: true };
   }
 
+  function markConnectedRemoteConnectionsStale(): void {
+    for (const tab of tabsRef.current) {
+      if (tab.remotePane.connectionStatus === "connected" && tab.remotePane.connectionId) {
+        staleRemoteConnectionIdsRef.current.add(tab.remotePane.connectionId);
+      }
+    }
+  }
+
+  async function reconnectRemoteTab(
+    tabId: string,
+    staleConnectionId: string,
+    targetPath: string
+  ): Promise<string | null> {
+    if (!appSettings.remote.autoReconnectAfterSleep || reconnectingRemoteTabsRef.current.has(tabId)) return null;
+    const tab = tabsRef.current.find((item) => item.id === tabId);
+    const pane = tab?.remotePane;
+    if (!tab || !pane || pane.connectionId !== staleConnectionId || pane.connectionStatus !== "connected") return null;
+    if (!pane.activeProfileId || !pane.host || !pane.username) return null;
+
+    reconnectingRemoteTabsRef.current.add(tabId);
+    setTabs((prev) =>
+      prev.map((item) =>
+        item.id === tabId && item.remotePane.connectionId === staleConnectionId
+          ? {
+              ...item,
+              remotePane: {
+                ...item.remotePane,
+                error: "Reconnecting remote session…",
+                isListing: true
+              }
+            }
+          : item
+      )
+    );
+
+    try {
+      const reconnectPath = targetPath || pane.currentPath || pane.homePath || "/";
+      const connectResult = await window.cofinder.remote.connect({
+        profileId: pane.activeProfileId,
+        host: pane.host,
+        port: pane.port,
+        username: pane.username,
+        defaultRemotePath: reconnectPath,
+        authType: pane.authType
+      });
+      if (!connectResult.ok) {
+        markRemoteDisconnected(tabId, staleConnectionId, `Reconnect failed: ${connectResult.error.message}`);
+        return null;
+      }
+      const nextConnectionId = connectResult.data.connectionId;
+      staleRemoteConnectionIdsRef.current.delete(staleConnectionId);
+      staleRemoteConnectionIdsRef.current.delete(nextConnectionId);
+      void window.cofinder.remote.previewClearForConnection({ connectionId: staleConnectionId });
+      void window.cofinder.remote.disconnect({ connectionId: staleConnectionId });
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId && item.remotePane.connectionId === staleConnectionId
+            ? {
+                ...item,
+                remotePane: {
+                  ...item.remotePane,
+                  connectionId: nextConnectionId,
+                  homePath: connectResult.data.homePath || item.remotePane.homePath || "/",
+                  connectionStatus: "connected",
+                  error: "",
+                  isListing: false
+                }
+              }
+            : item
+        )
+      );
+      return nextConnectionId;
+    } finally {
+      reconnectingRemoteTabsRef.current.delete(tabId);
+    }
+  }
+
   async function handleSiteManagerLogin(tabId: string): Promise<void> {
     const sm = siteManagerRef.current[tabId];
     if (!sm?.open) return;
@@ -1893,11 +1991,21 @@ export function App(props: AppProps = {}) {
     mode: "push" | "replace" | "back" | "forward" = "push",
     tabId: string = activeTabId
   ): Promise<boolean> {
-    const previousPath = tabs.find((tab) => tab.id === tabId)?.remotePane.currentPath ?? "";
+    const previousPath = tabsRef.current.find((tab) => tab.id === tabId)?.remotePane.currentPath ?? "";
+    let effectiveConnectionId = connectionId;
+    let reconnected = false;
+    if (!appSettings.remote.autoReconnectAfterSleep) {
+      staleRemoteConnectionIdsRef.current.delete(effectiveConnectionId);
+    } else if (staleRemoteConnectionIdsRef.current.has(effectiveConnectionId)) {
+      const nextConnectionId = await reconnectRemoteTab(tabId, effectiveConnectionId, targetPath || previousPath);
+      if (!nextConnectionId) return false;
+      effectiveConnectionId = nextConnectionId;
+      reconnected = true;
+    }
     setTabs((prev) =>
       prev.map((tab) =>
         tab.id !== tabId ||
-        (tab.remotePane.connectionId !== connectionId && tab.remotePane.connectionStatus !== "connecting")
+        (tab.remotePane.connectionId !== effectiveConnectionId && tab.remotePane.connectionStatus !== "connecting")
           ? tab
           : {
               ...tab,
@@ -1911,18 +2019,25 @@ export function App(props: AppProps = {}) {
       )
     );
     const result = await window.cofinder.remote.listDirectory({
-      connectionId,
+      connectionId: effectiveConnectionId,
       path: targetPath
     });
     if (!result.ok) {
       if (result.error.code === "REMOTE_DISCONNECTED") {
-        markRemoteDisconnected(tabId, connectionId, result.error.message);
+        if (!reconnected) {
+          staleRemoteConnectionIdsRef.current.add(effectiveConnectionId);
+          const nextConnectionId = await reconnectRemoteTab(tabId, effectiveConnectionId, targetPath || previousPath);
+          if (nextConnectionId) {
+            return listRemotePath(nextConnectionId, targetPath, mode, tabId);
+          }
+        }
+        markRemoteDisconnected(tabId, effectiveConnectionId, result.error.message);
         return false;
       }
       setTabs((prev) =>
         prev.map((tab) =>
           tab.id !== tabId ||
-          (tab.remotePane.connectionId !== connectionId && tab.remotePane.connectionStatus !== "connecting")
+          (tab.remotePane.connectionId !== effectiveConnectionId && tab.remotePane.connectionStatus !== "connecting")
             ? tab
             : {
                 ...tab,
@@ -1943,7 +2058,7 @@ export function App(props: AppProps = {}) {
       prev.map((tab) => {
         if (
           tab.id !== tabId ||
-          (tab.remotePane.connectionId !== connectionId && tab.remotePane.connectionStatus !== "connecting")
+          (tab.remotePane.connectionId !== effectiveConnectionId && tab.remotePane.connectionStatus !== "connecting")
         ) {
           return tab;
         }
@@ -1963,12 +2078,13 @@ export function App(props: AppProps = {}) {
         };
       })
     );
-    const profileId = tabs.find((tab) => tab.id === tabId)?.remotePane.activeProfileId;
+    const profileId = tabsRef.current.find((tab) => tab.id === tabId)?.remotePane.activeProfileId;
     rememberRemoteRecent(profileId, payload.path);
     return true;
   }
 
   function markRemoteDisconnected(tabId: string, connectionId: string, message: string): void {
+    staleRemoteConnectionIdsRef.current.delete(connectionId);
     setTabs((prev) =>
       prev.map((tab) =>
         tab.id !== tabId || tab.remotePane.connectionId !== connectionId
@@ -3075,6 +3191,7 @@ export function App(props: AppProps = {}) {
   async function disconnectRemote(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId) return;
+    staleRemoteConnectionIdsRef.current.delete(tab.remotePane.connectionId);
     await window.cofinder.remote.previewClearForTab({ tabId });
     await window.cofinder.remote.disconnect({ connectionId: tab.remotePane.connectionId });
     setTabs((prev) =>
@@ -3102,6 +3219,7 @@ export function App(props: AppProps = {}) {
     const closing = tabs[closingIndex];
     if (!closing) return;
     if (closing.remotePane.connectionId) {
+      staleRemoteConnectionIdsRef.current.delete(closing.remotePane.connectionId);
       await window.cofinder.remote.previewClearForTab({ tabId });
       await window.cofinder.remote.disconnect({ connectionId: closing.remotePane.connectionId });
     }
@@ -5239,6 +5357,19 @@ export function App(props: AppProps = {}) {
                 ) : null}
                 {activePreferenceTab === "remote" ? (
                   <div className="preferences-grid">
+                    <label className="preferences-check">
+                      <input
+                        type="checkbox"
+                        checked={preferences.draft.remote.autoReconnectAfterSleep}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: { ...p.draft, remote: { ...p.draft.remote, autoReconnectAfterSleep: e.target.checked } }
+                          }))
+                        }
+                      />
+                      Auto-reconnect after sleep or network resume
+                    </label>
                     <div className={`preferences-inline-setting${preferences.draft.remote.autoRefreshEnabled ? "" : " is-disabled"}`}>
                       <label className="preferences-check">
                         <input

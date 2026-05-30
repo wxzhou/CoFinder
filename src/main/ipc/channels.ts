@@ -90,6 +90,7 @@ export const IPC_CHANNELS = {
     openLogFolder: "system:openLogFolder",
     openLogFile: "system:openLogFile",
     copyDiagnostics: "system:copyDiagnostics",
-    checkForUpdates: "system:checkForUpdates"
+    checkForUpdates: "system:checkForUpdates",
+    resume: "system:resume"
   }
 } as const;

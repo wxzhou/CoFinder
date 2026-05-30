@@ -201,6 +201,7 @@ export type AppSettings = {
   remote: {
     autoRefreshEnabled: boolean;
     autoRefreshIntervalSeconds: number;
+    autoReconnectAfterSleep: boolean;
   };
   appearance: {
     rowDensity: "compact" | "comfortable";
@@ -391,5 +392,6 @@ export interface IpcApi {
     copyDiagnostics: () => Promise<IpcResponse<{ copied: true; diagnostics: DiagnosticsBundle }>>;
     checkForUpdates: () => Promise<IpcResponse<{ available: false; message: string }>>;
     onOpenPreferences: (handler: () => void) => () => void;
+    onSystemResume: (handler: () => void) => () => void;
   };
 }

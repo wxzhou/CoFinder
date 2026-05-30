@@ -18,6 +18,7 @@ V2.8.9 is a focused toolbar icon and transfer-auth reliability polish release.
 - Remote delete now uses a server-side delete command when available, making large/deep folder deletes more reliable than recursive SFTP traversal.
 - Pane toolbar icons for Home, Toggle Inspector, Upload, Download, and Delete are refreshed to match the requested visual direction while preserving the existing toolbar layout.
 - Preferences are organized into General, Navigation, Jobs, Remote, Appearance, Shortcuts, and Diagnostics tabs; Shortcuts is explicitly a read-only reference.
+- Remote sessions can be marked stale after macOS sleep or network resume and lazily reconnect on the next remote action before reporting failure.
 
 ## v1.8.8 — Product milestone V2.8.8
 

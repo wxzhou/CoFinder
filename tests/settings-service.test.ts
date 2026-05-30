@@ -19,7 +19,7 @@ describe("SettingsService", () => {
     const saved = await service.set({
       general: { showHiddenFiles: true, defaultTextEditor: "TextMate" },
       transfer: { defaultConflictPolicy: "rename", queueAutoHideDelayMs: 2500 },
-      remote: { autoRefreshEnabled: true, autoRefreshIntervalSeconds: 30 },
+      remote: { autoRefreshEnabled: true, autoRefreshIntervalSeconds: 30, autoReconnectAfterSleep: false },
       appearance: { rowDensity: "compact", defaultPaneRatio: 0.7, sidebarWidth: 320 }
     });
 
@@ -29,6 +29,7 @@ describe("SettingsService", () => {
     expect(saved.transfer.queueAutoHideDelayMs).toBe(2500);
     expect(saved.remote.autoRefreshEnabled).toBe(true);
     expect(saved.remote.autoRefreshIntervalSeconds).toBe(30);
+    expect(saved.remote.autoReconnectAfterSleep).toBe(false);
     expect(saved.appearance.rowDensity).toBe("compact");
     expect(saved.appearance.sidebarWidth).toBe(320);
     await expect(service.get()).resolves.toEqual(saved);
@@ -39,7 +40,7 @@ describe("SettingsService", () => {
       schemaVersion: 99,
       general: { confirmBeforeDelete: "no", defaultTextEditor: "" },
       transfer: { defaultConflictPolicy: "cancel", queueAutoHideDelayMs: -1 },
-      remote: { autoRefreshEnabled: "yes", autoRefreshIntervalSeconds: 1 },
+      remote: { autoRefreshEnabled: "yes", autoRefreshIntervalSeconds: 1, autoReconnectAfterSleep: "no" },
       appearance: { rowDensity: "huge", defaultPaneRatio: 1, sidebarWidth: 999 }
     });
 
@@ -51,6 +52,7 @@ describe("SettingsService", () => {
     expect(settings.transfer.queueAutoHideDelayMs).toBe(0);
     expect(settings.remote.autoRefreshEnabled).toBe(false);
     expect(settings.remote.autoRefreshIntervalSeconds).toBe(5);
+    expect(settings.remote.autoReconnectAfterSleep).toBe(true);
     expect(settings.appearance.rowDensity).toBe("comfortable");
     expect(settings.appearance.defaultPaneRatio).toBe(0.75);
     expect(settings.appearance.sidebarWidth).toBe(420);

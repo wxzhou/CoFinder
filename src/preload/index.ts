@@ -112,6 +112,11 @@ const api: IpcApi = {
       const wrapped = () => handler();
       ipcRenderer.on("system:openPreferences", wrapped);
       return () => ipcRenderer.off("system:openPreferences", wrapped);
+    },
+    onSystemResume: (handler) => {
+      const wrapped = () => handler();
+      ipcRenderer.on("system:resume", wrapped);
+      return () => ipcRenderer.off("system:resume", wrapped);
     }
   }
 };
