@@ -46,7 +46,7 @@
   flex-shrink: 0;
   height: var(--cfv12-title-h);
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 8px;
   padding: 0 8px 0 84px;
   background: var(--cfv12-bg-chrome);
@@ -56,10 +56,10 @@
 }
 
 .cfv12-title-leading {
-  align-self: stretch;
   display: flex;
   align-items: center;
   flex: 0 0 auto;
+  height: 100%;
 }
 
 .cfv12-traffic {

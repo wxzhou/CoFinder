@@ -55,7 +55,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Conflict policy:** set default conflict policy to `rename`, trigger an upload/download conflict, and confirm CoFinder keeps both without prompting. Repeat with `skip` on a two-file transfer, then reset to `prompt`.
 - **Queue auto-hide:** set delay to 1 second, run a successful small transfer, and confirm the queue hides after success when not pinned.
 - **Timestamp preservation:** with preserve timestamps enabled, run a small transfer and confirm modification time is preserved where the filesystem/server supports it. Disable it, repeat with a new file, and confirm rsync no longer preserves the original mtime.
-- **Appearance:** toggle compact/comfortable density, default inspector visibility, pane ratio, and sidebar visibility; relaunch and confirm settings apply. In V12, also use the sidebar footer toggle button and `Cmd+Option+B` to hide/show the sidebar, confirming the hidden-state titlebar button beside the traffic lights restores it.
+- **Appearance:** toggle compact/comfortable density, default inspector visibility, pane ratio, and sidebar visibility; relaunch and confirm settings apply. In V12, also use the fixed titlebar sidebar button beside the traffic lights and `Cmd+Option+B` to hide/show the sidebar; confirm the button does not move between expanded and collapsed states.
 - **Shortcut display:** confirm Preferences shows the implemented shortcut list and that the bindings still match the V1.3 shortcut smoke section.
 
 ## V1.7 search, filter, and navigation

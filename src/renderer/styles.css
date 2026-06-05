@@ -295,8 +295,7 @@ body,
   gap: 8px;
 }
 
-.cfv12-root .v12m-sidebar-preferences,
-.cfv12-root .v12m-sidebar-toggle {
+.cfv12-root .v12m-sidebar-preferences {
   width: var(--control-h);
   height: var(--control-h);
   display: inline-flex;
@@ -309,25 +308,19 @@ body,
   padding: 0;
 }
 
-.cfv12-root .v12m-sidebar-preferences:hover,
-.cfv12-root .v12m-sidebar-toggle:hover {
+.cfv12-root .v12m-sidebar-preferences:hover {
   background: #fff;
 }
 
-.cfv12-root .v12m-sidebar-toggle {
-  cursor: pointer;
-  -webkit-app-region: no-drag;
-}
-
 .cfv12-root .cfv12-title-sidebar-toggle {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--border-subtle) 86%, transparent);
-  border-radius: var(--radius-sm);
-  background: color-mix(in srgb, #fff 62%, var(--bg-soft));
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
   color: color-mix(in srgb, var(--text-primary) 70%, transparent);
   padding: 0;
   cursor: pointer;
@@ -335,7 +328,7 @@ body,
 }
 
 .cfv12-root .cfv12-title-sidebar-toggle:hover {
-  background: #fff;
+  background: color-mix(in srgb, #000 7%, transparent);
 }
 
 .pane-filter-input:disabled,

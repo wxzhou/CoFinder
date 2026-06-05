@@ -5231,17 +5231,16 @@ export function App(props: AppProps = {}) {
         <AppShellV12
           titleTabs={tabBar}
           titleLeading={
-            !appSettings.appearance.sidebarVisible ? (
-              <button
-                type="button"
-                className="cfv12-title-sidebar-toggle"
-                title="Show Sidebar"
-                aria-label="Show Sidebar"
-                onClick={() => void setSidebarVisible(true)}
-              >
-                <V12TbIcon name="sidebar-toggle" />
-              </button>
-            ) : null
+            <button
+              type="button"
+              className="cfv12-title-sidebar-toggle"
+              title={appSettings.appearance.sidebarVisible ? "Hide Sidebar" : "Show Sidebar"}
+              aria-label={appSettings.appearance.sidebarVisible ? "Hide Sidebar" : "Show Sidebar"}
+              aria-pressed={appSettings.appearance.sidebarVisible}
+              onClick={() => void setSidebarVisible(!appSettings.appearance.sidebarVisible)}
+            >
+              <V12TbIcon name="sidebar-toggle" />
+            </button>
           }
           banner={null}
           toolbar={null}
@@ -5295,7 +5294,6 @@ export function App(props: AppProps = {}) {
                     onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
                     onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
                     onOpenPreferences={openPreferences}
-                    onToggleSidebar={() => void setSidebarVisible(false)}
                   />
                 </div>
                 <div

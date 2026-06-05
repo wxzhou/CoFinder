@@ -23,7 +23,6 @@ export type V12LocalFavoritesSidebarProps = {
   onRemoveRemoteFavorite: (id: string) => void;
   onReorderRemoteFavorite: (id: string, direction: "up" | "down") => void;
   onOpenPreferences: () => void;
-  onToggleSidebar: () => void;
 };
 
 export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): ReactElement {
@@ -183,15 +182,6 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
           onClick={() => props.onOpenPreferences()}
         >
           <V12TbIcon name="gear-preferences" />
-        </button>
-        <button
-          type="button"
-          className="v12m-sidebar-toggle"
-          title="Hide Sidebar"
-          aria-label="Hide Sidebar"
-          onClick={() => props.onToggleSidebar()}
-        >
-          <V12TbIcon name="sidebar-toggle" />
         </button>
       </div>
     </aside>
