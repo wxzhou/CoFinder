@@ -1675,6 +1675,14 @@ body,
   color: var(--m-sel-active-fg);
 }
 
+.cfv12-root .v12m-lname-input,
+.cfv12-root .v12m-lrow.sel-active .v12m-lname-input,
+.cfv12-root .v12m-lrow.sel-inactive .v12m-lname-input {
+  background: #fff;
+  color: var(--m-fg);
+  caret-color: var(--m-fg);
+}
+
 .cfv12-root .v12m-lrow.sel-active .v12m-lcell,
 .cfv12-root .v12m-lrow.sel-active .v12m-kind {
   color: var(--m-fg-faint);
