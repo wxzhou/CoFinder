@@ -324,6 +324,7 @@ body,
   color: color-mix(in srgb, var(--text-primary) 70%, transparent);
   padding: 0;
   cursor: pointer;
+  transform: translateY(5px);
   -webkit-app-region: no-drag;
 }
 
