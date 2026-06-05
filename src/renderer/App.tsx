@@ -5230,6 +5230,19 @@ export function App(props: AppProps = {}) {
       ) : (
         <AppShellV12
           titleTabs={tabBar}
+          titleLeading={
+            !appSettings.appearance.sidebarVisible ? (
+              <button
+                type="button"
+                className="cfv12-title-sidebar-toggle"
+                title="Show Sidebar"
+                aria-label="Show Sidebar"
+                onClick={() => void setSidebarVisible(true)}
+              >
+                <V12TbIcon name="sidebar-toggle" />
+              </button>
+            ) : null
+          }
           banner={null}
           toolbar={null}
           devHint={import.meta.env.DEV ? <V12ProdDevHint /> : null}
@@ -5293,17 +5306,7 @@ export function App(props: AppProps = {}) {
                   onMouseDown={beginSidebarResize}
                 />
               </>
-            ) : (
-              <button
-                type="button"
-                className="cfv12-sidebar-floating-toggle"
-                title="Show Sidebar"
-                aria-label="Show Sidebar"
-                onClick={() => void setSidebarVisible(true)}
-              >
-                <V12TbIcon name="sidebar-toggle" />
-              </button>
-            )
+            ) : null
           }
         />
       )}
