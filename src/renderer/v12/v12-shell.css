@@ -48,7 +48,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 8px 0 84px;
+  padding: 0 8px 0 60px;
   background: var(--cfv12-bg-chrome);
   border-bottom: 1px solid var(--cfv12-sep);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
@@ -145,14 +145,29 @@
 
 .cfv12-sidebar-wrap {
   flex: 0 0 auto;
-  min-width: 180px;
   max-width: 420px;
   min-height: 0;
   display: flex;
+  overflow: hidden;
+  transition: width 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: width;
 }
 
 .cfv12-sidebar-wrap .cfv12-sidebar {
   width: 100%;
+  flex: 0 0 100%;
+  transition:
+    opacity 150ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.cfv12-sidebar-wrap.is-collapsed {
+  pointer-events: none;
+}
+
+.cfv12-sidebar-wrap.is-collapsed .cfv12-sidebar {
+  opacity: 0;
+  transform: translateX(-14px);
 }
 
 .cfv12-sidebar-resizer {
@@ -160,6 +175,17 @@
   cursor: col-resize;
   background: transparent;
   border-right: 1px solid var(--cfv12-sep);
+  transition:
+    flex-basis 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 120ms ease,
+    border-color 180ms ease;
+}
+
+.cfv12-sidebar-resizer.is-collapsed {
+  flex-basis: 0;
+  opacity: 0;
+  pointer-events: none;
+  border-right-color: transparent;
 }
 
 .cfv12-sidebar-resizer:hover {

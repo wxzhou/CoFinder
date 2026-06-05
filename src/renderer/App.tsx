@@ -5264,47 +5264,49 @@ export function App(props: AppProps = {}) {
           }
           remotePane={remotePaneEl}
           sidebar={
-            appSettings.appearance.sidebarVisible ? (
-              <>
-                <div className="cfv12-sidebar-wrap" style={{ width: `${appSettings.appearance.sidebarWidth}px` }}>
-                  <V12LocalFavoritesSidebar
-                    favorites={v12LocalFavorites}
-                    currentLocalPath={localPane.currentPath || "/"}
-                    hint={v12FavoriteHint}
-                    remoteFavorites={activeProfile?.remoteFavorites ?? []}
-                    remoteConnected={remoteConnected}
-                    currentRemotePath={remotePane.currentPath || "/"}
-                    onSelectFavorite={(path) => {
-                      setActivePane("local");
-                      clearLocalSelection(activeTab.id);
-                      cancelV12LocalInspRevealTimer();
-                      setV12LocalInspectorReveal(false);
-                      void navigateLocal(activeTab.id, path, "push");
-                    }}
-                    onAddCurrentPath={() => void handleV12AddLocalFavorite()}
-                    onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
-                    onReorderFavorite={(id, direction) => void handleV12ReorderLocalFavorite(id, direction)}
-                    onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
-                    onSelectRemoteFavorite={(path) => {
-                      setActivePane("remote");
-                      clearRemoteSelection(activeTab.id);
-                      if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
-                    }}
-                    onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
-                    onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
-                    onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
-                    onOpenPreferences={openPreferences}
-                  />
-                </div>
-                <div
-                  className="cfv12-sidebar-resizer"
-                  role="separator"
-                  aria-orientation="vertical"
-                  title="Drag to resize sidebar"
-                  onMouseDown={beginSidebarResize}
+            <>
+              <div
+                className={appSettings.appearance.sidebarVisible ? "cfv12-sidebar-wrap" : "cfv12-sidebar-wrap is-collapsed"}
+                style={{ width: appSettings.appearance.sidebarVisible ? `${appSettings.appearance.sidebarWidth}px` : "0px" }}
+                aria-hidden={!appSettings.appearance.sidebarVisible}
+              >
+                <V12LocalFavoritesSidebar
+                  favorites={v12LocalFavorites}
+                  currentLocalPath={localPane.currentPath || "/"}
+                  hint={v12FavoriteHint}
+                  remoteFavorites={activeProfile?.remoteFavorites ?? []}
+                  remoteConnected={remoteConnected}
+                  currentRemotePath={remotePane.currentPath || "/"}
+                  onSelectFavorite={(path) => {
+                    setActivePane("local");
+                    clearLocalSelection(activeTab.id);
+                    cancelV12LocalInspRevealTimer();
+                    setV12LocalInspectorReveal(false);
+                    void navigateLocal(activeTab.id, path, "push");
+                  }}
+                  onAddCurrentPath={() => void handleV12AddLocalFavorite()}
+                  onRemoveFavorite={(id) => void handleV12RemoveLocalFavorite(id)}
+                  onReorderFavorite={(id, direction) => void handleV12ReorderLocalFavorite(id, direction)}
+                  onRestoreDefaults={() => void handleV12RestoreDefaultFavorites()}
+                  onSelectRemoteFavorite={(path) => {
+                    setActivePane("remote");
+                    clearRemoteSelection(activeTab.id);
+                    if (remotePane.connectionId) void listRemotePath(remotePane.connectionId, path, "push", activeTab.id);
+                  }}
+                  onAddCurrentRemotePath={() => void handleV12AddRemoteFavorite()}
+                  onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
+                  onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
+                  onOpenPreferences={openPreferences}
                 />
-              </>
-            ) : null
+              </div>
+              <div
+                className={appSettings.appearance.sidebarVisible ? "cfv12-sidebar-resizer" : "cfv12-sidebar-resizer is-collapsed"}
+                role="separator"
+                aria-orientation="vertical"
+                title="Drag to resize sidebar"
+                onMouseDown={appSettings.appearance.sidebarVisible ? beginSidebarResize : undefined}
+              />
+            </>
           }
         />
       )}
