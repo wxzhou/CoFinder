@@ -10,15 +10,15 @@ Current development version: **v1.8.9** (`package.json` version `1.8.9`).
 - SFTP connection profiles, optional password saving through Electron `safeStorage`, and per-profile remote favorites.
 - Unified Jobs pane for rsync upload/download plus delete/gzip work, with conflict handling, retry, progress/status, folder-upload file detail, and drag-and-drop between panes.
 - Local and remote file operations: rename, delete, new folder, new text file, gzip single-file compression, basic metadata/Inspector, and selected remote operations such as octal chmod and small-file duplicate.
-- Local Quick Look plus read-only remote preview / Quick Look for sniffed text and image files.
-- Remote text edit workflow: edit sniffed remote text files in a configured local editor, watch saves, upload back, and surface conflicts safely.
+- Local Quick Look for local files.
+- Remote local-copy workflow: open remote files with the default macOS app or a configured text editor, watch local saves, upload back, and surface conflicts safely. Text-editor opens are optimized for sniffed text and require confirmation before forcing binary files; default-app opens warn for large/executable files.
 - Pane-scoped V12 UI with compact toolbars, breadcrumb copy buttons, resizable sidebar/panes, Inspector, Jobs pane, remote auto-refresh preference, diagnostics, and macOS menu integration.
 
 ## Scope
 
 CoFinder is intentionally personal and macOS-only. It is not currently a cross-platform file manager, a full remote shell/ACL manager, a general indexed search tool, or an App Store/notarized distribution.
 
-Remote editing is intentionally scoped to text files. Binary/document edit auto-sync is not supported.
+Remote editing uses app-managed local copies. Text-editor edits are optimized for text files, while default-app remote Open can handle broader file types after downloading them locally and watching for saves.
 
 ## Versioning
 

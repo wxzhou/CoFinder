@@ -100,7 +100,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Folder target:** upload a local folder `xyz` into a remote target and confirm the result is `target/xyz`, not `target/xyz/xyz`.
 - **Unicode paths:** upload/download files and folders with Chinese characters in local and remote paths.
 - **Create/delete:** create local and remote folders, create local and remote text files, and delete local and remote folders inside isolated test roots.
-- **Remote preview:** open a remote `.bed` or tab-delimited text file and a common image; binary unsupported files should show a clear unsupported message.
+- **Remote Open/Edit:** open a remote `.bed` or tab-delimited text file with `Edit`; save in the configured editor and confirm upload-back. Use remote `Open` on a common image or document and confirm the default macOS app opens an app-managed local copy. Try forcing `Edit` on a binary file and confirm CoFinder asks before opening it in the text editor.
 - **Inspector:** `Cmd+I`, context-menu Show Inspector, and toolbar Inspector should reveal the Inspector without opening a modal; directory selections should show file/folder child counts.
 - **Navigation/layout:** verify Home, Copy Current Path (`Cmd+Option+C`), active-pane indicator, macOS CoFinder > Preferences, restore-last-path behavior, and persisted sidebar resizing.
 - **Scope cuts:** confirm there is no UI implying remote edit auto-sync, full auto-update install, App Store distribution, or cross-platform support.
@@ -189,8 +189,8 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Edit save upload:** modify and save that local edit-cache copy in the editor. Confirm CoFinder reports the upload, the remote pane refreshes when viewing the file's parent folder, and reopening/downloading the remote file shows the saved content.
 - **Edit conflict:** open a remote text file for Edit, change the remote file from another shell/session before saving the local edit, then save locally. Confirm CoFinder reports a conflict, does not overwrite the remote file, and keeps the local edit copy available.
 - **Edit status UI:** while an edit session is active, confirm the Remote edits panel lists the remote path and state. Test Reveal, Save Back Now, Stop Monitoring, and Discard Local Copy. For a conflict/failed session, also test Re-download, Force upload after the confirmation prompt, Remote Copy, and Copy Paths.
-- **Open remains read-only:** use right-click `Open` or double-click on the same remote text file and confirm it still follows the read-only remote preview path, separate from Edit.
-- **Unsupported edit:** select a remote directory, a multi-selection, and a binary file in turn; confirm Edit is disabled where possible or shows a clear unsupported message without starting an edit session.
+- **Open uses editable local copy:** use right-click `Open`, double-click, or Space on the same remote text file and confirm it opens an app-managed local copy. Save a change and confirm CoFinder uploads back after conflict checks.
+- **Unsupported / confirmed edit:** select a remote directory and a multi-selection in turn; confirm Edit/Open are unavailable where appropriate. Select a binary file and choose `Edit`; confirm CoFinder asks before forcing the text editor.
 
 ## V2.7 V12 UI regression
 
@@ -206,10 +206,10 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Tab reorder:** drag tabs into a new order; confirm active tab and local/remote pane state stay with the tab.
 - **Local favorites:** add current local folder; reorder/remove it; verify hover-only up/down arrow buttons and full path subtitle; restore default locations; confirm clicks affect local pane only.
 - **Remote favorites:** connect using a saved profile; add current remote path; reorder/remove it; verify hover-only up/down arrow buttons and full path subtitle; click a remote favorite and confirm only the remote pane navigates.
-- **Remote preview:** double-click a remote text file with no obvious text extension, or right-click it and choose `Open`; repeat to confirm cached reopen. Update the remote file and confirm CoFinder re-downloads before opening. Repeat with a PNG/JPEG/GIF/WebP image. Try a binary file and confirm an unsupported message.
-- **Remote Quick Look:** press Space on a single selected remote text/image file and confirm the read-only remote preview opens. Right-click the same file and choose `Quick Look`; confirm this uses the same read-only preview path and remains separate from `Edit`.
-- **Read-only cache:** after a remote preview opens, attempt to save edits in the local viewer and confirm the cached file behaves as read-only. If you force-edit the cached file outside the app, open the same remote file again and confirm CoFinder re-downloads the remote version instead of showing the local edit.
-- **Preview cleanup:** cache files live under the macOS temp directory in `remote-preview/<tab-hash>/` (for example `find "$(getconf DARWIN_USER_TEMP_DIR)remote-preview" -type f`). Open a remote preview, disconnect or close the tab, and confirm the cache entry is cleared.
+- **Remote Open:** double-click a remote file with no obvious text extension, or right-click it and choose `Open`; confirm the default macOS app opens an app-managed local copy. Save a change and confirm upload-back or conflict handling.
+- **Remote Space key:** press Space on a single selected remote file and confirm it follows remote `Open` semantics. Right-click the same file and confirm there is no separate remote `Quick Look` item.
+- **Remote Edit:** right-click a remote text file and choose `Edit`; confirm the configured text editor opens. Try a binary file and confirm the force-open prompt appears before the text editor is launched.
+- **Local-copy cleanup:** local-copy files live under the macOS temp directory in `remote-edit/<tab-hash>/`. Open a remote local-copy session, use the Remote edits panel `Discard` action, and confirm the local copy is removed. Quit-time cleanup should also close remaining local-copy watchers.
 
 ## Test Workspace
 

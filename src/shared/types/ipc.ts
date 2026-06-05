@@ -328,7 +328,15 @@ export interface IpcApi {
     }) => Promise<IpcResponse<{ opened: true; localPath: string; kind: "text" | "image" }>>;
     previewClearForTab: (request: { tabId: string }) => Promise<IpcResponse<{ cleared: number }>>;
     previewClearForConnection: (request: { connectionId: string }) => Promise<IpcResponse<{ cleared: number }>>;
-    editOpen: (request: { tabId: string; connectionId: string; path: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
+    editOpen: (request: {
+      tabId: string;
+      connectionId: string;
+      path: string;
+      opener?: "text" | "default";
+      allowBinaryText?: boolean;
+      allowLargeFile?: boolean;
+      allowExecutable?: boolean;
+    }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
     editList: () => Promise<IpcResponse<{ sessions: RemoteEditSession[] }>>;
     editSyncNow: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
     editRevealLocal: (request: { sessionId: string }) => Promise<IpcResponse<{ revealed: true; localPath: string }>>;

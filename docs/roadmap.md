@@ -96,6 +96,8 @@ V2.5 introduces the first write-capable remote edit workflow with tight text-onl
 - Local save watching with debounced upload and remote-baseline conflict checks.
 - Conflict/failure recovery actions and compact Remote edits status panel.
 
+**Superseded on dev after V2.8.9:** remote **Open** now also uses the writable local-copy session model, with default-app opening and save-back conflict checks. Remote **Edit** remains the explicit text-editor opener.
+
 See **`docs/dev/V2.5_PLAN.md`** for the detailed acceptance checks.
 
 ### V2.6 / v1.6.0 — Remote Edit Reliability and Session Management
@@ -128,6 +130,8 @@ V2.8 chooses Track B from the advanced navigation/preview decision:
 - Space opens read-only preview for a single selected remote text/image file.
 - Remote context menu has Quick Look separate from Open and Edit.
 - Column View and recursive remote search remain deferred.
+
+**Superseded on dev after V2.8.9:** remote Quick Look is no longer a separate right-click action. Space now follows remote **Open** and creates a writable local-copy session.
 
 See **`docs/dev/V2.8_PLAN.md`** and **`docs/dev/V2.8_DECISION.md`**.
 
@@ -289,8 +293,8 @@ See **`docs/dev/V2.1_PLAN.md`** for the detailed triage and acceptance checks.
 
 These remain **unsupported**, **deferred**, or **non-goals** across current plans unless a future milestone explicitly adopts them:
 
-- **Binary/document remote edit auto-sync**. V2.5/V2.6 plan text-file-only remote edit workflows first.
-- **Full Remote Quick Look**. A limited read-only remote preview cache for text/images exists from **V1.3**; V2.8 may choose a broader remote Quick Look track, but it remains deferred until then.
+- **Unrestricted binary/document remote edit auto-sync**. Remote **Open** can use default macOS apps through app-managed local-copy sessions, but broad binary/document workflows still require cautious manual verification because app save behavior varies.
+- **Separate full Remote Quick Look**. The previous read-only remote preview / Quick Look path is superseded on dev by writable remote Open/Edit local-copy sessions. A true non-editing Quick Look would need a new explicit future design.
 - **Unrestricted parallel jobs**. Future parallelism should use the V2.0.x multi-lane design: serial transfer lane, configurable gzip lane, serial delete lane, and path locks.
 - **Remote gzip percentage progress**. Do not implement approximate percentage progress from sampling or `.gz` output growth; see `docs/dev/remote-gzip-progress-decision.md`.
 - **Real Column View**. V2.7 defers it deliberately; see `docs/dev/column-view-decision.md`.

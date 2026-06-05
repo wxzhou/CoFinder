@@ -658,7 +658,7 @@ export function App(props: AppProps = {}) {
         if (contextMenu) return;
         if (isEditableTarget(document.activeElement)) return;
         if (activePane === "remote") {
-          void quickLookSelection(activeTab.id, "remote");
+          void openRemoteSelection(activeTab.id, "default");
           event.preventDefault();
           event.stopPropagation();
           return;
@@ -2174,7 +2174,7 @@ export function App(props: AppProps = {}) {
       if (tab.remotePane.connectionId) await listRemotePath(tab.remotePane.connectionId, entry.fullPath, "push", tabId);
       return;
     }
-    await previewRemotePath(tabId, entry.fullPath);
+    await openRemotePath(tabId, entry.fullPath, "default");
   }
 
   async function enqueueUpload(tabId: string, options?: { localSources?: string[]; remoteDestinationDir?: string }): Promise<void> {
@@ -3226,7 +3226,7 @@ export function App(props: AppProps = {}) {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     if (pane === "remote") {
-      await previewRemoteSelection(tabId);
+      await openRemoteSelection(tabId, "default");
       return;
     }
     const selected = tab.localPane.selectedFullPaths;
@@ -3659,26 +3659,58 @@ export function App(props: AppProps = {}) {
     window.addEventListener("mouseup", onUp);
   }
 
-  async function previewRemoteSelection(tabId: string): Promise<void> {
+  async function openRemoteSelection(tabId: string, opener: "text" | "default"): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     const target = tab?.remotePane.selectedFullPaths[0];
     if (!tab?.remotePane.connectionId || !target || tab.remotePane.selectedFullPaths.length !== 1) return;
-    await previewRemotePath(tabId, target);
+    await openRemotePath(tabId, target, opener);
   }
 
   async function editRemoteSelection(tabId: string): Promise<void> {
+    await openRemoteSelection(tabId, "text");
+  }
+
+  async function openRemotePath(
+    tabId: string,
+    remotePath: string,
+    opener: "text" | "default",
+    allowances: { allowBinaryText?: boolean; allowLargeFile?: boolean; allowExecutable?: boolean } = {}
+  ): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
-    const target = tab?.remotePane.selectedFullPaths[0];
-    if (!tab?.remotePane.connectionId || !target || tab.remotePane.selectedFullPaths.length !== 1) return;
+    if (!tab?.remotePane.connectionId) return;
+    const entry = tab.remotePane.entries.find((item) => item.fullPath === remotePath);
+    if (entry?.type === "directory") return;
+    const nextAllowances = { ...allowances };
+    if (!nextAllowances.allowLargeFile && shouldConfirmLargeRemoteOpen(opener, entry?.size ?? 0)) {
+      const message =
+        opener === "text"
+          ? `This remote file is ${formatSize(entry?.size ?? 0)}. Open it in the text editor anyway?`
+          : `This remote file is ${formatSize(entry?.size ?? 0)} and will be downloaded before opening. Continue?`;
+      if (!window.confirm(message)) return;
+      nextAllowances.allowLargeFile = true;
+    }
+    if (opener === "default" && !nextAllowances.allowExecutable && remoteEntryLooksExecutable(entry)) {
+      if (!window.confirm("This remote file appears executable. Open it with the default app anyway?")) return;
+      nextAllowances.allowExecutable = true;
+    }
     const res = await window.cofinder.remote.editOpen({
       tabId,
       connectionId: tab.remotePane.connectionId,
-      path: target
+      path: remotePath,
+      opener,
+      ...nextAllowances
     });
     if (!res.ok) {
       if (res.error.code === "REMOTE_DISCONNECTED") {
         markRemoteDisconnected(tabId, tab.remotePane.connectionId, res.error.message);
         return;
+      }
+      if (res.error.code === "REMOTE_PREVIEW_UNSUPPORTED") {
+        const retry = await confirmRemoteOpenRetry(res.error.message, opener, nextAllowances);
+        if (retry) {
+          await openRemotePath(tabId, remotePath, opener, { ...nextAllowances, ...retry });
+          return;
+        }
       }
       setTabs((prev) =>
         prev.map((item) =>
@@ -3687,29 +3719,37 @@ export function App(props: AppProps = {}) {
       );
       return;
     }
-    setQueueError(`Editing ${target}`);
+    clearRemotePaneError(tabId);
+    setQueueError(opener === "text" ? `Editing ${remotePath}` : `Opening ${remotePath}`);
   }
 
-  async function previewRemotePath(tabId: string, remotePath: string): Promise<void> {
-    const tab = tabs.find((item) => item.id === tabId);
-    if (!tab?.remotePane.connectionId) return;
-    const res = await window.cofinder.remote.previewOpen({
-      tabId,
-      connectionId: tab.remotePane.connectionId,
-      path: remotePath
-    });
-    if (!res.ok) {
-      if (res.error.code === "REMOTE_DISCONNECTED") {
-        markRemoteDisconnected(tabId, tab.remotePane.connectionId, res.error.message);
-        return;
-      }
-      setTabs((prev) =>
-        prev.map((item) =>
-          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: res.error.message } } : item
-        )
-      );
-      return;
+  function shouldConfirmLargeRemoteOpen(opener: "text" | "default", size: number): boolean {
+    const threshold = opener === "text" ? 5 * 1024 * 1024 : 100 * 1024 * 1024;
+    return size > threshold;
+  }
+
+  function remoteEntryLooksExecutable(entry: RemoteFileEntry | undefined): boolean {
+    return entry?.type === "file" && /x/.test(entry.permissions ?? "");
+  }
+
+  async function confirmRemoteOpenRetry(
+    message: string,
+    opener: "text" | "default",
+    allowances: { allowBinaryText?: boolean; allowLargeFile?: boolean; allowExecutable?: boolean }
+  ): Promise<{ allowBinaryText?: boolean; allowLargeFile?: boolean; allowExecutable?: boolean } | null> {
+    if (opener === "text" && !allowances.allowBinaryText && /sniffed text files only/i.test(message)) {
+      return window.confirm("该文件为二进制，是否仍要打开？") ? { allowBinaryText: true } : null;
     }
+    if (!allowances.allowLargeFile && /without confirmation|about \d+ MB/i.test(message)) {
+      return window.confirm(`${message}\n\nContinue?`) ? { allowLargeFile: true } : null;
+    }
+    if (opener === "default" && !allowances.allowExecutable && /executable/i.test(message)) {
+      return window.confirm("This remote file appears executable. Open it with the default app anyway?") ? { allowExecutable: true } : null;
+    }
+    return null;
+  }
+
+  function clearRemotePaneError(tabId: string): void {
     setTabs((prev) =>
       prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "" } } : item))
     );
@@ -5735,20 +5775,11 @@ export function App(props: AppProps = {}) {
                 <>
                   {contextSingleSelection ? (
                     <button type="button" className="context-item" onClick={async () => {
-                      await previewRemoteSelection(contextMenu.tabId);
+                      await openRemoteSelection(contextMenu.tabId, "default");
                       setContextMenu(null);
                     }}>
                       Open
                       <span className="context-shortcut">double-click</span>
-                    </button>
-                  ) : null}
-                  {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={async () => {
-                      await quickLookSelection(contextMenu.tabId, "remote");
-                      setContextMenu(null);
-                    }}>
-                      Quick Look
-                      <span className="context-shortcut">Space</span>
                     </button>
                   ) : null}
                   {contextSingleSelection ? (

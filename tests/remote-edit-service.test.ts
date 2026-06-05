@@ -77,6 +77,94 @@ describe("RemoteEditService", () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
+  it("can force-open a binary-looking file in the configured text editor", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 4, modifyTime: 1234 })),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, Buffer.from([0x00, 0x01, 0x02, 0xff]));
+      })
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+
+    const session = await service.openLocalCopySession(
+      { tabId: "tab", connectionId: "c1", remotePath: "/data/blob.bin" },
+      { opener: "text", textEditor: "TextMate", allowBinaryText: true }
+    );
+
+    expect(session.state).toBe("clean");
+    expect(session.remotePath).toBe("/data/blob.bin");
+    expect(spawnMock).toHaveBeenCalledWith("open", ["-a", "TextMate", expect.any(String)], { stdio: "ignore" });
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("opens binary-looking files with the default app as a writable local-copy session", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 4, modifyTime: 1234 })),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, Buffer.from([0x00, 0x01, 0x02, 0xff]));
+      })
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+
+    const session = await service.openDefaultSession({ tabId: "tab", connectionId: "c1", remotePath: "/data/blob.bin" });
+
+    expect(session.state).toBe("clean");
+    expect(session.localPath).toContain(`${path.sep}remote-edit${path.sep}`);
+    expect(spawnMock).toHaveBeenCalledWith("open", [expect.any(String)], { stdio: "ignore" });
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("requires confirmation before opening executable remote files with the default app", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 22, modifyTime: 1234, mode: 0o755 })),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, "#!/bin/sh\necho hello\n", "utf8");
+      })
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+
+    await expect(service.openDefaultSession({ tabId: "tab", connectionId: "c1", remotePath: "/data/run.sh" })).rejects.toMatchObject({
+      code: "REMOTE_PREVIEW_UNSUPPORTED"
+    });
+    expect(client.fastGet).not.toHaveBeenCalled();
+    expect(service.listSessions()).toHaveLength(0);
+
+    const session = await service.openDefaultSession(
+      { tabId: "tab", connectionId: "c1", remotePath: "/data/run.sh" },
+      { allowExecutable: true }
+    );
+    expect(session.remotePath).toBe("/data/run.sh");
+    expect(spawnMock).toHaveBeenCalledWith("open", [expect.any(String)], { stdio: "ignore" });
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
   it("uploads a changed local edit copy after confirming the remote baseline is unchanged", async () => {
     const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));

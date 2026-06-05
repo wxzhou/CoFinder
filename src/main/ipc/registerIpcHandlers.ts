@@ -508,11 +508,18 @@ export function registerIpcHandlers(): void {
       const tabId = requiredId(body.tabId, "tabId", "REMOTE_INVALID_INPUT");
       const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
       const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const opener = body.opener === "default" ? "default" : "text";
       const settings = await settingsService.get();
       return ok({
-        session: await remoteEditService.openTextEditSession(
+        session: await remoteEditService.openLocalCopySession(
           { tabId, connectionId, remotePath: targetPath },
-          { textEditor: settings.general.defaultTextEditor }
+          {
+            opener,
+            textEditor: settings.general.defaultTextEditor,
+            allowBinaryText: optionalBoolean(body.allowBinaryText),
+            allowLargeFile: optionalBoolean(body.allowLargeFile),
+            allowExecutable: optionalBoolean(body.allowExecutable)
+          }
         )
       });
     } catch (error) {

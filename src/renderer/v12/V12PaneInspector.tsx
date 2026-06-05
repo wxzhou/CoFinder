@@ -59,9 +59,11 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
             </p>
           </div>
           <div className="v12m-insp-actions">
-            <button type="button" className="v12m-insp-linkbtn" disabled>
-              Quick Look
-            </button>
+            {props.scope === "local" ? (
+              <button type="button" className="v12m-insp-linkbtn" disabled>
+                Quick Look
+              </button>
+            ) : null}
             {props.scope === "local" ? (
               <button type="button" className="v12m-insp-linkbtn" disabled>
                 Reveal in Finder
@@ -154,14 +156,16 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                 </ul>
               </div>
               <div className="v12m-insp-actions">
-                <button
-                  type="button"
-                  className="v12m-insp-linkbtn"
-                  disabled={props.scope !== "local" || !props.onQuickLook}
-                  onClick={() => props.onQuickLook?.()}
-                >
-                  Quick Look
-                </button>
+                {props.scope === "local" ? (
+                  <button
+                    type="button"
+                    className="v12m-insp-linkbtn"
+                    disabled={!props.onQuickLook}
+                    onClick={() => props.onQuickLook?.()}
+                  >
+                    Quick Look
+                  </button>
+                ) : null}
                 {props.scope === "local" ? (
                   <button type="button" className="v12m-insp-linkbtn" disabled={!props.onRevealInFinder} onClick={() => props.onRevealInFinder?.()}>
                     Reveal in Finder
