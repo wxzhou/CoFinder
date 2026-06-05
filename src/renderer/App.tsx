@@ -725,11 +725,15 @@ export function App(props: AppProps = {}) {
         event.stopPropagation();
       };
       const isKeyC = key === "c" || event.code === "KeyC";
+      const isKeyB = key === "b" || event.code === "KeyB";
       if (event.key === "F2") {
         openInlineRename(activeTab.id, activePane);
         prevent();
       } else if (event.key === "Delete" || event.key === "Backspace") {
         openDeleteConfirm(activeTab.id, activePane);
+        prevent();
+      } else if (cmd && event.altKey && isKeyB) {
+        void setSidebarVisible(!appSettings.appearance.sidebarVisible);
         prevent();
       } else if (cmd && key === "i") {
         toggleInspectorFromShortcut(activeTab.id, activePane);
@@ -780,7 +784,7 @@ export function App(props: AppProps = {}) {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePane, contextMenu, localPane, remotePane, activeTab.id, setTabs, tabs, uiShell]);
+  }, [activePane, appSettings, contextMenu, localPane, remotePane, activeTab.id, setTabs, tabs, uiShell]);
 
   async function loadTransferTasks(): Promise<void> {
     const res = await window.cofinder.transfer.list();
@@ -939,6 +943,24 @@ export function App(props: AppProps = {}) {
     };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
+  }
+
+  async function setSidebarVisible(visible: boolean): Promise<void> {
+    const optimistic = {
+      ...appSettings,
+      appearance: { ...appSettings.appearance, sidebarVisible: visible }
+    };
+    setAppSettings(optimistic);
+    setPreferences((prev) => ({ ...prev, draft: optimistic }));
+    const res = await window.cofinder.settings.set({ appearance: { sidebarVisible: visible } });
+    if (res.ok) {
+      setAppSettings(res.data);
+      setPreferences((prev) => ({ ...prev, draft: res.data }));
+      return;
+    }
+    setQueueError(res.error.message);
+    setAppSettings(appSettings);
+    setPreferences((prev) => ({ ...prev, draft: appSettings }));
   }
 
   async function dismissOnboarding(): Promise<void> {
@@ -5260,6 +5282,7 @@ export function App(props: AppProps = {}) {
                     onRemoveRemoteFavorite={(id) => void handleV12RemoveRemoteFavorite(id)}
                     onReorderRemoteFavorite={(id, direction) => void handleV12ReorderRemoteFavorite(id, direction)}
                     onOpenPreferences={openPreferences}
+                    onToggleSidebar={() => void setSidebarVisible(false)}
                   />
                 </div>
                 <div
@@ -5270,7 +5293,17 @@ export function App(props: AppProps = {}) {
                   onMouseDown={beginSidebarResize}
                 />
               </>
-            ) : null
+            ) : (
+              <button
+                type="button"
+                className="cfv12-sidebar-floating-toggle"
+                title="Show Sidebar"
+                aria-label="Show Sidebar"
+                onClick={() => void setSidebarVisible(true)}
+              >
+                <V12TbIcon name="sidebar-toggle" />
+              </button>
+            )
           }
         />
       )}

@@ -309,6 +309,13 @@ export function V12TbIcon(props: { name: string }): ReactElement {
           <circle cx="10" cy="10" r="1.85" />
         </svg>
       );
+    case "sidebar-toggle":
+      return (
+        <svg {...s}>
+          <rect x="4.2" y="4.2" width="11.6" height="11.6" rx="2.4" />
+          <path d="M7.6 5.5v9" />
+        </svg>
+      );
     case "gear":
       return (
         <svg {...s}>

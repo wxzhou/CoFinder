@@ -11,6 +11,7 @@
 - Remote `Open` now uses the same writable local-copy session model as remote `Edit`, opening files with the default macOS app and uploading saved changes back after conflict checks.
 - Remote `Edit` continues to use the configured text editor, but can now force-open binary-looking files after explicit confirmation.
 - Removed the redundant remote context-menu `Quick Look` entry; remote double-click, Space, and context-menu `Open` now all use editable remote local-copy semantics.
+- Added a V12 sidebar toggle beside Preferences plus a hidden-sidebar floating restore button and `Cmd+Option+B` shortcut.
 
 ## v1.8.9 — Product milestone V2.8.9
 

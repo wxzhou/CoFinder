@@ -121,6 +121,7 @@
 .cfv12-core {
   flex: 1;
   display: flex;
+  position: relative;
   min-height: 0;
 }
 
