@@ -4,6 +4,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
 import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse } from "../../shared/types/ipc";
+import { timestampInputToTouchStamp } from "../../shared/timestampInput";
 import { ConnectionManager } from "./ConnectionManager";
 import { isSafeHostOrUsername, normalizeRemotePosixPath } from "../utils/pathSafety";
 import { modeToRwx, rightsToRwx } from "./permissionDisplay";
@@ -338,7 +339,7 @@ export class RemoteFileService {
     }
   }
 
-  async touchPath(connectionId: string, targetPath: string): Promise<void> {
+  async touchPath(connectionId: string, targetPath: string, options?: { timestamp?: string }): Promise<void> {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
     const normalizedPath = this.normalizeRemotePath(targetPath);
@@ -347,7 +348,8 @@ export class RemoteFileService {
       await client.stat(normalizedPath);
       const exec = client.client?.exec?.bind(client.client);
       if (!exec) throw new RemoteServiceError("REMOTE_TOUCH_FAILED", "Remote command execution is unavailable for touch.");
-      await execRemoteCommand(exec, buildRemoteTouchCommand(normalizedPath), {
+      const touchStamp = options?.timestamp ? timestampInputToTouchStamp(options.timestamp) : undefined;
+      await execRemoteCommand(exec, buildRemoteTouchCommand(normalizedPath, touchStamp), {
         code: "REMOTE_TOUCH_FAILED",
         message: "Remote touch command failed."
       });
@@ -941,9 +943,10 @@ function buildRemoteGzipCommand(sourcePath: string, destinationPath: string, tem
   ].join(" && ");
 }
 
-function buildRemoteTouchCommand(targetPath: string): string {
+function buildRemoteTouchCommand(targetPath: string, touchStamp?: string): string {
   const target = shellQuote(targetPath);
-  return `if [ ! -e ${target} ] && [ ! -L ${target} ]; then exit 66; fi; touch -- ${target}`;
+  const timestampArgs = touchStamp ? `-t ${shellQuote(touchStamp)} ` : "";
+  return `if [ ! -e ${target} ] && [ ! -L ${target} ]; then exit 66; fi; touch ${timestampArgs}-- ${target}`;
 }
 
 function shellQuote(value: string): string {

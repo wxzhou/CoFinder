@@ -218,7 +218,7 @@ export function registerIpcHandlers(): void {
     try {
       const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:touch request.");
       const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
-      await localFileService.touchPath(targetPath);
+      await localFileService.touchPath(targetPath, { timestamp: optionalString(body.timestamp) });
       return ok({ touched: true as const });
     } catch (error) {
       return toIpcError(error, "LOCAL_TOUCH_FAILED", "Failed to touch local path.");
@@ -396,7 +396,7 @@ export function registerIpcHandlers(): void {
       const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:touch request.");
       const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
       const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
-      await remoteFileService.touchPath(connectionId, targetPath);
+      await remoteFileService.touchPath(connectionId, targetPath, { timestamp: optionalString(body.timestamp) });
       return ok({ touched: true as const });
     } catch (error) {
       return toIpcError(error, "REMOTE_TOUCH_FAILED", "Failed to touch remote path.");

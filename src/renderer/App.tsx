@@ -151,6 +151,19 @@ type ChmodDialogState = {
   busy: boolean;
 };
 
+type TimestampPartKey = "year" | "month" | "day" | "hour" | "minute" | "second";
+
+type TimestampDialogState = {
+  pane: ActivePane;
+  tabId: string;
+  connectionId?: string;
+  path: string;
+  name: string;
+  parts: Record<TimestampPartKey, string>;
+  error: string;
+  busy: boolean;
+};
+
 type ActivePane = "local" | "remote";
 
 type TransferDragPayload = {
@@ -222,6 +235,14 @@ const CHMOD_COLUMNS = [
   { label: "w", bit: 2 },
   { label: "x", bit: 1 }
 ] as const;
+const TIMESTAMP_FIELDS: Array<{ key: TimestampPartKey; label: string; maxLength: number; placeholder: string }> = [
+  { key: "year", label: "Year", maxLength: 4, placeholder: "2026" },
+  { key: "month", label: "Month", maxLength: 2, placeholder: "06" },
+  { key: "day", label: "Day", maxLength: 2, placeholder: "06" },
+  { key: "hour", label: "Hour", maxLength: 2, placeholder: "14" },
+  { key: "minute", label: "Minute", maxLength: 2, placeholder: "30" },
+  { key: "second", label: "Second", maxLength: 2, placeholder: "00" }
+];
 const DEFAULT_RENDERER_SETTINGS: AppSettings = {
   schemaVersion: 2,
   general: {
@@ -337,6 +358,15 @@ export function App(props: AppProps = {}) {
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
   const [createFolderDialog, setCreateFolderDialog] = useState<CreateFolderDialogState | null>(null);
   const [chmodDialog, setChmodDialog] = useState<ChmodDialogState | null>(null);
+  const [timestampDialog, setTimestampDialog] = useState<TimestampDialogState | null>(null);
+  const timestampInputRefs = useRef<Record<TimestampPartKey, HTMLInputElement | null>>({
+    year: null,
+    month: null,
+    day: null,
+    hour: null,
+    minute: null,
+    second: null
+  });
   const deleteInFlightKeysRef = useRef(new Set<string>());
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
@@ -2833,7 +2863,7 @@ export function App(props: AppProps = {}) {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
     const result = await window.cofinder.remote.rename({
-      connectionId,
+      connectionId: connectionId ?? undefined,
       path: targetPath,
       newName: nextName
     });
@@ -3293,6 +3323,70 @@ export function App(props: AppProps = {}) {
       return;
     }
     await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+  }
+
+  function openTimestampDialog(tabId: string, pane: ActivePane): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    const selected = pane === "local" ? tab.localPane.selectedFullPaths : tab.remotePane.selectedFullPaths;
+    const targetPath = selected[0];
+    if (!targetPath || selected.length !== 1) return;
+    const entry = pane === "local" ? tab.localPane.entries.find((item) => item.fullPath === targetPath) : tab.remotePane.entries.find((item) => item.fullPath === targetPath);
+    const connectionId = pane === "remote" ? tab.remotePane.connectionId : undefined;
+    if (pane === "remote" && !connectionId) return;
+    setTimestampDialog({
+      pane,
+      tabId,
+      connectionId: connectionId ?? undefined,
+      path: targetPath,
+      name: entry?.name ?? targetPath,
+      parts: dateToTimestampParts(parseEntryDate(entry?.mtime)),
+      error: "",
+      busy: false
+    });
+  }
+
+  async function submitTimestampDialog(): Promise<void> {
+    if (!timestampDialog || timestampDialog.busy) return;
+    const timestamp = timestampPartsToInput(timestampDialog.parts);
+    const validation = validateTimestampParts(timestampDialog.parts);
+    if (!validation.ok) {
+      setTimestampDialog((prev) => (prev ? { ...prev, error: validation.message } : prev));
+      return;
+    }
+    setTimestampDialog((prev) => (prev ? { ...prev, busy: true, error: "" } : prev));
+    if (timestampDialog.pane === "local") {
+      const result = await window.cofinder.local.touch({ path: timestampDialog.path, timestamp });
+      if (!result.ok) {
+        setTimestampDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
+        return;
+      }
+      const tab = tabs.find((item) => item.id === timestampDialog.tabId);
+      if (tab) await navigateLocal(timestampDialog.tabId, tab.localPane.currentPath, "replace");
+      setTimestampDialog(null);
+      return;
+    }
+    if (!timestampDialog.connectionId) return;
+    const result = await window.cofinder.remote.touch({ connectionId: timestampDialog.connectionId, path: timestampDialog.path, timestamp });
+    if (!result.ok) {
+      if (result.error.code === "REMOTE_DISCONNECTED") markRemoteDisconnected(timestampDialog.tabId, timestampDialog.connectionId, result.error.message);
+      setTimestampDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
+      return;
+    }
+    const tab = tabs.find((item) => item.id === timestampDialog.tabId);
+    if (tab?.remotePane.connectionId) await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", timestampDialog.tabId);
+    setTimestampDialog(null);
+  }
+
+  function updateTimestampPart(key: TimestampPartKey, rawValue: string): void {
+    const field = TIMESTAMP_FIELDS.find((item) => item.key === key);
+    const value = rawValue.replace(/\D/g, "").slice(0, field?.maxLength ?? 2);
+    setTimestampDialog((prev) => (prev ? { ...prev, parts: { ...prev.parts, [key]: value }, error: "" } : prev));
+    if (field && value.length >= field.maxLength) {
+      const index = TIMESTAMP_FIELDS.findIndex((item) => item.key === key);
+      const next = TIMESTAMP_FIELDS[index + 1]?.key;
+      if (next) queueMicrotask(() => timestampInputRefs.current[next]?.focus());
+    }
   }
 
   async function openTerminalHere(tabId: string, pane: "local" | "remote", targetPath?: string): Promise<void> {
@@ -5798,6 +5892,12 @@ export function App(props: AppProps = {}) {
                         }}>
                           Touch
                         </button>
+                        <button type="button" className="context-item" onClick={() => {
+                          openTimestampDialog(contextMenu.tabId, "local");
+                          setContextMenu(null);
+                        }}>
+                          Change Timestamp...
+                        </button>
                         {contextSingleFile ? (
                           <button type="button" className="context-item" onClick={async () => {
                             await compressLocalSelection(contextMenu.tabId);
@@ -5954,6 +6054,12 @@ export function App(props: AppProps = {}) {
                           setContextMenu(null);
                         }}>
                           Touch
+                        </button>
+                        <button type="button" className="context-item" onClick={() => {
+                          openTimestampDialog(contextMenu.tabId, "remote");
+                          setContextMenu(null);
+                        }}>
+                          Change Timestamp...
                         </button>
                         {contextSingleFile ? (
                           <button type="button" className="context-item" onClick={async () => {
@@ -6201,6 +6307,63 @@ export function App(props: AppProps = {}) {
           </div>
         </div>
       ) : null}
+      {timestampDialog ? (
+        <div
+          className="delete-confirm-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !timestampDialog.busy) setTimestampDialog(null);
+          }}
+        >
+          <div className="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="timestamp-title">
+            <h3 id="timestamp-title">Change Timestamp</h3>
+            <p>
+              Set modified time for <strong>{timestampDialog.name}</strong>.
+            </p>
+            <div className="timestamp-grid">
+              {TIMESTAMP_FIELDS.map((field, index) => (
+                <label key={field.key}>
+                  {field.label}
+                  <input
+                    ref={(node) => {
+                      timestampInputRefs.current[field.key] = node;
+                    }}
+                    autoFocus={index === 0}
+                    inputMode="numeric"
+                    maxLength={field.maxLength}
+                    placeholder={field.placeholder}
+                    value={timestampDialog.parts[field.key]}
+                    disabled={timestampDialog.busy}
+                    onFocus={(event) => event.currentTarget.select()}
+                    onChange={(event) => updateTimestampPart(field.key, event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        void submitTimestampDialog();
+                      } else if (event.key === "Escape" && !timestampDialog.busy) {
+                        event.preventDefault();
+                        setTimestampDialog(null);
+                      } else if (event.key === "Backspace" && timestampDialog.parts[field.key] === "") {
+                        const prev = TIMESTAMP_FIELDS[index - 1]?.key;
+                        if (prev) queueMicrotask(() => timestampInputRefs.current[prev]?.focus());
+                      }
+                    }}
+                  />
+                </label>
+              ))}
+            </div>
+            {timestampDialog.error ? <div className="error-banner">{timestampDialog.error}</div> : null}
+            <div className="delete-confirm-actions">
+              <button type="button" className="toolbar-button" disabled={timestampDialog.busy} onClick={() => setTimestampDialog(null)}>
+                Cancel
+              </button>
+              <button type="button" className="toolbar-button is-active" disabled={timestampDialog.busy} onClick={() => void submitTimestampDialog()}>
+                {timestampDialog.busy ? "Changing..." : "Change"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       {activeSiteManager?.open ? (
         <SiteManagerModal
           open={activeSiteManager.open}
@@ -6392,6 +6555,50 @@ function toggleOctalModeBit(mode: string, digitIndex: number, bit: number, enabl
   const digits = normalizeOctalModeDraft(mode).padEnd(3, "0").slice(0, 3).split("").map((item) => Number(item));
   digits[digitIndex] = enabled ? digits[digitIndex] | bit : digits[digitIndex] & ~bit;
   return digits.join("");
+}
+
+function parseEntryDate(value: string | undefined): Date {
+  const date = value ? new Date(value) : new Date();
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function dateToTimestampParts(date: Date): Record<TimestampPartKey, string> {
+  return {
+    year: String(date.getFullYear()).padStart(4, "0"),
+    month: String(date.getMonth() + 1).padStart(2, "0"),
+    day: String(date.getDate()).padStart(2, "0"),
+    hour: String(date.getHours()).padStart(2, "0"),
+    minute: String(date.getMinutes()).padStart(2, "0"),
+    second: String(date.getSeconds()).padStart(2, "0")
+  };
+}
+
+function timestampPartsToInput(parts: Record<TimestampPartKey, string>): string {
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+function validateTimestampParts(parts: Record<TimestampPartKey, string>): { ok: true } | { ok: false; message: string } {
+  if (parts.year.length !== 4 || parts.month.length !== 2 || parts.day.length !== 2 || parts.hour.length !== 2 || parts.minute.length !== 2 || parts.second.length !== 2) {
+    return { ok: false, message: "Enter a complete year, month, day, hour, minute, and second." };
+  }
+  const year = Number(parts.year);
+  const month = Number(parts.month);
+  const day = Number(parts.day);
+  const hour = Number(parts.hour);
+  const minute = Number(parts.minute);
+  const second = Number(parts.second);
+  const date = new Date(year, month - 1, day, hour, minute, second, 0);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day ||
+    date.getHours() !== hour ||
+    date.getMinutes() !== minute ||
+    date.getSeconds() !== second
+  ) {
+    return { ok: false, message: "Enter a valid calendar date and time." };
+  }
+  return { ok: true };
 }
 
 function readLastLocalPath(): string {

@@ -151,6 +151,23 @@ describe("LocalFileService touchPath", () => {
     expect((await fs.stat(source)).mtimeMs).toBeGreaterThan(oldDate.getTime());
     await expect(service.touchPath(path.join(dir, "missing.txt"))).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
+
+  it("sets an explicit local timestamp", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "stamp.txt");
+    await fs.writeFile(source, "stamp me\n");
+
+    await service.touchPath(source, { timestamp: "2024-05-06T11:22:33" });
+
+    const mtime = await fs.stat(source).then((stat) => stat.mtime);
+    expect(mtime.getFullYear()).toBe(2024);
+    expect(mtime.getMonth()).toBe(4);
+    expect(mtime.getDate()).toBe(6);
+    expect(mtime.getHours()).toBe(11);
+    expect(mtime.getMinutes()).toBe(22);
+    expect(mtime.getSeconds()).toBe(33);
+  });
 });
 
 describe("LocalFileService listDirectory metadata", () => {

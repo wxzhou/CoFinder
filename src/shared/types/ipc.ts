@@ -294,7 +294,7 @@ export interface IpcApi {
     mkdir: (request: { parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
     createTextFile: (request: { parentPath: string; name?: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
     compressGzip: (request: { path: string }) => Promise<IpcResponse<{ compressed: true; path: string }>>;
-    touch: (request: { path: string }) => Promise<IpcResponse<{ touched: true }>>;
+    touch: (request: { path: string; timestamp?: string }) => Promise<IpcResponse<{ touched: true }>>;
     getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
   };
   remote: {
@@ -320,7 +320,7 @@ export interface IpcApi {
       name?: string;
     }) => Promise<IpcResponse<{ created: true; path: string }>>;
     compressGzip: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ compressed: true; path: string }>>;
-    touch: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ touched: true }>>;
+    touch: (request: { connectionId: string; path: string; timestamp?: string }) => Promise<IpcResponse<{ touched: true }>>;
     chmod: (request: { connectionId: string; path: string; mode: string }) => Promise<IpcResponse<{ changed: true }>>;
     duplicate: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ duplicated: true; newPath: string }>>;
     directorySizeStart: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ jobId: string }>>;

@@ -9,6 +9,7 @@ import { createGzip } from "node:zlib";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
 import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo } from "../../shared/types/ipc";
+import { parseTimestampInput } from "../../shared/timestampInput";
 import { normalizeLocalPath } from "../utils/pathSafety";
 import { modeToRwx } from "./permissionDisplay";
 
@@ -170,12 +171,12 @@ export class LocalFileService {
     }
   }
 
-  async touchPath(targetPath: string): Promise<void> {
+  async touchPath(targetPath: string, options?: { timestamp?: string }): Promise<void> {
     const normalizedPath = normalizeLocalPath(targetPath);
     try {
       await fs.lstat(normalizedPath);
-      const now = new Date();
-      await fs.utimes(normalizedPath, now, now);
+      const timestamp = options?.timestamp ? parseTimestampInput(options.timestamp) : new Date();
+      await fs.utimes(normalizedPath, timestamp, timestamp);
     } catch (error) {
       throw this.mapTouchError(error, normalizedPath);
     }

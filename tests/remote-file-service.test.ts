@@ -468,6 +468,27 @@ describe("RemoteFileService path/list behavior", () => {
     expect(exec.mock.calls[0][0]).toContain("[ ! -e '/a/file'\\''s.txt' ]");
   });
 
+  it("touches a remote path with an explicit timestamp", async () => {
+    const stat = vi.fn(async () => ({ type: "-", size: 10, modifyTime: Date.now() }));
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("close", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, client: { exec } }
+      })
+    } as any);
+
+    await service.touchPath("c1", "/a/stamp.txt", { timestamp: "2024-05-06T11:22:33" });
+
+    expect(exec.mock.calls[0][0]).toContain("touch -t '202405061122.33' -- '/a/stamp.txt'");
+  });
+
   it("deletes the remote source after gzip only when requested", async () => {
     const remoteFiles = new Map<string, Buffer>([
       ["/a/remove.txt", Buffer.from("remote delete source\n")]
