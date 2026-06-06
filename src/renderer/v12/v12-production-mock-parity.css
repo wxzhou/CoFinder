@@ -802,6 +802,18 @@
 .cfv12-root .v12m-lrow.sel-active,
 .cfv12-root .v12m-lrow.sel-inactive {
   box-shadow: none;
+  border-radius: 0;
+  overflow: hidden;
+}
+
+.cfv12-root .v12m-lrow.sel-run-start {
+  border-top-left-radius: 7px;
+  border-top-right-radius: 7px;
+}
+
+.cfv12-root .v12m-lrow.sel-run-end {
+  border-bottom-left-radius: 7px;
+  border-bottom-right-radius: 7px;
 }
 
 .cfv12-root .v12m-lrow.sel-active {

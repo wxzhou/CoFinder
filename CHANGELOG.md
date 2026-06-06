@@ -11,6 +11,8 @@
 - Added the first multi-lane Jobs scheduler: upload/download remain in a serial transfer lane, delete remains in a serial delete lane, and compression-style jobs can run in their own lane.
 - Added path locks so unsafe parent/child or same-destination jobs remain pending instead of starting beside a conflicting running job.
 - Added a Jobs preference for compression job concurrency, defaulting to `2` and clamped to `1-4`.
+- Added explicit Jobs pane queue filters for all queues, transfer, compression, and delete, combinable with the existing status filters.
+- Adjusted V12 contiguous file-selection highlights to use Finder-like rounded outer corners.
 - Added focused unit coverage for transfer-vs-compression concurrency, serial transfer behavior, path locks, and compression-concurrency setting validation.
 - Polished V12 multi-selection rows so selected ranges use continuous row-width highlights with thin separators, and inactive-pane selections no longer show a darker left crescent.
 
