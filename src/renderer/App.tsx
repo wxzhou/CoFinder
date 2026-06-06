@@ -212,6 +212,16 @@ const V12_DEFAULT_COLUMNS: V12FileColumn[] = [
   { key: "permissions", label: "Permission", width: 96, visible: false },
   { key: "owner", label: "Owner", width: 84, visible: false }
 ];
+const CHMOD_ROWS = [
+  { label: "User", digitIndex: 0 },
+  { label: "Group", digitIndex: 1 },
+  { label: "Other", digitIndex: 2 }
+] as const;
+const CHMOD_COLUMNS = [
+  { label: "r", bit: 4 },
+  { label: "w", bit: 2 },
+  { label: "x", bit: 1 }
+] as const;
 const DEFAULT_RENDERER_SETTINGS: AppSettings = {
   schemaVersion: 2,
   general: {
@@ -6063,6 +6073,41 @@ export function App(props: AppProps = {}) {
             <p>
               Set remote permissions for <strong>{chmodDialog.name}</strong>.
             </p>
+            <div className="chmod-grid" role="group" aria-label="Permission checkboxes">
+              <div />
+              {CHMOD_COLUMNS.map((column) => (
+                <div key={column.label} className="chmod-grid-heading">
+                  {column.label}
+                </div>
+              ))}
+              {CHMOD_ROWS.map((row) => (
+                <div key={row.label} className="chmod-grid-row">
+                  <div className="chmod-grid-row-label">
+                    {row.label}
+                  </div>
+                  {CHMOD_COLUMNS.map((column) => (
+                    <label key={`${row.label}-${column.label}`} className="chmod-grid-check" title={`${row.label} ${column.label}`}>
+                      <input
+                        type="checkbox"
+                        checked={octalModeHasBit(chmodDialog.mode, row.digitIndex, column.bit)}
+                        disabled={chmodDialog.busy}
+                        onChange={(event) =>
+                          setChmodDialog((prev) =>
+                            prev
+                              ? {
+                                  ...prev,
+                                  mode: toggleOctalModeBit(prev.mode, row.digitIndex, column.bit, event.target.checked),
+                                  error: ""
+                                }
+                              : prev
+                          )
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+              ))}
+            </div>
             <label className="create-folder-field">
               Octal mode
               <input
@@ -6075,7 +6120,7 @@ export function App(props: AppProps = {}) {
                 onFocus={(event) => event.currentTarget.select()}
                 onChange={(event) =>
                   setChmodDialog((prev) =>
-                    prev ? { ...prev, mode: event.target.value.replace(/[^0-7]/g, "").slice(0, 3), error: "" } : prev
+                    prev ? { ...prev, mode: normalizeOctalModeDraft(event.target.value), error: "" } : prev
                   )
                 }
                 onKeyDown={(event) => {
@@ -6277,6 +6322,21 @@ function rwxToOctal(input: string): string {
       return String(value);
     })
     .join("");
+}
+
+function normalizeOctalModeDraft(input: string): string {
+  return input.replace(/[^0-7]/g, "").slice(0, 3);
+}
+
+function octalModeHasBit(mode: string, digitIndex: number, bit: number): boolean {
+  const digit = Number(mode[digitIndex] ?? "0");
+  return Number.isInteger(digit) && (digit & bit) !== 0;
+}
+
+function toggleOctalModeBit(mode: string, digitIndex: number, bit: number, enabled: boolean): string {
+  const digits = normalizeOctalModeDraft(mode).padEnd(3, "0").slice(0, 3).split("").map((item) => Number(item));
+  digits[digitIndex] = enabled ? digits[digitIndex] | bit : digits[digitIndex] & ~bit;
+  return digits.join("");
 }
 
 function readLastLocalPath(): string {

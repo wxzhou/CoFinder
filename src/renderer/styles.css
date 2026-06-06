@@ -1941,6 +1941,49 @@ body,
   outline-offset: 1px;
 }
 
+.chmod-grid {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) repeat(3, 42px);
+  gap: 6px 8px;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: #fafafa;
+  padding: 9px 10px;
+}
+
+.chmod-grid-row {
+  display: contents;
+}
+
+.chmod-grid-heading,
+.chmod-grid-row-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.chmod-grid-heading {
+  text-align: center;
+  font-weight: 600;
+}
+
+.chmod-grid-row-label {
+  font-weight: 500;
+}
+
+.chmod-grid-check {
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chmod-grid-check input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+
 .toolbar-button.danger {
   border-color: #e7b1b1;
   color: #9b1c1c;
