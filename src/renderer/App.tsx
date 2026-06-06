@@ -3275,8 +3275,6 @@ export function App(props: AppProps = {}) {
     const tab = tabs.find((item) => item.id === tabId);
     const targetPath = tab?.localPane.selectedFullPaths[0];
     if (!tab || !targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
-    const entry = tab.localPane.entries.find((item) => item.fullPath === targetPath);
-    if (entry?.type !== "file") return;
     const result = await window.cofinder.transfer.enqueueGzip({ tabId, pane: "local", path: targetPath });
     if (!result.ok) {
       setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
@@ -3287,9 +3285,42 @@ export function App(props: AppProps = {}) {
     const tab = tabs.find((item) => item.id === tabId);
     const targetPath = tab?.remotePane.selectedFullPaths[0];
     if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
-    const entry = tab.remotePane.entries.find((item) => item.fullPath === targetPath);
-    if (entry?.type !== "file") return;
     const result = await window.cofinder.transfer.enqueueGzip({
+      tabId,
+      pane: "remote",
+      connectionId: tab.remotePane.connectionId,
+      path: targetPath
+    });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+    }
+  }
+
+  async function decompressLocalSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.localPane.selectedFullPaths[0];
+    if (!tab || !targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
+    const entry = tab.localPane.entries.find((item) => item.fullPath === targetPath);
+    if (entry?.type !== "file" || !isSupportedCompressedPath(targetPath)) {
+      window.alert("Selected item is not a supported compressed file.");
+      return;
+    }
+    const result = await window.cofinder.transfer.enqueueDecompress({ tabId, pane: "local", path: targetPath });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+    }
+  }
+
+  async function decompressRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const entry = tab.remotePane.entries.find((item) => item.fullPath === targetPath);
+    if (entry?.type !== "file" || !isSupportedCompressedPath(targetPath)) {
+      window.alert("Selected item is not a supported compressed file.");
+      return;
+    }
+    const result = await window.cofinder.transfer.enqueueDecompress({
       tabId,
       pane: "remote",
       connectionId: tab.remotePane.connectionId,
@@ -5898,14 +5929,18 @@ export function App(props: AppProps = {}) {
                         }}>
                           Change Timestamp...
                         </button>
-                        {contextSingleFile ? (
-                          <button type="button" className="context-item" onClick={async () => {
-                            await compressLocalSelection(contextMenu.tabId);
-                            setContextMenu(null);
-                          }}>
-                            Compress as gzip
-                          </button>
-                        ) : null}
+                        <button type="button" className="context-item" onClick={async () => {
+                          await compressLocalSelection(contextMenu.tabId);
+                          setContextMenu(null);
+                        }}>
+                          Compress
+                        </button>
+                        <button type="button" className="context-item" onClick={async () => {
+                          await decompressLocalSelection(contextMenu.tabId);
+                          setContextMenu(null);
+                        }}>
+                          Decompress
+                        </button>
                       </div>
                     </div>
                   ) : null}
@@ -6061,14 +6096,18 @@ export function App(props: AppProps = {}) {
                         }}>
                           Change Timestamp...
                         </button>
-                        {contextSingleFile ? (
-                          <button type="button" className="context-item" onClick={async () => {
-                            await compressRemoteSelection(contextMenu.tabId);
-                            setContextMenu(null);
-                          }}>
-                            Compress as gzip
-                          </button>
-                        ) : null}
+                        <button type="button" className="context-item" onClick={async () => {
+                          await compressRemoteSelection(contextMenu.tabId);
+                          setContextMenu(null);
+                        }}>
+                          Compress
+                        </button>
+                        <button type="button" className="context-item" onClick={async () => {
+                          await decompressRemoteSelection(contextMenu.tabId);
+                          setContextMenu(null);
+                        }}>
+                          Decompress
+                        </button>
                         <button type="button" className="context-item" onClick={() => {
                           openChmodDialog(contextMenu.tabId);
                           setContextMenu(null);
@@ -6575,6 +6614,10 @@ function dateToTimestampParts(date: Date): Record<TimestampPartKey, string> {
 
 function timestampPartsToInput(parts: Record<TimestampPartKey, string>): string {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
+function isSupportedCompressedPath(input: string): boolean {
+  return input.endsWith(".gz") || input.endsWith(".tgz");
 }
 
 function validateTimestampParts(parts: Record<TimestampPartKey, string>): { ok: true } | { ok: false; message: string } {

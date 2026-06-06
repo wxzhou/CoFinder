@@ -119,10 +119,15 @@ describe("LocalFileService compressFileGzip", () => {
     await expect(service.compressFileGzip(source)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
   });
 
-  it("rejects local directories for gzip compression", async () => {
+  it("compresses local directories to tar.gz", async () => {
     const service = new LocalFileService();
     const dir = await makeTempDir();
-    await expect(service.compressFileGzip(dir)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
+    await fs.writeFile(path.join(dir, "nested.txt"), "folder gzip\n");
+
+    const compressed = await service.compressFileGzip(dir);
+
+    expect(compressed).toBe(`${dir}.tar.gz`);
+    await expect(fs.stat(compressed)).resolves.toBeTruthy();
   });
 
   it("deletes the local source after gzip only when requested", async () => {
@@ -134,6 +139,39 @@ describe("LocalFileService compressFileGzip", () => {
     const compressed = await service.compressFileGzip(source, { deleteSourceAfterSuccess: true });
     await expect(gunzipAsync(await fs.readFile(compressed))).resolves.toEqual(Buffer.from("remove me after gzip\n"));
     await expect(fs.stat(source)).rejects.toBeTruthy();
+  });
+});
+
+describe("LocalFileService decompressPath", () => {
+  it("decompresses gzip files without overwriting existing targets", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "data.txt");
+    await fs.writeFile(source, "hello decompress\n");
+    const compressed = await service.compressFileGzip(source);
+    await fs.rm(source);
+
+    const output = await service.decompressPath(compressed);
+
+    expect(output).toBe(source);
+    await expect(fs.readFile(output, "utf8")).resolves.toBe("hello decompress\n");
+    await expect(service.decompressPath(compressed)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
+  });
+
+  it("decompresses tar.gz folders without overwriting existing targets", async () => {
+    const service = new LocalFileService();
+    const parent = await makeTempDir();
+    const dir = path.join(parent, "folder");
+    await fs.mkdir(dir);
+    await fs.writeFile(path.join(dir, "nested.txt"), "hello tar\n");
+    const compressed = await service.compressFileGzip(dir);
+    await fs.rm(dir, { recursive: true, force: true });
+
+    const output = await service.decompressPath(compressed);
+
+    expect(output).toBe(dir);
+    await expect(fs.readFile(path.join(dir, "nested.txt"), "utf8")).resolves.toBe("hello tar\n");
+    await expect(service.decompressPath(compressed)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
   });
 });
 

@@ -62,6 +62,7 @@ const api: IpcApi = {
     enqueueDownload: (request) => ipcRenderer.invoke("transfer:enqueueDownload", request),
     enqueueDelete: (request) => ipcRenderer.invoke("transfer:enqueueDelete", request),
     enqueueGzip: (request) => ipcRenderer.invoke("transfer:enqueueGzip", request),
+    enqueueDecompress: (request) => ipcRenderer.invoke("transfer:enqueueDecompress", request),
     cancel: (request) => ipcRenderer.invoke("transfer:cancel", request),
     stop: (request) => ipcRenderer.invoke("transfer:stop", request),
     retry: (request) => ipcRenderer.invoke("transfer:retry", request),

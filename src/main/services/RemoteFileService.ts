@@ -312,16 +312,15 @@ export class RemoteFileService {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
     const normalizedPath = this.normalizeRemotePath(targetPath);
-    const destinationPath = this.normalizeRemotePath(`${normalizedPath}.gz`);
     const client = connection.client as unknown as RemoteCompressClient;
     try {
       const sourceStat = (await client.stat(normalizedPath)) as RemoteStatItem;
-      if (resolveRemoteType(sourceStat) !== "file") {
-        throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only remote files can be compressed as gzip.");
-      }
+      const sourceType = resolveRemoteType(sourceStat);
+      if (sourceType !== "file" && sourceType !== "directory") throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only remote files and folders can be compressed.");
+      const destinationPath = this.normalizeRemotePath(sourceType === "directory" ? `${normalizedPath}.tar.gz` : `${normalizedPath}.gz`);
       try {
         await client.stat(destinationPath);
-        throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Gzip target already exists.");
+        throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Compression target already exists.");
       } catch (error) {
         if (error instanceof RemoteServiceError) throw error;
         const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : "";
@@ -330,7 +329,32 @@ export class RemoteFileService {
       const exec = client.client?.exec?.bind(client.client);
       if (!exec) throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote command execution is unavailable for gzip.");
       const tempPath = `${destinationPath}.cofinder-${Date.now()}-${randomUUID().slice(0, 8)}.tmp`;
-      const command = buildRemoteGzipCommand(normalizedPath, destinationPath, tempPath, !!options?.deleteSourceAfterSuccess);
+      const command = sourceType === "directory"
+        ? buildRemoteTarGzipCommand(normalizedPath, destinationPath, tempPath, !!options?.deleteSourceAfterSuccess)
+        : buildRemoteGzipCommand(normalizedPath, destinationPath, tempPath, !!options?.deleteSourceAfterSuccess);
+      await execRemoteCommand(exec, command);
+      return destinationPath;
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapCompressError(error);
+    }
+  }
+
+  async decompressPath(connectionId: string, targetPath: string): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const client = connection.client as unknown as RemoteCompressClient;
+    try {
+      const sourceStat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      if (resolveRemoteType(sourceStat) !== "file") throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only compressed remote files can be decompressed.");
+      const destinationPath = remoteDecompressDestination(normalizedPath);
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote command execution is unavailable for decompress.");
+      const tempPath = `${destinationPath}.cofinder-${Date.now()}-${randomUUID().slice(0, 8)}.tmp`;
+      const command = remoteIsTarGzipPath(normalizedPath)
+        ? buildRemoteTarDecompressCommand(normalizedPath)
+        : buildRemoteGunzipCommand(normalizedPath, destinationPath, tempPath);
       await execRemoteCommand(exec, command);
       return destinationPath;
     } catch (error) {
@@ -940,6 +964,52 @@ function buildRemoteGzipCommand(sourcePath: string, destinationPath: string, tem
     `rm -f -- ${tmp}`,
     `gzip -c -- ${src} > ${tmp}`,
     `mv -- ${tmp} ${dst}${removeSource}`
+  ].join(" && ");
+}
+
+function buildRemoteTarGzipCommand(sourcePath: string, destinationPath: string, tempPath: string, deleteSourceAfterSuccess: boolean): string {
+  const src = shellQuote(sourcePath);
+  const parent = shellQuote(posixPath.dirname(sourcePath) || "/");
+  const base = shellQuote(posixPath.basename(sourcePath));
+  const dst = shellQuote(destinationPath);
+  const tmp = shellQuote(tempPath);
+  const removeSource = deleteSourceAfterSuccess ? ` && rm -rf -- ${src}` : "";
+  return [
+    `rm -f -- ${tmp}`,
+    `tar -czf ${tmp} -C ${parent} -- ${base}`,
+    `mv -- ${tmp} ${dst}${removeSource}`
+  ].join(" && ");
+}
+
+function remoteIsTarGzipPath(input: string): boolean {
+  return input.endsWith(".tar.gz") || input.endsWith(".tgz");
+}
+
+function remoteDecompressDestination(input: string): string {
+  if (input.endsWith(".tar.gz")) return input.slice(0, -7);
+  if (input.endsWith(".tgz")) return input.slice(0, -4);
+  if (input.endsWith(".gz")) return input.slice(0, -3);
+  throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Selected item is not a supported compressed file.");
+}
+
+function buildRemoteGunzipCommand(sourcePath: string, destinationPath: string, tempPath: string): string {
+  const src = shellQuote(sourcePath);
+  const dst = shellQuote(destinationPath);
+  const tmp = shellQuote(tempPath);
+  return [
+    `if [ -e ${dst} ] || [ -L ${dst} ]; then printf '%s\\n' 'Decompress target already exists.' >&2; exit 73; fi`,
+    `rm -f -- ${tmp}`,
+    `gzip -cd -- ${src} > ${tmp}`,
+    `mv -- ${tmp} ${dst}`
+  ].join(" && ");
+}
+
+function buildRemoteTarDecompressCommand(sourcePath: string): string {
+  const src = shellQuote(sourcePath);
+  const parent = shellQuote(posixPath.dirname(sourcePath) || "/");
+  return [
+    `for p in $(tar -tzf ${src} | awk -F/ 'NF {print $1}' | sort -u); do if [ -e ${parent}/"$p" ] || [ -L ${parent}/"$p" ]; then printf '%s\\n' 'Decompress target already exists.' >&2; exit 73; fi; done`,
+    `tar -xzf ${src} -C ${parent}`
   ].join(" && ");
 }
 

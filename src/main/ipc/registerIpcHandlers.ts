@@ -37,6 +37,7 @@ import { RemotePreviewService } from "../services/RemotePreviewService";
 import { RemoteEditService } from "../services/RemoteEditService";
 import { buildSshTerminalCommand } from "./sshTerminalCommand";
 import type {
+  EnqueueDecompressRequest,
   EnqueueDeleteRequest,
   EnqueueDownloadRequest,
   EnqueueGzipRequest,
@@ -63,6 +64,8 @@ const transferQueueService = new TransferQueueService({
   remoteDelete: (connectionId, paths) => remoteFileService.deletePaths(connectionId, paths),
   localGzip: (targetPath, options) => localFileService.compressFileGzip(targetPath, options),
   remoteGzip: (connectionId, targetPath, options) => remoteFileService.compressFileGzip(connectionId, targetPath, options),
+  localDecompress: (targetPath) => localFileService.decompressPath(targetPath),
+  remoteDecompress: (connectionId, targetPath) => remoteFileService.decompressPath(connectionId, targetPath),
   remoteUploadFallback: (connectionId, localPath, remotePath) => remoteFileService.uploadPathToRemote(connectionId, localPath, remotePath),
   remoteDownloadFallback: (connectionId, remotePath, localPath) => remoteFileService.downloadPathToLocal(connectionId, remotePath, localPath)
 });
@@ -719,6 +722,20 @@ export function registerIpcHandlers(): void {
     }
   );
 
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueDecompress,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueDecompress request.");
+        const req = parseDecompressRequest(body);
+        const data = await transferQueueService.enqueueDecompress(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
+      }
+    }
+  );
+
   registerChannel(IPC_CHANNELS.transfer.cancel, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:cancel request.");
@@ -1290,6 +1307,18 @@ function parseGzipRequest(body: Record<string, unknown>, defaultDeleteSourceAfte
       ? normalizeRemotePathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
       : validateLocalPathInput(body.path, "TRANSFER_INVALID_REQUEST", "path"),
     deleteSourceAfterSuccess: optionalBoolean(body.deleteSourceAfterSuccess) ?? defaultDeleteSourceAfterSuccess
+  };
+}
+
+function parseDecompressRequest(body: Record<string, unknown>): EnqueueDecompressRequest {
+  const pane = body.pane === "remote" ? "remote" : "local";
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    pane,
+    connectionId: optionalString(body.connectionId),
+    path: pane === "remote"
+      ? normalizeRemotePathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
+      : validateLocalPathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
   };
 }
 

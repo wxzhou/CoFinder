@@ -279,7 +279,8 @@ function maxJobsPaneHeight(): number {
 function jobKindLabel(task: TransferTask): string {
   if (task.kind === "upload") return "Upload";
   if (task.kind === "download") return "Download";
-  if (task.kind === "gzip") return "Gzip";
+  if (task.kind === "gzip") return "Compress";
+  if (task.kind === "decompress") return "Decompress";
   return "Delete";
 }
 
@@ -287,6 +288,7 @@ function JobKindIcon(props: { task: TransferTask }): ReactElement {
   if (props.task.kind === "upload") return <V12TbIcon name="arrow-up-tray" />;
   if (props.task.kind === "download") return <V12TbIcon name="arrow-down-tray" />;
   if (props.task.kind === "delete") return <V12TbIcon name="trash" />;
+  if (props.task.kind === "decompress") return <V12TbIcon name="arrow-down-tray" />;
   return (
     <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M5.4 5.1h7.7c.75 0 1.35.6 1.35 1.35v3.15H6.75c-.75 0-1.35-.6-1.35-1.35V5.1z" />

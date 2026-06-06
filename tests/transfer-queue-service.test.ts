@@ -47,6 +47,8 @@ function createService(options?: {
   remoteDelete?: (connectionId: string, paths: string[]) => Promise<number>;
   localGzip?: (path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
   remoteGzip?: (connectionId: string, path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
+  localDecompress?: (path: string) => Promise<string>;
+  remoteDecompress?: (connectionId: string, path: string) => Promise<string>;
   remoteUploadFallback?: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
   remoteDownloadFallback?: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
 }) {
@@ -71,6 +73,8 @@ function createService(options?: {
     remoteDelete: options?.remoteDelete,
     localGzip: options?.localGzip,
     remoteGzip: options?.remoteGzip,
+    localDecompress: options?.localDecompress,
+    remoteDecompress: options?.remoteDecompress,
     remoteUploadFallback: options?.remoteUploadFallback,
     remoteDownloadFallback: options?.remoteDownloadFallback
   });
@@ -392,6 +396,23 @@ describe("TransferQueueService state machine", () => {
       expect(task.error).toBe("Gzip target already exists.");
     });
     expect(localGzip).toHaveBeenCalledTimes(1);
+  });
+
+  it("runs local decompress as a visible queued job", async () => {
+    const localDecompress = vi.fn(async () => "/tmp/source.txt");
+    const { service, spawnProcess } = createService({ localDecompress });
+
+    await service.enqueueDecompress({ tabId: "tab-a", pane: "local", path: "/tmp/source.txt.gz" });
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("decompress");
+      expect(task.status).toBe("success");
+      expect(task.destination).toBe("/tmp/source.txt");
+      expect(task.progressText).toBe("Decompressed.");
+    });
+    expect(localDecompress).toHaveBeenCalledWith("/tmp/source.txt.gz");
+    expect(spawnProcess).not.toHaveBeenCalled();
   });
 
   it("falls back to SFTP download when rsync exits with SSH code 255", async () => {

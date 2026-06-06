@@ -5,7 +5,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { pipeline } from "node:stream/promises";
-import { createGzip } from "node:zlib";
+import { createGunzip, createGzip } from "node:zlib";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
 import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo } from "../../shared/types/ipc";
@@ -156,18 +156,48 @@ export class LocalFileService {
 
   async compressFileGzip(targetPath: string, options?: { deleteSourceAfterSuccess?: boolean }): Promise<string> {
     const normalizedPath = normalizeLocalPath(targetPath);
-    const destinationPath = normalizeLocalPath(`${normalizedPath}.gz`);
+    let destinationPath = normalizeLocalPath(`${normalizedPath}.gz`);
     try {
       const stats = await fs.lstat(normalizedPath);
-      if (!stats.isFile()) throw new LocalFileServiceError("COMPRESS_FAILED", "Only files can be compressed as gzip.");
-      await pipeline(createReadStream(normalizedPath), createGzip(), createWriteStream(destinationPath, { flags: "wx" }));
-      if (options?.deleteSourceAfterSuccess) await fs.rm(normalizedPath, { force: false });
+      if (stats.isFile()) {
+        await pipeline(createReadStream(normalizedPath), createGzip(), createWriteStream(destinationPath, { flags: "wx" }));
+        if (options?.deleteSourceAfterSuccess) await fs.rm(normalizedPath, { force: false });
+      } else if (stats.isDirectory()) {
+        destinationPath = normalizeLocalPath(`${normalizedPath}.tar.gz`);
+        await ensureLocalTargetAbsent(destinationPath);
+        await execFileAsync("tar", ["-czf", destinationPath, "-C", path.dirname(normalizedPath), path.basename(normalizedPath)]);
+        if (options?.deleteSourceAfterSuccess) await fs.rm(normalizedPath, { recursive: true, force: false });
+      } else {
+        throw new LocalFileServiceError("COMPRESS_FAILED", "Only files and folders can be compressed.");
+      }
       return destinationPath;
     } catch (error) {
       const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
       if (code !== "EEXIST") await fs.rm(destinationPath, { force: true }).catch(() => {});
       if (error instanceof LocalFileServiceError) throw error;
       throw this.mapCompressError(error, normalizedPath);
+    }
+  }
+
+  async decompressPath(targetPath: string): Promise<string> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const destinationPath = localDecompressDestination(normalizedPath);
+    try {
+      await fs.lstat(normalizedPath);
+      if (isTarGzipPath(normalizedPath)) {
+        await ensureTarExtractionTargetsAbsent(normalizedPath);
+        await execFileAsync("tar", ["-xzf", normalizedPath, "-C", path.dirname(normalizedPath)]);
+      } else if (normalizedPath.endsWith(".gz")) {
+        await pipeline(createReadStream(normalizedPath), createGunzip(), createWriteStream(destinationPath, { flags: "wx" }));
+      } else {
+        throw new LocalFileServiceError("COMPRESS_FAILED", "Selected item is not a supported compressed file.");
+      }
+      return destinationPath;
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      if (code !== "EEXIST" && normalizedPath.endsWith(".gz") && !isTarGzipPath(normalizedPath)) await fs.rm(destinationPath, { force: true }).catch(() => {});
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapDecompressError(error, normalizedPath);
     }
   }
 
@@ -269,6 +299,14 @@ export class LocalFileService {
     return new LocalFileServiceError("COMPRESS_FAILED", `Failed to compress path: ${requestedPath}`);
   }
 
+  private mapDecompressError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    if (code === "EEXIST") return new LocalFileServiceError("COMPRESS_FAILED", "Decompress target already exists.");
+    return new LocalFileServiceError("COMPRESS_FAILED", `Failed to decompress path: ${requestedPath}`);
+  }
+
   private mapTouchError(error: unknown, requestedPath: string): LocalFileServiceError {
     const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
     if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
@@ -298,6 +336,40 @@ function validateNewChildName(name: string): string {
     throw new LocalFileServiceError("UNKNOWN", "Name is invalid.");
   }
   return trimmed;
+}
+
+function isTarGzipPath(input: string): boolean {
+  return input.endsWith(".tar.gz") || input.endsWith(".tgz");
+}
+
+function localDecompressDestination(input: string): string {
+  if (input.endsWith(".tar.gz")) return input.slice(0, -7);
+  if (input.endsWith(".tgz")) return input.slice(0, -4);
+  if (input.endsWith(".gz")) return input.slice(0, -3);
+  throw new LocalFileServiceError("COMPRESS_FAILED", "Selected item is not a supported compressed file.");
+}
+
+async function ensureLocalTargetAbsent(targetPath: string): Promise<void> {
+  try {
+    await fs.lstat(targetPath);
+    throw new LocalFileServiceError("COMPRESS_FAILED", "Target already exists.");
+  } catch (error) {
+    if (error instanceof LocalFileServiceError) throw error;
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code !== "ENOENT") throw error;
+  }
+}
+
+async function ensureTarExtractionTargetsAbsent(archivePath: string): Promise<void> {
+  const { stdout } = await execFileAsync("tar", ["-tzf", archivePath]);
+  const parent = path.dirname(archivePath);
+  const topLevel = new Set(
+    stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim().replace(/^\.\//, "").split("/").filter(Boolean)[0])
+      .filter(Boolean)
+  );
+  for (const name of topLevel) await ensureLocalTargetAbsent(path.join(parent, name));
 }
 
 async function nextAvailableLocalTextFile(parentPath: string): Promise<string> {

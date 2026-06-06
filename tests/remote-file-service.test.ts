@@ -443,6 +443,53 @@ describe("RemoteFileService path/list behavior", () => {
     await expect(service.compressFileGzip("c1", "/a/file.txt")).rejects.toMatchObject({ code: "REMOTE_COMPRESS_FAILED" });
   });
 
+  it("compresses a remote folder to tar.gz", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/a/folder") return { type: "d", size: 0, modifyTime: Date.now() };
+      if (target === "/a/folder.tar.gz") throw new Error("No such file");
+      return { type: "-", size: 10, modifyTime: Date.now() };
+    });
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("close", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, client: { exec } }
+      })
+    } as any);
+
+    await expect(service.compressFileGzip("c1", "/a/folder")).resolves.toBe("/a/folder.tar.gz");
+    expect(exec.mock.calls[0][0]).toContain("tar -czf ");
+    expect(exec.mock.calls[0][0]).toContain("-C '/a' -- 'folder'");
+  });
+
+  it("decompresses remote gzip and tar.gz files", async () => {
+    const stat = vi.fn(async () => ({ type: "-", size: 10, modifyTime: Date.now() }));
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("close", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, client: { exec } }
+      })
+    } as any);
+
+    await expect(service.decompressPath("c1", "/a/file.txt.gz")).resolves.toBe("/a/file.txt");
+    expect(exec.mock.calls[0][0]).toContain("gzip -cd -- '/a/file.txt.gz'");
+    await expect(service.decompressPath("c1", "/a/folder.tar.gz")).resolves.toBe("/a/folder");
+    expect(exec.mock.calls[1][0]).toContain("tar -xzf '/a/folder.tar.gz' -C '/a'");
+  });
+
   it("touches an existing remote path through a server-side command", async () => {
     const stat = vi.fn(async (target: string) => {
       if (target !== "/a/file's.txt") throw new Error("No such file");
