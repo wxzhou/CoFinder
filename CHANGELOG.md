@@ -6,9 +6,10 @@
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
 - **Latest release: v1.9.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
-## Unreleased
+## Unreleased / v1.9.1 planning
 
-- None.
+- Planning-only development branch for the v1.9.x hard-feature track. No runtime behavior is changed yet.
+- Added detailed plans for multi-lane Jobs, remote copy/move, grep/less content tools, expandable list rows, and additional Finder-style view modes.
 
 ## v1.9.0 — Stability rollup after v1.8.0
 
