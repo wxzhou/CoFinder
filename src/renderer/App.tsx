@@ -2774,10 +2774,12 @@ export function App(props: AppProps = {}) {
   async function copySelection(tabId: string, pane: "local" | "remote", mode: "name" | "path"): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
+    const localEntriesForCopy = tab.id === activeTab.id ? sortedEntries : tab.localPane.entries;
+    const remoteEntriesForCopy = tab.id === activeTab.id ? sortedRemoteEntries : tab.remotePane.entries;
     const text =
       pane === "local"
-        ? stringifySelection(tab.localPane.selectedFullPaths, tab.localPane.entries, mode)
-        : stringifySelection(tab.remotePane.selectedFullPaths, tab.remotePane.entries, mode);
+        ? stringifySelection(tab.localPane.selectedFullPaths, localEntriesForCopy, mode)
+        : stringifySelection(tab.remotePane.selectedFullPaths, remoteEntriesForCopy, mode);
     if (!text) return;
     const result = await window.cofinder.system.copyText({ text });
     if (!result.ok) setQueueError(result.error.message);

@@ -15,6 +15,7 @@
 - Adjusted V12 contiguous file-selection highlights to use Finder-like rounded outer corners.
 - Added focused unit coverage for transfer-vs-compression concurrency, serial transfer behavior, path locks, and compression-concurrency setting validation.
 - Polished V12 multi-selection rows so selected ranges use continuous row-width highlights with thin separators, and inactive-pane selections no longer show a darker left crescent.
+- Grouped Jobs queue/status filters into segmented controls and fixed multi-selection Copy Name / Copy Full Path to preserve the current file-list order.
 
 ## v1.9.1 planning
 

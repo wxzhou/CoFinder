@@ -92,7 +92,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 - **Transfer serial lane:** enqueue two large uploads or downloads. Confirm only one transfer runs at a time and the second waits pending until the first finishes or stops.
 - **Compression lane concurrency:** set Preferences -> Jobs -> Compression jobs at once to `2`, enqueue two independent Compress/Decompress/Generate MD5 jobs, and confirm both can run together in Jobs.
-- **Queue filters:** expand Jobs and confirm the top row shows queue filters for All queues / Transfer / Compression / Delete. Combine `Compression` with `Running` and confirm only running/pending compression-lane jobs remain visible.
+- **Queue filters:** expand Jobs and confirm the top row shows two segmented filter groups: All queues / Transfer / Compression / Delete, then All / Running / Failed / Done. Combine `Compression` with `Running` and confirm only running/pending compression-lane jobs remain visible.
 - **Cross-lane concurrency:** start one long upload/download and one independent compression-style job. Confirm the compression job can run while the transfer lane remains busy.
 - **Path lock:** start deleting a disposable folder, then enqueue compression or MD5 on a child path before delete finishes. Confirm the child job does not start until the delete job releases the path lock.
 - **Retry failed:** create one failed transfer and one failed compression job, use Retry failed, and confirm each returns to its own lane while honoring current concurrency.
@@ -309,12 +309,13 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 4. Right-click local single file and verify menu shows: Open / Upload / Reveal in Finder / Copy Name / Copy Full Path / Refresh.
 5. Right-click a local file outside current selection and confirm selection switches to that row.
 6. Right-click a local file inside current multi-selection and confirm selection is preserved.
-7. Use local context `Copy Name` / `Copy Full Path` for multi-selection and verify clipboard has newline-separated values.
+7. Use local context `Copy Name` / `Copy Full Path` for multi-selection and verify clipboard has newline-separated values in the same order currently shown in the file list.
 8. Use local context `Upload` on multi-selection and verify queue creates one task per selected source.
 9. In remote pane, repeat `Cmd-click` and `Shift-click` selection checks.
 10. Confirm remote status bar selected count/size reflects multiple selected rows.
 11. Right-click remote item and verify menu shows: Download / Copy Name / Copy Full Path / Refresh.
-12. Use remote context `Download` on multi-selection and verify queue creates one task per selected source.
+12. Use remote context `Copy Name` / `Copy Full Path` for multi-selection and verify clipboard order matches the remote file list.
+13. Use remote context `Download` on multi-selection and verify queue creates one task per selected source.
 
 ## UI Polish Smoke (V1.1 M4)
 
