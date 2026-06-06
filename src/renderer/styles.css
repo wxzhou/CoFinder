@@ -1918,6 +1918,10 @@ body,
   gap: 10px;
 }
 
+.timestamp-dialog {
+  width: min(500px, calc(100vw - 36px));
+}
+
 .delete-confirm-dialog h3 {
   margin: 0;
   font-size: 15px;
@@ -2015,7 +2019,7 @@ body,
 
 .timestamp-grid {
   display: grid;
-  grid-template-columns: 1.3fr repeat(5, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -2040,6 +2044,12 @@ body,
 .timestamp-grid input:focus {
   outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
   outline-offset: 1px;
+}
+
+@media (max-width: 520px) {
+  .timestamp-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .toolbar-button.danger {

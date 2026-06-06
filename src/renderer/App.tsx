@@ -6401,7 +6401,7 @@ export function App(props: AppProps = {}) {
             if (e.target === e.currentTarget && !timestampDialog.busy) setTimestampDialog(null);
           }}
         >
-          <div className="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="timestamp-title">
+          <div className="delete-confirm-dialog timestamp-dialog" role="dialog" aria-modal="true" aria-labelledby="timestamp-title">
             <h3 id="timestamp-title">Change Timestamp</h3>
             <p>
               Set modified time for <strong>{timestampDialog.name}</strong>.
