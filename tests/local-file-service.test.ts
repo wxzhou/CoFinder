@@ -137,6 +137,22 @@ describe("LocalFileService compressFileGzip", () => {
   });
 });
 
+describe("LocalFileService touchPath", () => {
+  it("updates an existing local file timestamp without creating missing paths", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "touch.txt");
+    await fs.writeFile(source, "touch me\n");
+    const oldDate = new Date("2020-01-01T00:00:00Z");
+    await fs.utimes(source, oldDate, oldDate);
+
+    await service.touchPath(source);
+
+    expect((await fs.stat(source)).mtimeMs).toBeGreaterThan(oldDate.getTime());
+    await expect(service.touchPath(path.join(dir, "missing.txt"))).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+});
+
 describe("LocalFileService listDirectory metadata", () => {
   it("returns rwx permissions and owner names for listed local entries", async () => {
     const service = new LocalFileService();

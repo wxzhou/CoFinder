@@ -3270,6 +3270,31 @@ export function App(props: AppProps = {}) {
     }
   }
 
+  async function touchLocalSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.localPane.selectedFullPaths[0];
+    if (!tab || !targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
+    const result = await window.cofinder.local.touch({ path: targetPath });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+      return;
+    }
+    await navigateLocal(tabId, tab.localPane.currentPath, "replace");
+  }
+
+  async function touchRemoteSelection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const result = await window.cofinder.remote.touch({ connectionId: tab.remotePane.connectionId, path: targetPath });
+    if (!result.ok) {
+      if (result.error.code === "REMOTE_DISCONNECTED") markRemoteDisconnected(tabId, tab.remotePane.connectionId, result.error.message);
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
+    }
+    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+  }
+
   async function openTerminalHere(tabId: string, pane: "local" | "remote", targetPath?: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
@@ -5760,7 +5785,7 @@ export function App(props: AppProps = {}) {
                     Delete
                     <span className="context-shortcut">Del</span>
                   </button>
-                  {contextSingleFile ? (
+                  {contextSingleSelection ? (
                     <div className="context-submenu">
                       <button type="button" className="context-item context-submenu-trigger">
                         File Operation
@@ -5768,11 +5793,19 @@ export function App(props: AppProps = {}) {
                       </button>
                       <div className="context-submenu-panel">
                         <button type="button" className="context-item" onClick={async () => {
-                          await compressLocalSelection(contextMenu.tabId);
+                          await touchLocalSelection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
-                          Compress as gzip
+                          Touch
                         </button>
+                        {contextSingleFile ? (
+                          <button type="button" className="context-item" onClick={async () => {
+                            await compressLocalSelection(contextMenu.tabId);
+                            setContextMenu(null);
+                          }}>
+                            Compress as gzip
+                          </button>
+                        ) : null}
                       </div>
                     </div>
                   ) : null}
@@ -5916,6 +5949,12 @@ export function App(props: AppProps = {}) {
                         <span className="context-shortcut">›</span>
                       </button>
                       <div className="context-submenu-panel">
+                        <button type="button" className="context-item" onClick={async () => {
+                          await touchRemoteSelection(contextMenu.tabId);
+                          setContextMenu(null);
+                        }}>
+                          Touch
+                        </button>
                         {contextSingleFile ? (
                           <button type="button" className="context-item" onClick={async () => {
                             await compressRemoteSelection(contextMenu.tabId);

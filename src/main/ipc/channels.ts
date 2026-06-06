@@ -9,6 +9,7 @@ export const IPC_CHANNELS = {
     mkdir: "local:mkdir",
     createTextFile: "local:createTextFile",
     compressGzip: "local:compressGzip",
+    touch: "local:touch",
     getInfo: "local:getInfo"
   },
   remote: {
@@ -22,6 +23,7 @@ export const IPC_CHANNELS = {
     mkdir: "remote:mkdir",
     createTextFile: "remote:createTextFile",
     compressGzip: "remote:compressGzip",
+    touch: "remote:touch",
     chmod: "remote:chmod",
     duplicate: "remote:duplicate",
     directorySizeStart: "remote:directorySizeStart",

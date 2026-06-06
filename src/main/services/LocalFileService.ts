@@ -170,6 +170,17 @@ export class LocalFileService {
     }
   }
 
+  async touchPath(targetPath: string): Promise<void> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    try {
+      await fs.lstat(normalizedPath);
+      const now = new Date();
+      await fs.utimes(normalizedPath, now, now);
+    } catch (error) {
+      throw this.mapTouchError(error, normalizedPath);
+    }
+  }
+
   async getPathInfo(targetPath: string, options?: { includeDirectorySize?: boolean }): Promise<PathInfo> {
     const normalizedPath = normalizeLocalPath(targetPath);
     try {
@@ -255,6 +266,13 @@ export class LocalFileService {
     if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
     if (code === "EEXIST") return new LocalFileServiceError("COMPRESS_FAILED", "Gzip target already exists.");
     return new LocalFileServiceError("COMPRESS_FAILED", `Failed to compress path: ${requestedPath}`);
+  }
+
+  private mapTouchError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    return new LocalFileServiceError("TOUCH_FAILED", `Failed to touch path: ${requestedPath}`);
   }
 
   private async getDirectorySize(dirPath: string): Promise<number> {

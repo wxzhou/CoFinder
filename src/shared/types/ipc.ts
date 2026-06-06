@@ -11,6 +11,7 @@ export type LocalErrorCode =
   | "RENAME_FAILED"
   | "DELETE_FAILED"
   | "COMPRESS_FAILED"
+  | "TOUCH_FAILED"
   | "INFO_FAILED"
   | "UNKNOWN";
 
@@ -48,6 +49,7 @@ export type RemoteErrorCode =
   | "LOCAL_MKDIR_FAILED"
   | "LOCAL_CREATE_FILE_FAILED"
   | "LOCAL_COMPRESS_FAILED"
+  | "LOCAL_TOUCH_FAILED"
   | "LOCAL_INFO_FAILED"
   | "LOCAL_UNKNOWN_ERROR"
   | "SYSTEM_INVALID_INPUT"
@@ -68,6 +70,7 @@ export type RemoteErrorCode =
   | "REMOTE_MKDIR_FAILED"
   | "REMOTE_CREATE_FILE_FAILED"
   | "REMOTE_COMPRESS_FAILED"
+  | "REMOTE_TOUCH_FAILED"
   | "REMOTE_CHMOD_FAILED"
   | "REMOTE_DUPLICATE_FAILED"
   | "REMOTE_DIRECTORY_SIZE_FAILED"
@@ -291,6 +294,7 @@ export interface IpcApi {
     mkdir: (request: { parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
     createTextFile: (request: { parentPath: string; name?: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
     compressGzip: (request: { path: string }) => Promise<IpcResponse<{ compressed: true; path: string }>>;
+    touch: (request: { path: string }) => Promise<IpcResponse<{ touched: true }>>;
     getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
   };
   remote: {
@@ -316,6 +320,7 @@ export interface IpcApi {
       name?: string;
     }) => Promise<IpcResponse<{ created: true; path: string }>>;
     compressGzip: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ compressed: true; path: string }>>;
+    touch: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ touched: true }>>;
     chmod: (request: { connectionId: string; path: string; mode: string }) => Promise<IpcResponse<{ changed: true }>>;
     duplicate: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ duplicated: true; newPath: string }>>;
     directorySizeStart: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ jobId: string }>>;

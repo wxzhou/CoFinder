@@ -338,6 +338,25 @@ export class RemoteFileService {
     }
   }
 
+  async touchPath(connectionId: string, targetPath: string): Promise<void> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const client = connection.client as unknown as RemoteCompressClient;
+    try {
+      await client.stat(normalizedPath);
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_TOUCH_FAILED", "Remote command execution is unavailable for touch.");
+      await execRemoteCommand(exec, buildRemoteTouchCommand(normalizedPath), {
+        code: "REMOTE_TOUCH_FAILED",
+        message: "Remote touch command failed."
+      });
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapTouchError(error);
+    }
+  }
+
   async downloadPathToLocal(connectionId: string, remotePath: string, localTargetPath: string): Promise<void> {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
@@ -807,6 +826,21 @@ export class RemoteFileService {
     return new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Failed to compress remote file.", message);
   }
 
+  private mapTouchError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote touch failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_TOUCH_FAILED", "Failed to touch remote path.", message);
+  }
+
   private mapDownloadError(error: unknown): RemoteServiceError {
     const message =
       typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote download failed";
@@ -905,6 +939,11 @@ function buildRemoteGzipCommand(sourcePath: string, destinationPath: string, tem
     `gzip -c -- ${src} > ${tmp}`,
     `mv -- ${tmp} ${dst}${removeSource}`
   ].join(" && ");
+}
+
+function buildRemoteTouchCommand(targetPath: string): string {
+  const target = shellQuote(targetPath);
+  return `if [ ! -e ${target} ] && [ ! -L ${target} ]; then exit 66; fi; touch -- ${target}`;
 }
 
 function shellQuote(value: string): string {

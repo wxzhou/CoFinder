@@ -443,6 +443,31 @@ describe("RemoteFileService path/list behavior", () => {
     await expect(service.compressFileGzip("c1", "/a/file.txt")).rejects.toMatchObject({ code: "REMOTE_COMPRESS_FAILED" });
   });
 
+  it("touches an existing remote path through a server-side command", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target !== "/a/file's.txt") throw new Error("No such file");
+      return { type: "-", size: 10, modifyTime: Date.now() };
+    });
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("close", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, client: { exec } }
+      })
+    } as any);
+
+    await expect(service.touchPath("c1", "/a/file's.txt")).resolves.toBeUndefined();
+    expect(exec).toHaveBeenCalledTimes(1);
+    expect(exec.mock.calls[0][0]).toContain("touch -- '/a/file'\\''s.txt'");
+    expect(exec.mock.calls[0][0]).toContain("[ ! -e '/a/file'\\''s.txt' ]");
+  });
+
   it("deletes the remote source after gzip only when requested", async () => {
     const remoteFiles = new Map<string, Buffer>([
       ["/a/remove.txt", Buffer.from("remote delete source\n")]

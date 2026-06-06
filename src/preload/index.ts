@@ -12,6 +12,7 @@ const api: IpcApi = {
     mkdir: (request) => ipcRenderer.invoke("local:mkdir", request),
     createTextFile: (request) => ipcRenderer.invoke("local:createTextFile", request),
     compressGzip: (request) => ipcRenderer.invoke("local:compressGzip", request),
+    touch: (request) => ipcRenderer.invoke("local:touch", request),
     getInfo: (request) => ipcRenderer.invoke("local:getInfo", request)
   },
   remote: {
@@ -25,6 +26,7 @@ const api: IpcApi = {
     mkdir: (request) => ipcRenderer.invoke("remote:mkdir", request),
     createTextFile: (request) => ipcRenderer.invoke("remote:createTextFile", request),
     compressGzip: (request) => ipcRenderer.invoke("remote:compressGzip", request),
+    touch: (request) => ipcRenderer.invoke("remote:touch", request),
     chmod: (request) => ipcRenderer.invoke("remote:chmod", request),
     duplicate: (request) => ipcRenderer.invoke("remote:duplicate", request),
     directorySizeStart: (request) => ipcRenderer.invoke("remote:directorySizeStart", request),

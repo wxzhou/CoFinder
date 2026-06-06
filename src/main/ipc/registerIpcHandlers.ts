@@ -214,6 +214,17 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.touch, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:touch request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      await localFileService.touchPath(targetPath);
+      return ok({ touched: true as const });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_TOUCH_FAILED", "Failed to touch local path.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.local.getInfo, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:getInfo request.");
@@ -377,6 +388,18 @@ export function registerIpcHandlers(): void {
       return ok({ compressed: true as const, path: compressedPath });
     } catch (error) {
       return toIpcError(error, "REMOTE_COMPRESS_FAILED", "Failed to compress remote file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.touch, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:touch request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      await remoteFileService.touchPath(connectionId, targetPath);
+      return ok({ touched: true as const });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_TOUCH_FAILED", "Failed to touch remote path.");
     }
   });
 
