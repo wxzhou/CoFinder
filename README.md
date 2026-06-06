@@ -89,7 +89,8 @@ More detail: [docs/security.md](docs/security.md).
 - [docs/roadmap.md](docs/roadmap.md) — milestone themes and future boundaries.
 - [docs/smoke-test.md](docs/smoke-test.md) — manual release-candidate checks.
 - [docs/release-checklist.md](docs/release-checklist.md) — release process.
-- [docs/dev/DEVELOPMENT_RULES.md](docs/dev/DEVELOPMENT_RULES.md) — development constraints.
+- [AGENTS.md](AGENTS.md) — coding-agent development rules.
+- [docs/dev/DEVELOPMENT_RULES.md](docs/dev/DEVELOPMENT_RULES.md) — historical development constraints.
 
 ## Project Structure
 

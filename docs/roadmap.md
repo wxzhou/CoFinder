@@ -275,7 +275,7 @@ Recommended order:
 7. **v1.9.7:** column view, after the shared view-mode state and pane-independent rendering are proven.
 8. **v1.9.8:** gallery view, after preview caching and large-file guardrails are reused safely.
 
-See **`docs/dev/V2.10_HARD_FEATURES_PLAN.md`** and **`docs/releases/v1.9.x-development-log.md`**.
+See **`docs/dev/V2.10_HARD_FEATURES_PLAN.md`** and the current **`CHANGELOG.md`** unreleased section.
 
 ### V2.8.9 / v1.8.9 — Toolbar Icon and Transfer Reliability Polish
 

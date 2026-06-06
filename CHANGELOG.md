@@ -10,6 +10,7 @@
 
 - Planning-only development branch for the v1.9.x hard-feature track. No runtime behavior is changed yet.
 - Added detailed plans for multi-lane Jobs, remote copy/move, grep/less content tools, expandable list rows, and additional Finder-style view modes.
+- v1.9.x development checkpoints are recorded in this changelog instead of a separate release-log file.
 
 ## v1.9.0 — Stability rollup after v1.8.0
 
