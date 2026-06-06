@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionManager } from "./ConnectionManager";
 import { RemotePreviewError, sniffPreviewKind, darwinTextPreviewOpenArgs } from "./RemotePreviewService";
+import { isSourceLikePath } from "../../shared/sourceFileTypes";
 import {
   remoteEditRemoteChanged,
   remoteEditSessionKey,
@@ -79,7 +80,8 @@ export class RemoteEditService {
     if (stat.type === "d" || stat.type === "directory" || stat.type === 2) {
       throw new RemotePreviewError("REMOTE_PREVIEW_UNSUPPORTED", "Remote edit supports files only.");
     }
-    const opener = options.opener ?? "text";
+    const requestedOpener = options.opener ?? "text";
+    const opener: RemoteLocalCopyOpener = requestedOpener === "default" && isSourceLikePath(request.remotePath) ? "text" : requestedOpener;
     const baseline = remoteEditBaselineFromStat(stat);
     if (requiresLargeFileConfirmation(opener, baseline.size) && !options.allowLargeFile) {
       throw new RemotePreviewError("REMOTE_PREVIEW_UNSUPPORTED", largeFileMessage(opener, baseline.size));

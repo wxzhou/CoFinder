@@ -48,6 +48,7 @@ import {
 } from "./selection";
 import type { LocalFavoriteListItem } from "../shared/localFavorites";
 import type { RemoteEditSession } from "../shared/remoteEdit";
+import { isSourceLikePath } from "../shared/sourceFileTypes";
 import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
@@ -3702,16 +3703,17 @@ export function App(props: AppProps = {}) {
     if (!tab?.remotePane.connectionId) return;
     const entry = tab.remotePane.entries.find((item) => item.fullPath === remotePath);
     if (entry?.type === "directory") return;
+    const effectiveOpener = opener === "default" && isSourceLikePath(remotePath) ? "text" : opener;
     const nextAllowances = { ...allowances };
-    if (!nextAllowances.allowLargeFile && shouldConfirmLargeRemoteOpen(opener, entry?.size ?? 0)) {
+    if (!nextAllowances.allowLargeFile && shouldConfirmLargeRemoteOpen(effectiveOpener, entry?.size ?? 0)) {
       const message =
-        opener === "text"
+        effectiveOpener === "text"
           ? `This remote file is ${formatSize(entry?.size ?? 0)}. Open it in the text editor anyway?`
           : `This remote file is ${formatSize(entry?.size ?? 0)} and will be downloaded before opening. Continue?`;
       if (!window.confirm(message)) return;
       nextAllowances.allowLargeFile = true;
     }
-    if (opener === "default" && !nextAllowances.allowExecutable && remoteEntryLooksExecutable(entry)) {
+    if (effectiveOpener === "default" && !nextAllowances.allowExecutable && remoteEntryLooksExecutable(entry)) {
       if (!window.confirm("This remote file appears executable. Open it with the default app anyway?")) return;
       nextAllowances.allowExecutable = true;
     }
@@ -3719,7 +3721,7 @@ export function App(props: AppProps = {}) {
       tabId,
       connectionId: tab.remotePane.connectionId,
       path: remotePath,
-      opener,
+      opener: effectiveOpener,
       ...nextAllowances
     });
     if (!res.ok) {
@@ -3728,9 +3730,9 @@ export function App(props: AppProps = {}) {
         return;
       }
       if (res.error.code === "REMOTE_PREVIEW_UNSUPPORTED") {
-        const retry = await confirmRemoteOpenRetry(res.error.message, opener, nextAllowances);
+        const retry = await confirmRemoteOpenRetry(res.error.message, effectiveOpener, nextAllowances);
         if (retry) {
-          await openRemotePath(tabId, remotePath, opener, { ...nextAllowances, ...retry });
+          await openRemotePath(tabId, remotePath, effectiveOpener, { ...nextAllowances, ...retry });
           return;
         }
       }
@@ -3742,7 +3744,7 @@ export function App(props: AppProps = {}) {
       return;
     }
     clearRemotePaneError(tabId);
-    setQueueError(opener === "text" ? `Editing ${remotePath}` : `Opening ${remotePath}`);
+    setQueueError(effectiveOpener === "text" ? `Editing ${remotePath}` : `Opening ${remotePath}`);
   }
 
   function shouldConfirmLargeRemoteOpen(opener: "text" | "default", size: number): boolean {

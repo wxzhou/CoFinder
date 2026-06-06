@@ -132,7 +132,7 @@ describe("RemoteEditService", () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
-  it("requires confirmation before opening executable remote files with the default app", async () => {
+  it("opens source-like executable remote files in the configured text editor without confirmation", async () => {
     const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
     const client = {
@@ -148,17 +148,44 @@ describe("RemoteEditService", () => {
       dir
     );
 
-    await expect(service.openDefaultSession({ tabId: "tab", connectionId: "c1", remotePath: "/data/run.sh" })).rejects.toMatchObject({
+    const session = await service.openDefaultSession(
+      { tabId: "tab", connectionId: "c1", remotePath: "/data/run.sh" },
+      { textEditor: "TextMate" }
+    );
+    expect(session.remotePath).toBe("/data/run.sh");
+    expect(spawnMock).toHaveBeenCalledWith("open", ["-a", "TextMate", expect.any(String)], { stdio: "ignore" });
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  it("requires confirmation before opening non-source executable remote files with the default app", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 22, modifyTime: 1234, mode: 0o755 })),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, "#!/bin/sh\necho hello\n", "utf8");
+      })
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+
+    await expect(service.openDefaultSession({ tabId: "tab", connectionId: "c1", remotePath: "/data/run" })).rejects.toMatchObject({
       code: "REMOTE_PREVIEW_UNSUPPORTED"
     });
     expect(client.fastGet).not.toHaveBeenCalled();
     expect(service.listSessions()).toHaveLength(0);
 
     const session = await service.openDefaultSession(
-      { tabId: "tab", connectionId: "c1", remotePath: "/data/run.sh" },
+      { tabId: "tab", connectionId: "c1", remotePath: "/data/run" },
       { allowExecutable: true }
     );
-    expect(session.remotePath).toBe("/data/run.sh");
+    expect(session.remotePath).toBe("/data/run");
     expect(spawnMock).toHaveBeenCalledWith("open", [expect.any(String)], { stdio: "ignore" });
 
     service.closeAll();
