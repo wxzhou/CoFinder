@@ -91,17 +91,17 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 ## V2.10 M1 / v1.9.2 multi-lane Jobs
 
 - **Transfer serial lane:** enqueue two large uploads or downloads. Confirm only one transfer runs at a time and the second waits pending until the first finishes or stops.
-- **Compression lane concurrency:** set Preferences -> Jobs -> Compression jobs at once to `2`, enqueue two independent Compress/Decompress/Generate MD5 jobs, and confirm both can run together in Jobs.
-- **Queue filters:** expand Jobs and confirm the top row shows two segmented filter groups: All queues / Transfer / Compression / Delete, then All / Running / Failed / Done. Combine `Compression` with `Running` and confirm only running/pending compression-lane jobs remain visible.
+- **Compress lane concurrency:** set Preferences -> Jobs -> Compression jobs at once to `2`, enqueue two independent Compress/Decompress/Generate MD5 jobs, and confirm both can run together in Jobs.
+- **Queue filters:** expand Jobs and confirm the top row shows two segmented filter groups: All queues / Transfer / Compress / Delete, then All / Running / Failed / Done. Combine `Compress` with `Running` and confirm only running/pending compression-lane jobs remain visible.
 - **Cross-lane concurrency:** start one long upload/download and one independent compression-style job. Confirm the compression job can run while the transfer lane remains busy.
 - **Path lock:** start deleting a disposable folder, then enqueue compression or MD5 on a child path before delete finishes. Confirm the child job does not start until the delete job releases the path lock.
 - **Retry failed:** create one failed transfer and one failed compression job, use Retry failed, and confirm each returns to its own lane while honoring current concurrency.
 
 ## V2.10 M2 / v1.9.3 remote Copy To / Move To
 
-- **Copy file:** select one remote disposable file, right-click `Copy To...`, enter a destination folder ending with `/`, choose `fail` for existing targets, and confirm Jobs shows a Remote Ops copy job that completes and creates the copied file.
+- **Copy file:** select one remote disposable file, right-click `Copy To...`, enter a destination folder ending with `/`, choose `fail` for existing targets, and confirm Jobs shows a Relocate copy job that completes and creates the copied file.
 - **Copy folder:** repeat `Copy To...` on a small disposable remote folder and confirm the folder copy appears without merging into an existing folder.
-- **Move file/folder:** select one remote disposable file and one disposable folder in separate runs, right-click `Move To...`, confirm the destructive prompt, and confirm the source disappears after the Remote Ops move job succeeds.
+- **Move file/folder:** select one remote disposable file and one disposable folder in separate runs, right-click `Move To...`, confirm the destructive dialog, and confirm the source disappears after the Relocate move job succeeds.
 - **Keep both:** copy a remote file to a destination where the target already exists, choose `rename`, and confirm CoFinder creates a `copy`-suffixed target instead of overwriting.
 - **Failure visibility:** copy or move to an unwritable/missing destination and confirm the job remains visible as failed with an actionable error.
 - **Path locks:** enqueue a long remote delete on a parent disposable folder, then enqueue `Move To...` for a child path before delete finishes. Confirm the move remains pending until the delete releases the path lock.

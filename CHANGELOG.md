@@ -10,8 +10,9 @@
 
 - Added remote selected-item `Copy To...` and `Move To...` actions as visible Jobs tasks.
 - Remote copy/move run server-side over the active SSH/SFTP connection using `cp -a` and `mv`, avoiding rsync/passwordless-SSH requirements.
-- Added a remote mutation Jobs lane and a `Remote Ops` queue filter for copy/move work.
+- Added a remote mutation Jobs lane and a `Relocate` queue filter for copy/move work.
 - Remote copy/move default to failing when the destination exists, with an optional rename/keep-both policy.
+- Fixed remote `Copy To...` / `Move To...` doing nothing in packaged Electron builds by replacing browser `prompt` calls with an in-app destination dialog.
 - Added tests for remote copy/move queue behavior, path-lock interaction, and shell-safe quoting for spaces, Chinese characters, and single quotes.
 
 ## v1.9.2 development

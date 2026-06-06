@@ -1939,6 +1939,10 @@ body,
   width: min(500px, calc(100vw - 36px));
 }
 
+.remote-copy-move-dialog {
+  width: min(520px, calc(100vw - 36px));
+}
+
 .delete-confirm-dialog h3 {
   margin: 0;
   font-size: 15px;
@@ -1989,6 +1993,47 @@ body,
 .create-folder-field input:focus {
   outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
   outline-offset: 1px;
+}
+
+.remote-copy-move-help {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.remote-copy-move-help code {
+  color: var(--text-primary);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}
+
+.remote-copy-move-options {
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: #fafafa;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 9px 10px;
+}
+
+.remote-copy-move-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.remote-copy-move-options input {
+  margin: 0;
+}
+
+.remote-copy-move-warning {
+  border: 1px solid #e7b1b1;
+  border-radius: var(--radius-sm);
+  background: #fff4f4;
+  color: #9b1c1c;
+  font-size: 12px;
+  padding: 8px 10px;
 }
 
 .chmod-grid {

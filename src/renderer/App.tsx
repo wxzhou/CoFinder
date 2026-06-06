@@ -164,6 +164,17 @@ type TimestampDialogState = {
   busy: boolean;
 };
 
+type RemoteCopyMoveDialogState = {
+  tabId: string;
+  connectionId: string;
+  operation: "copy" | "move";
+  sources: string[];
+  destinationPath: string;
+  conflictPolicy: "fail" | "rename";
+  error: string;
+  busy: boolean;
+};
+
 type ActivePane = "local" | "remote";
 
 type TransferDragPayload = {
@@ -360,6 +371,7 @@ export function App(props: AppProps = {}) {
   const [createFolderDialog, setCreateFolderDialog] = useState<CreateFolderDialogState | null>(null);
   const [chmodDialog, setChmodDialog] = useState<ChmodDialogState | null>(null);
   const [timestampDialog, setTimestampDialog] = useState<TimestampDialogState | null>(null);
+  const [remoteCopyMoveDialog, setRemoteCopyMoveDialog] = useState<RemoteCopyMoveDialogState | null>(null);
   const timestampInputRefs = useRef<Record<TimestampPartKey, HTMLInputElement | null>>({
     year: null,
     month: null,
@@ -3274,45 +3286,56 @@ export function App(props: AppProps = {}) {
     );
   }
 
-  async function enqueueRemoteCopyMove(tabId: string, operation: "copy" | "move"): Promise<void> {
+  function openRemoteCopyMoveDialog(tabId: string, operation: "copy" | "move"): void {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId || tab.remotePane.selectedFullPaths.length === 0) return;
-    const count = tab.remotePane.selectedFullPaths.length;
-    const operationLabel = operation === "copy" ? "Copy" : "Move";
     const defaultDestination = `${tab.remotePane.currentPath.replace(/\/+$/, "") || "/"}/`;
-    const destination = window.prompt(
-      `${operationLabel} ${count} selected remote ${count === 1 ? "item" : "items"} to:\n\nEnter a remote folder path ending with /, or a full destination path for one item.`,
-      defaultDestination
-    )?.trim();
-    if (!destination) return;
-    if (count > 1 && !destination.endsWith("/")) {
-      window.alert("For multiple selected items, enter a destination folder path ending with /.");
-      return;
-    }
-    if (operation === "move") {
-      const confirmed = window.confirm(
-        `Move ${count} selected remote ${count === 1 ? "item" : "items"}?\n\nThis changes the remote server. Failed move jobs should preserve the source.`
-      );
-      if (!confirmed) return;
-    }
-    const conflictAnswer = window.prompt("If the destination already exists, type one option: fail, rename", "fail");
-    const conflictPolicy: "fail" | "rename" = conflictAnswer?.trim().toLowerCase() === "rename" ? "rename" : "fail";
-    const request = {
+    setRemoteCopyMoveDialog({
       tabId,
       connectionId: tab.remotePane.connectionId,
-      sources: tab.remotePane.selectedFullPaths,
+      operation,
+      sources: [...tab.remotePane.selectedFullPaths],
+      destinationPath: defaultDestination,
+      conflictPolicy: "fail",
+      error: "",
+      busy: false
+    });
+  }
+
+  async function submitRemoteCopyMoveDialog(): Promise<void> {
+    if (!remoteCopyMoveDialog || remoteCopyMoveDialog.busy) return;
+    const dialog = remoteCopyMoveDialog;
+    const destination = dialog.destinationPath.trim();
+    if (!destination) {
+      setRemoteCopyMoveDialog((prev) => (prev ? { ...prev, error: "Destination path is required." } : prev));
+      return;
+    }
+    if (dialog.sources.length > 1 && !destination.endsWith("/")) {
+      setRemoteCopyMoveDialog((prev) =>
+        prev ? { ...prev, error: "For multiple selected items, enter a destination folder path ending with /." } : prev
+      );
+      return;
+    }
+    const request = {
+      tabId: dialog.tabId,
+      connectionId: dialog.connectionId,
+      sources: dialog.sources,
       destinationPath: destination,
-      conflictPolicy
+      conflictPolicy: dialog.conflictPolicy
     };
-    const result = operation === "copy"
+    setRemoteCopyMoveDialog((prev) => (prev ? { ...prev, destinationPath: destination, error: "", busy: true } : prev));
+    const result = dialog.operation === "copy"
       ? await window.cofinder.transfer.enqueueRemoteCopy(request)
       : await window.cofinder.transfer.enqueueRemoteMove(request);
     if (!result.ok) {
       if (result.error.code === "REMOTE_DISCONNECTED") {
-        markRemoteDisconnected(tabId, tab.remotePane.connectionId, result.error.message);
+        markRemoteDisconnected(dialog.tabId, dialog.connectionId, result.error.message);
       }
-      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      setRemoteCopyMoveDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
+      setTabs((prev) => prev.map((item) => (item.id === dialog.tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+      return;
     }
+    setRemoteCopyMoveDialog(null);
   }
 
   async function compressLocalSelection(tabId: string): Promise<void> {
@@ -6169,14 +6192,14 @@ export function App(props: AppProps = {}) {
                       <span className="context-shortcut">F2</span>
                     </button>
                   ) : null}
-                  <button type="button" className="context-item" onClick={async () => {
-                    await enqueueRemoteCopyMove(contextMenu.tabId, "copy");
+                  <button type="button" className="context-item" onClick={() => {
+                    openRemoteCopyMoveDialog(contextMenu.tabId, "copy");
                     setContextMenu(null);
                   }}>
                     Copy To...
                   </button>
-                  <button type="button" className="context-item" onClick={async () => {
-                    await enqueueRemoteCopyMove(contextMenu.tabId, "move");
+                  <button type="button" className="context-item" onClick={() => {
+                    openRemoteCopyMoveDialog(contextMenu.tabId, "move");
                     setContextMenu(null);
                   }}>
                     Move To...
@@ -6379,6 +6402,94 @@ export function App(props: AppProps = {}) {
               </button>
               <button type="button" className="toolbar-button is-active" disabled={createFolderDialog.busy} onClick={() => void submitCreateFolderDialog()}>
                 {createFolderDialog.busy ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {remoteCopyMoveDialog ? (
+        <div
+          className="delete-confirm-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !remoteCopyMoveDialog.busy) setRemoteCopyMoveDialog(null);
+          }}
+        >
+          <div className="delete-confirm-dialog remote-copy-move-dialog" role="dialog" aria-modal="true" aria-labelledby="remote-copy-move-title">
+            <h3 id="remote-copy-move-title">{remoteCopyMoveDialog.operation === "copy" ? "Copy Remote Items" : "Move Remote Items"}</h3>
+            <p>
+              {remoteCopyMoveDialog.operation === "copy" ? "Copy" : "Move"} {remoteCopyMoveDialog.sources.length} selected remote{" "}
+              {remoteCopyMoveDialog.sources.length === 1 ? "item" : "items"} to a remote path on this connection.
+            </p>
+            <div className="delete-confirm-list">
+              {remoteCopyMoveDialog.sources.slice(0, 8).map((source, index) => (
+                <div key={`${source}-${index}`}>{basenameRemotePath(source)}</div>
+              ))}
+              {remoteCopyMoveDialog.sources.length > 8 ? <div>...and {remoteCopyMoveDialog.sources.length - 8} more</div> : null}
+            </div>
+            <label className="create-folder-field">
+              Destination path
+              <input
+                autoFocus
+                value={remoteCopyMoveDialog.destinationPath}
+                disabled={remoteCopyMoveDialog.busy}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) => setRemoteCopyMoveDialog((prev) => (prev ? { ...prev, destinationPath: event.target.value, error: "" } : prev))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitRemoteCopyMoveDialog();
+                  } else if (event.key === "Escape" && !remoteCopyMoveDialog.busy) {
+                    event.preventDefault();
+                    setRemoteCopyMoveDialog(null);
+                  }
+                }}
+              />
+            </label>
+            <div className="remote-copy-move-help">
+              Use a folder path ending with <code>/</code>, or a full destination path for one item. Existing destinations are never overwritten.
+            </div>
+            <div className="remote-copy-move-options" role="radiogroup" aria-label="Destination conflict behavior">
+              <label>
+                <input
+                  type="radio"
+                  name="remote-copy-move-conflict"
+                  value="fail"
+                  checked={remoteCopyMoveDialog.conflictPolicy === "fail"}
+                  disabled={remoteCopyMoveDialog.busy}
+                  onChange={() => setRemoteCopyMoveDialog((prev) => (prev ? { ...prev, conflictPolicy: "fail", error: "" } : prev))}
+                />
+                Fail if destination exists
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="remote-copy-move-conflict"
+                  value="rename"
+                  checked={remoteCopyMoveDialog.conflictPolicy === "rename"}
+                  disabled={remoteCopyMoveDialog.busy}
+                  onChange={() => setRemoteCopyMoveDialog((prev) => (prev ? { ...prev, conflictPolicy: "rename", error: "" } : prev))}
+                />
+                Keep both with copy suffix
+              </label>
+            </div>
+            {remoteCopyMoveDialog.operation === "move" ? (
+              <div className="remote-copy-move-warning">
+                Move changes the remote server. Failed move jobs should preserve the source.
+              </div>
+            ) : null}
+            {remoteCopyMoveDialog.error ? <div className="error-banner">{remoteCopyMoveDialog.error}</div> : null}
+            <div className="delete-confirm-actions">
+              <button type="button" className="toolbar-button" disabled={remoteCopyMoveDialog.busy} onClick={() => setRemoteCopyMoveDialog(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={`toolbar-button ${remoteCopyMoveDialog.operation === "move" ? "danger" : "is-active"}`}
+                disabled={remoteCopyMoveDialog.busy}
+                onClick={() => void submitRemoteCopyMoveDialog()}
+              >
+                {remoteCopyMoveDialog.busy ? "Queueing..." : remoteCopyMoveDialog.operation === "copy" ? "Copy" : "Move"}
               </button>
             </div>
           </div>

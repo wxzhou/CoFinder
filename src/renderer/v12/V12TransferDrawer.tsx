@@ -9,6 +9,15 @@ const MIN_JOBS_PANE_HEIGHT = 96;
 const MAX_JOBS_PANE_HEIGHT = 560;
 
 export type V12DrawerQueueState = "hidden" | "expanded" | "collapsed" | "autoHidePending";
+type V12JobLaneFilter = "all" | "transfer" | "compression" | "remoteMutation" | "delete";
+
+export const V12_JOB_LANE_FILTER_LABELS: ReadonlyArray<readonly [V12JobLaneFilter, string]> = [
+  ["all", "All queues"],
+  ["transfer", "Transfer"],
+  ["compression", "Compress"],
+  ["remoteMutation", "Relocate"],
+  ["delete", "Delete"]
+];
 
 export type V12TransferDrawerProps = {
   state: V12DrawerQueueState;
@@ -29,7 +38,7 @@ export type V12TransferDrawerProps = {
 export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
   const expanded = props.state === "expanded" || props.state === "autoHidePending";
   const [filter, setFilter] = useState<"all" | "running" | "failed" | "done">("all");
-  const [laneFilter, setLaneFilter] = useState<"all" | "transfer" | "compression" | "remoteMutation" | "delete">("all");
+  const [laneFilter, setLaneFilter] = useState<V12JobLaneFilter>("all");
   const [collapsedTasks, setCollapsedTasks] = useState<Record<string, boolean>>({});
   const [paneHeight, setPaneHeight] = useState(() => readJobsPaneHeight());
   const laneFilteredTasks = props.tasks.filter((task) => laneFilter === "all" || taskLane(task) === laneFilter);
@@ -54,13 +63,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
   };
   const laneFilterChips = (
     <div className="v12m-tq-filters v12m-tq-lane-filters" role="tablist" aria-label="Job queue filters" onClick={(event) => event.stopPropagation()}>
-      {([
-        ["all", "All queues"],
-        ["transfer", "Transfer"],
-        ["compression", "Compression"],
-        ["remoteMutation", "Remote Ops"],
-        ["delete", "Delete"]
-      ] as const).map(([item, label]) => (
+      {V12_JOB_LANE_FILTER_LABELS.map(([item, label]) => (
         <button
           key={item}
           type="button"
