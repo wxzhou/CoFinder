@@ -238,6 +238,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 - **Jobs pane identity:** enqueue one upload, one download, one delete, and one gzip job; confirm the bottom drawer is labeled Jobs and shows each type with a matching icon/text label.
 - **SFTP fallback:** with a password-auth SFTP connection that can browse remotely but lacks passwordless rsync SSH, upload and download disposable files/folders and confirm each job succeeds over SFTP instead of staying failed with rsync exit code 255.
+
 - **Delete jobs:** delete a disposable local file/folder and a disposable remote file/folder. Confirm the confirmation dialog closes immediately after confirmation and the delete appears as a job while the panes remain usable.
 - **Large remote delete:** create a disposable deep remote folder tree under the isolated test root, delete the top folder, and confirm the job succeeds without reporting a false missing path.
 - **Gzip jobs:** gzip a disposable local file and remote file. Confirm `.gz` appears after success and the job is visible in Jobs.
@@ -248,6 +249,17 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Filters/actions:** confirm All / Running / Failed / Done filters include all job types; retry failed and clear completed still work.
 - **Jobs pane resize:** expand Jobs, drag the top edge upward/downward, and confirm the pane height changes while the header row stays usable; double-click the edge to reset height.
 - **Auto-hide:** leave Jobs unpinned after successful jobs and confirm it auto-hides according to the queue auto-hide delay preference.
+
+## V2.8.9 file operation submenu
+
+- **Submenu placement:** right-click a single local file and a single remote file. Confirm `Touch`, `Change Timestamp...`, `Compress`, `Decompress`, and `Generate MD5` appear under `File Operation`; confirm remote also includes `Change Permissions`.
+- **Touch:** run `File Operation -> Touch` on a disposable local file and remote file, refresh, and confirm the modified time updates without creating new paths.
+- **Change Timestamp:** run `Change Timestamp...`, fill Year / Month / Day / Hour / Minute / Second, confirm auto-advance between fields, submit, refresh, and confirm the modified time matches.
+- **File compression:** compress a disposable local and remote file. Confirm `.gz` output appears, the source is preserved unless the gzip-source-delete preference is enabled, and a second attempt fails without overwrite.
+- **Folder compression:** compress a disposable local and remote folder. Confirm `.tar.gz` output appears and the folder contents can be recovered by Decompress.
+- **Decompress:** decompress `.gz`, `.tar.gz`, and `.tgz` fixtures where practical. Confirm existing extraction targets cause a failed job or error and do not overwrite.
+- **Generate MD5:** run `Generate MD5` on a disposable local and remote file. Confirm `<name>.md5` appears, includes an MD5 hash plus the original basename, runs as a visible Jobs task, and a second attempt fails without overwrite.
+- **Future non-goals:** confirm there are no shipped `grep` or `less` commands yet; those remain planned in `docs/dev/V2.0.x_REMOTE_CONTENT_TOOLS_PLAN.md`.
 
 ## V2.8.9 toolbar icon polish
 

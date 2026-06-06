@@ -297,6 +297,7 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 - **Separate full Remote Quick Look**. The previous read-only remote preview / Quick Look path is superseded on dev by writable remote Open/Edit local-copy sessions. A true non-editing Quick Look would need a new explicit future design.
 - **Unrestricted parallel jobs**. Future parallelism should use the V2.0.x multi-lane design: serial transfer lane, configurable gzip lane, serial delete lane, and path locks.
 - **Remote gzip percentage progress**. Do not implement approximate percentage progress from sampling or `.gz` output growth; see `docs/dev/remote-gzip-progress-decision.md`.
+- **Remote/content `grep` and `less` tools**. These are planned as future explicit content-inspection tools, not part of v1.8.9; see `docs/dev/V2.0.x_REMOTE_CONTENT_TOOLS_PLAN.md`.
 - **Real Column View**. V2.7 defers it deliberately; see `docs/dev/column-view-decision.md`.
 - **Indexed/full-text search** (V1.7 only filters current listings and suggests already-known paths)
 - **Full ACL editor / remote shell file-manager mode** (V1.8 ships curated remote operations only)

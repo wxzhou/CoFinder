@@ -8,8 +8,8 @@ Current development version: **v1.8.9** (`package.json` version `1.8.9`).
 
 - Dual-pane local / remote browsing with tabs, sorting, filtering, breadcrumbs, history, recents, and favorites.
 - SFTP connection profiles, optional password saving through Electron `safeStorage`, and per-profile remote favorites.
-- Unified Jobs pane for rsync upload/download plus delete/gzip work, with conflict handling, retry, progress/status, folder-upload file detail, and drag-and-drop between panes.
-- Local and remote file operations: rename, delete, new folder, new text file, gzip single-file compression, basic metadata/Inspector, and selected remote operations such as octal chmod and small-file duplicate.
+- Unified Jobs pane for rsync upload/download plus delete, compress/decompress, and MD5 work, with conflict handling, retry, progress/status, folder-upload file detail, and drag-and-drop between panes.
+- Local and remote file operations: rename, delete, new folder, new text file, touch, change timestamp, file/folder compression and decompression, MD5 sidecar generation, basic metadata/Inspector, and selected remote operations such as chmod and small-file duplicate.
 - Local Quick Look for local files.
 - Remote local-copy workflow: open remote files with the default macOS app or a configured text editor, watch local saves, upload back, and surface conflicts safely. Text-editor opens are optimized for sniffed text and require confirmation before forcing binary files; default-app opens warn for large/executable files.
 - Pane-scoped V12 UI with compact toolbars, breadcrumb copy buttons, resizable sidebar/panes, Inspector, Jobs pane, remote auto-refresh preference, diagnostics, and macOS menu integration.

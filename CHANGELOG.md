@@ -12,6 +12,10 @@
 - Remote `Edit` continues to use the configured text editor, but can now force-open binary-looking files after explicit confirmation.
 - Remote `Open` routes source and script files such as `.sh`, `.py`, `.R`, `.m`, and `.cpp` to the configured text editor, even when executable, instead of warning or handing them to a default app that might run them.
 - Remote `Change Permissions` now uses an in-app User/Group/Other permission checkbox dialog with a synchronized octal-mode field instead of relying on `window.prompt`.
+- Local and remote context menus now group selected-item file utilities under `File Operation`.
+- Added local and remote `Touch` and `Change Timestamp` actions for selected files/folders.
+- Compression now supports local/remote files as `.gz` and folders as `.tar.gz`, with matching decompression for `.gz`, `.tar.gz`, and `.tgz` files.
+- Added local and remote `Generate MD5`, creating a non-overwriting `<filename>.md5` sidecar as a visible Jobs pane task.
 - Removed the redundant remote context-menu `Quick Look` entry; remote double-click, Space, and context-menu `Open` now all use editable remote local-copy semantics.
 - Added a fixed V12 titlebar sidebar toggle beside the traffic lights plus a `Cmd+Option+B` shortcut.
 
