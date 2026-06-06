@@ -141,6 +141,16 @@ type CreateFolderDialogState = {
   busy: boolean;
 };
 
+type ChmodDialogState = {
+  tabId: string;
+  connectionId: string;
+  path: string;
+  name: string;
+  mode: string;
+  error: string;
+  busy: boolean;
+};
+
 type ActivePane = "local" | "remote";
 
 type TransferDragPayload = {
@@ -316,6 +326,7 @@ export function App(props: AppProps = {}) {
   const [inlineRename, setInlineRename] = useState<InlineRenameState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<DeleteConfirmState | null>(null);
   const [createFolderDialog, setCreateFolderDialog] = useState<CreateFolderDialogState | null>(null);
+  const [chmodDialog, setChmodDialog] = useState<ChmodDialogState | null>(null);
   const deleteInFlightKeysRef = useRef(new Set<string>());
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
@@ -3164,19 +3175,41 @@ export function App(props: AppProps = {}) {
     setCreateFolderDialog(null);
   }
 
-  async function chmodRemoteSelection(tabId: string): Promise<void> {
+  function openChmodDialog(tabId: string): void {
     const tab = tabs.find((item) => item.id === tabId);
     const targetPath = tab?.remotePane.selectedFullPaths[0];
     if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
     const entry = tab.remotePane.entries.find((item) => item.fullPath === targetPath);
-    const mode = window.prompt("Remote permissions mode (octal)", entry?.permissions ? rwxToOctal(entry.permissions) : "644");
-    if (!mode) return;
-    const result = await window.cofinder.remote.chmod({ connectionId: tab.remotePane.connectionId, path: targetPath, mode });
-    if (!result.ok) {
-      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+    setChmodDialog({
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      path: targetPath,
+      name: entry?.name ?? targetPath,
+      mode: entry?.permissions ? rwxToOctal(entry.permissions) : "644",
+      error: "",
+      busy: false
+    });
+  }
+
+  async function submitChmodDialog(): Promise<void> {
+    if (!chmodDialog || chmodDialog.busy) return;
+    const mode = chmodDialog.mode.trim();
+    if (!/^[0-7]{3}$/.test(mode)) {
+      setChmodDialog((prev) => (prev ? { ...prev, error: "Mode must be three octal digits, for example 644." } : prev));
       return;
     }
-    await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", tabId);
+    setChmodDialog((prev) => (prev ? { ...prev, mode, error: "", busy: true } : prev));
+    const result = await window.cofinder.remote.chmod({ connectionId: chmodDialog.connectionId, path: chmodDialog.path, mode });
+    if (!result.ok) {
+      if (result.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(chmodDialog.tabId, chmodDialog.connectionId, result.error.message);
+      }
+      setChmodDialog((prev) => (prev ? { ...prev, busy: false, error: result.error.message } : prev));
+      return;
+    }
+    const tab = tabs.find((item) => item.id === chmodDialog.tabId);
+    if (tab?.remotePane.connectionId) await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", chmodDialog.tabId);
+    setChmodDialog(null);
   }
 
   async function duplicateRemoteSelection(tabId: string): Promise<void> {
@@ -5867,8 +5900,8 @@ export function App(props: AppProps = {}) {
                     <span className="context-shortcut">⌘D</span>
                   </button>
                   {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={async () => {
-                      await chmodRemoteSelection(contextMenu.tabId);
+                    <button type="button" className="context-item" onClick={() => {
+                      openChmodDialog(contextMenu.tabId);
                       setContextMenu(null);
                     }}>
                       Change Permissions
@@ -6012,6 +6045,57 @@ export function App(props: AppProps = {}) {
               </button>
               <button type="button" className="toolbar-button is-active" disabled={createFolderDialog.busy} onClick={() => void submitCreateFolderDialog()}>
                 {createFolderDialog.busy ? "Creating..." : "Create"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {chmodDialog ? (
+        <div
+          className="delete-confirm-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !chmodDialog.busy) setChmodDialog(null);
+          }}
+        >
+          <div className="delete-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="chmod-title">
+            <h3 id="chmod-title">Change Permissions</h3>
+            <p>
+              Set remote permissions for <strong>{chmodDialog.name}</strong>.
+            </p>
+            <label className="create-folder-field">
+              Octal mode
+              <input
+                autoFocus
+                inputMode="numeric"
+                pattern="[0-7]{3}"
+                maxLength={3}
+                value={chmodDialog.mode}
+                disabled={chmodDialog.busy}
+                onFocus={(event) => event.currentTarget.select()}
+                onChange={(event) =>
+                  setChmodDialog((prev) =>
+                    prev ? { ...prev, mode: event.target.value.replace(/[^0-7]/g, "").slice(0, 3), error: "" } : prev
+                  )
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitChmodDialog();
+                  } else if (event.key === "Escape" && !chmodDialog.busy) {
+                    event.preventDefault();
+                    setChmodDialog(null);
+                  }
+                }}
+              />
+            </label>
+            {chmodDialog.error ? <div className="error-banner">{chmodDialog.error}</div> : null}
+            <div className="delete-confirm-actions">
+              <button type="button" className="toolbar-button" disabled={chmodDialog.busy} onClick={() => setChmodDialog(null)}>
+                Cancel
+              </button>
+              <button type="button" className="toolbar-button is-active" disabled={chmodDialog.busy} onClick={() => void submitChmodDialog()}>
+                {chmodDialog.busy ? "Changing..." : "Change"}
               </button>
             </div>
           </div>
