@@ -163,6 +163,78 @@ describe("RemoteFileService path/list behavior", () => {
     expect(rename).not.toHaveBeenCalled();
   });
 
+  it("copies remote paths server-side with shell-safe quoting", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/src/中文 file's.txt") return { type: "-", size: 1 };
+      throw new Error("No such file");
+    });
+    const exec = vi.fn((_command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("close", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, client: { exec } }
+      })
+    } as any);
+
+    await expect(service.copyPath("c1", "/src/中文 file's.txt", "/dst/", { forceDestinationDirectory: true })).resolves.toBe("/dst/中文 file's.txt");
+    expect(exec).toHaveBeenCalledTimes(1);
+    expect(exec.mock.calls[0][0]).toContain("cp -a -- '/src/中文 file'\\''s.txt' '/dst/中文 file'\\''s.txt'");
+  });
+
+  it("moves remote paths into existing destination directories", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/src/file.txt") return { type: "-", size: 1 };
+      if (target === "/archive") return { type: "d", size: 0 };
+      throw new Error("No such file");
+    });
+    const exec = vi.fn((_command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("close", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, client: { exec } }
+      })
+    } as any);
+
+    await expect(service.movePath("c1", "/src/file.txt", "/archive")).resolves.toBe("/archive/file.txt");
+    expect(exec.mock.calls[0][0]).toContain("mv -- '/src/file.txt' '/archive/file.txt'");
+  });
+
+  it("fails remote copy when the target exists unless rename is requested", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/src/file.txt" || target === "/dst/file.txt") return { type: "-", size: 1 };
+      if (target === "/dst/file copy.txt") throw new Error("No such file");
+      throw new Error("No such file");
+    });
+    const exec = vi.fn((_command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("close", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, client: { exec } }
+      })
+    } as any);
+
+    await expect(service.copyPath("c1", "/src/file.txt", "/dst/file.txt")).rejects.toMatchObject({ code: "REMOTE_COPY_FAILED" });
+    await expect(service.copyPath("c1", "/src/file.txt", "/dst/file.txt", { conflictPolicy: "rename" })).resolves.toBe("/dst/file copy.txt");
+  });
+
   it("maps collision error in remote rename", async () => {
     const rename = vi.fn().mockRejectedValue(new Error("EEXIST: file already exists"));
     const service = new RemoteFileService({

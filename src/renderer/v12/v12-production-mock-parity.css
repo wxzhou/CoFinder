@@ -759,6 +759,11 @@
   color: #c46b00;
 }
 
+.cfv12-root .v12m-tq-kind--remoteCopy,
+.cfv12-root .v12m-tq-kind--remoteMove {
+  color: #5b6470;
+}
+
 .cfv12-root .v12m-tq-kind--delete {
   color: #b42318;
 }

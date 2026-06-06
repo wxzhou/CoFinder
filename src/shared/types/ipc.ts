@@ -73,6 +73,8 @@ export type RemoteErrorCode =
   | "REMOTE_TOUCH_FAILED"
   | "REMOTE_CHMOD_FAILED"
   | "REMOTE_DUPLICATE_FAILED"
+  | "REMOTE_COPY_FAILED"
+  | "REMOTE_MOVE_FAILED"
   | "REMOTE_DIRECTORY_SIZE_FAILED"
   | "REMOTE_PREVIEW_UNSUPPORTED"
   | "REMOTE_PREVIEW_FAILED"
@@ -195,6 +197,16 @@ export type EnqueueMd5Request = {
   pane: "local" | "remote";
   path: string;
   connectionId?: string;
+};
+
+export type RemoteCopyMoveConflictPolicy = "fail" | "rename";
+
+export type EnqueueRemoteCopyMoveRequest = {
+  tabId: string;
+  connectionId: string;
+  sources: string[];
+  destinationPath: string;
+  conflictPolicy?: RemoteCopyMoveConflictPolicy;
 };
 
 export type TransferConflictPolicy = "prompt" | "overwrite" | "skip" | "rename" | "cancel";
@@ -376,6 +388,8 @@ export interface IpcApi {
     enqueueGzip: (request: EnqueueGzipRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     enqueueDecompress: (request: EnqueueDecompressRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     enqueueMd5: (request: EnqueueMd5Request) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueRemoteCopy: (request: EnqueueRemoteCopyMoveRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueRemoteMove: (request: EnqueueRemoteCopyMoveRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     cancel: (request: { taskId: string }) => Promise<IpcResponse<{ canceled: true }>>;
     stop: (request: { taskId: string }) => Promise<IpcResponse<{ stopped: true }>>;
     retry: (request: { taskId: string }) => Promise<IpcResponse<{ retried: true }>>;

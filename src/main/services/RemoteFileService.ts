@@ -39,6 +39,12 @@ type RemoteCommandClient = {
     exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
   };
 };
+type RemoteCopyMoveClient = {
+  stat: (path: string) => Promise<RemoteStatItem>;
+  client?: {
+    exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
+  };
+};
 type RemoteDownloadClient = {
   stat: (path: string) => Promise<RemoteStatItem>;
   list: (path: string) => Promise<RemoteListItem[]>;
@@ -306,6 +312,99 @@ export class RemoteFileService {
       if (error instanceof RemoteServiceError) throw error;
       throw this.mapDuplicateError(error);
     }
+  }
+
+  async copyPath(
+    connectionId: string,
+    sourcePath: string,
+    destinationPath: string,
+    options?: { conflictPolicy?: "fail" | "rename"; forceDestinationDirectory?: boolean }
+  ): Promise<string> {
+    return this.copyOrMovePath("copy", connectionId, sourcePath, destinationPath, options);
+  }
+
+  async movePath(
+    connectionId: string,
+    sourcePath: string,
+    destinationPath: string,
+    options?: { conflictPolicy?: "fail" | "rename"; forceDestinationDirectory?: boolean }
+  ): Promise<string> {
+    return this.copyOrMovePath("move", connectionId, sourcePath, destinationPath, options);
+  }
+
+  private async copyOrMovePath(
+    operation: "copy" | "move",
+    connectionId: string,
+    sourcePath: string,
+    destinationPath: string,
+    options?: { conflictPolicy?: "fail" | "rename"; forceDestinationDirectory?: boolean }
+  ): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedSource = this.normalizeRemotePath(sourcePath);
+    const normalizedDestinationInput = this.normalizeRemotePath(destinationPath);
+    if (normalizedSource === "/") {
+      throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Refusing to copy or move the remote root directory.");
+    }
+    const client = connection.client as unknown as RemoteCopyMoveClient;
+    try {
+      await client.stat(normalizedSource);
+      const destination = await this.resolveCopyMoveTarget(client, normalizedSource, normalizedDestinationInput, {
+        conflictPolicy: options?.conflictPolicy ?? "fail",
+        forceDestinationDirectory: !!options?.forceDestinationDirectory
+      });
+      if (normalizedSource === destination) {
+        throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Source and destination are the same.");
+      }
+      if (operation === "move" && pathContains(normalizedSource, destination)) {
+        throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Cannot move a folder into itself.");
+      }
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) {
+        throw new RemoteServiceError(operation === "copy" ? "REMOTE_COPY_FAILED" : "REMOTE_MOVE_FAILED", "Remote command execution is unavailable.");
+      }
+      await execRemoteCommand(
+        exec,
+        operation === "copy" ? buildRemoteCopyCommand(normalizedSource, destination) : buildRemoteMoveCommand(normalizedSource, destination),
+        {
+          code: operation === "copy" ? "REMOTE_COPY_FAILED" : "REMOTE_MOVE_FAILED",
+          message: operation === "copy" ? "Remote copy command failed." : "Remote move command failed."
+        }
+      );
+      return destination;
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw operation === "copy" ? this.mapCopyError(error) : this.mapMoveError(error);
+    }
+  }
+
+  private async resolveCopyMoveTarget(
+    client: RemoteCopyMoveClient,
+    sourcePath: string,
+    destinationInput: string,
+    options: { conflictPolicy: "fail" | "rename"; forceDestinationDirectory: boolean }
+  ): Promise<string> {
+    let treatAsDirectory = options.forceDestinationDirectory;
+    if (!treatAsDirectory) {
+      try {
+        const stat = await client.stat(destinationInput);
+        treatAsDirectory = resolveRemoteType(stat) === "directory";
+      } catch (error) {
+        if (!isMissingRemotePathError(error)) throw error;
+      }
+    }
+    let targetPath = treatAsDirectory ? posixPath.join(destinationInput, posixPath.basename(sourcePath)) : destinationInput;
+    try {
+      await client.stat(targetPath);
+      if (options.conflictPolicy !== "rename") {
+        throw new RemoteServiceError("REMOTE_COPY_FAILED", "Remote destination already exists.");
+      }
+      targetPath = await this.nextCopyMovePath(client, targetPath);
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      if (!isMissingRemotePathError(error)) throw error;
+    }
+    return targetPath;
   }
 
   async compressFileGzip(connectionId: string, targetPath: string, options?: { deleteSourceAfterSuccess?: boolean }): Promise<string> {
@@ -763,6 +862,22 @@ export class RemoteFileService {
     throw new RemoteServiceError("REMOTE_DUPLICATE_FAILED", "Could not find an available duplicate name.");
   }
 
+  private async nextCopyMovePath(client: RemoteCopyMoveClient, targetPath: string): Promise<string> {
+    const dir = posixPath.dirname(targetPath);
+    const parsed = posixPath.parse(targetPath);
+    for (let i = 1; i <= 999; i += 1) {
+      const suffix = i === 1 ? " copy" : ` copy ${i}`;
+      const candidate = posixPath.join(dir, `${parsed.name}${suffix}${parsed.ext}`);
+      try {
+        await client.stat(candidate);
+      } catch (error) {
+        if (isMissingRemotePathError(error)) return candidate;
+        throw error;
+      }
+    }
+    throw new RemoteServiceError("REMOTE_COPY_FAILED", "Could not find an available destination name.");
+  }
+
   private async nextAvailableTextFilePath(client: RemoteCreateClient, parentPath: string): Promise<string> {
     for (let i = 1; i <= 999; i += 1) {
       const name = i === 1 ? "Untitled.txt" : `Untitled ${i}.txt`;
@@ -860,6 +975,24 @@ export class RemoteFileService {
     if (/EACCES|Permission denied/i.test(message)) return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
     if (/No such file|ENOENT/i.test(message)) return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
     return new RemoteServiceError("REMOTE_DUPLICATE_FAILED", "Failed to duplicate remote file.", message);
+  }
+
+  private mapCopyError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote copy failed";
+    if (/EACCES|Permission denied/i.test(message)) return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    if (/already exists|EEXIST/i.test(message)) return new RemoteServiceError("REMOTE_COPY_FAILED", "Copy target already exists.", message);
+    return new RemoteServiceError("REMOTE_COPY_FAILED", "Failed to copy remote path.", message);
+  }
+
+  private mapMoveError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote move failed";
+    if (/EACCES|Permission denied/i.test(message)) return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    if (/already exists|EEXIST/i.test(message)) return new RemoteServiceError("REMOTE_MOVE_FAILED", "Move target already exists.", message);
+    return new RemoteServiceError("REMOTE_MOVE_FAILED", "Failed to move remote path.", message);
   }
 
   private mapCompressError(error: unknown): RemoteServiceError {
@@ -1055,6 +1188,14 @@ function buildRemoteMd5Command(sourcePath: string, destinationPath: string, temp
   ].join(" && ");
 }
 
+function buildRemoteCopyCommand(sourcePath: string, destinationPath: string): string {
+  return `cp -a -- ${shellQuote(sourcePath)} ${shellQuote(destinationPath)}`;
+}
+
+function buildRemoteMoveCommand(sourcePath: string, destinationPath: string): string {
+  return `mv -- ${shellQuote(sourcePath)} ${shellQuote(destinationPath)}`;
+}
+
 function buildRemoteTouchCommand(targetPath: string, touchStamp?: string): string {
   const target = shellQuote(targetPath);
   const timestampArgs = touchStamp ? `-t ${shellQuote(touchStamp)} ` : "";
@@ -1069,6 +1210,17 @@ function assertSafeRemoteDeletePath(targetPath: string): void {
   if (!targetPath || targetPath === "/" || targetPath === "." || targetPath === "..") {
     throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Refusing to delete unsafe remote path.");
   }
+}
+
+function pathContains(parent: string, child: string): boolean {
+  const normalizedParent = posixPath.normalize(parent).replace(/\/+$/, "") || "/";
+  const normalizedChild = posixPath.normalize(child).replace(/\/+$/, "") || "/";
+  return normalizedChild.startsWith(`${normalizedParent}/`);
+}
+
+function isMissingRemotePathError(error: unknown): boolean {
+  const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : "";
+  return /No such file|ENOENT|no such path|does not exist/i.test(message);
 }
 
 async function downloadRemoteFileToLocal(client: RemoteDownloadClient, remotePath: string, localPath: string): Promise<void> {

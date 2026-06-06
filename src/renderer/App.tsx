@@ -3274,6 +3274,47 @@ export function App(props: AppProps = {}) {
     );
   }
 
+  async function enqueueRemoteCopyMove(tabId: string, operation: "copy" | "move"): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId || tab.remotePane.selectedFullPaths.length === 0) return;
+    const count = tab.remotePane.selectedFullPaths.length;
+    const operationLabel = operation === "copy" ? "Copy" : "Move";
+    const defaultDestination = `${tab.remotePane.currentPath.replace(/\/+$/, "") || "/"}/`;
+    const destination = window.prompt(
+      `${operationLabel} ${count} selected remote ${count === 1 ? "item" : "items"} to:\n\nEnter a remote folder path ending with /, or a full destination path for one item.`,
+      defaultDestination
+    )?.trim();
+    if (!destination) return;
+    if (count > 1 && !destination.endsWith("/")) {
+      window.alert("For multiple selected items, enter a destination folder path ending with /.");
+      return;
+    }
+    if (operation === "move") {
+      const confirmed = window.confirm(
+        `Move ${count} selected remote ${count === 1 ? "item" : "items"}?\n\nThis changes the remote server. Failed move jobs should preserve the source.`
+      );
+      if (!confirmed) return;
+    }
+    const conflictAnswer = window.prompt("If the destination already exists, type one option: fail, rename", "fail");
+    const conflictPolicy: "fail" | "rename" = conflictAnswer?.trim().toLowerCase() === "rename" ? "rename" : "fail";
+    const request = {
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      sources: tab.remotePane.selectedFullPaths,
+      destinationPath: destination,
+      conflictPolicy
+    };
+    const result = operation === "copy"
+      ? await window.cofinder.transfer.enqueueRemoteCopy(request)
+      : await window.cofinder.transfer.enqueueRemoteMove(request);
+    if (!result.ok) {
+      if (result.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(tabId, tab.remotePane.connectionId, result.error.message);
+      }
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+    }
+  }
+
   async function compressLocalSelection(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     const targetPath = tab?.localPane.selectedFullPaths[0];
@@ -6128,6 +6169,18 @@ export function App(props: AppProps = {}) {
                       <span className="context-shortcut">F2</span>
                     </button>
                   ) : null}
+                  <button type="button" className="context-item" onClick={async () => {
+                    await enqueueRemoteCopyMove(contextMenu.tabId, "copy");
+                    setContextMenu(null);
+                  }}>
+                    Copy To...
+                  </button>
+                  <button type="button" className="context-item" onClick={async () => {
+                    await enqueueRemoteCopyMove(contextMenu.tabId, "move");
+                    setContextMenu(null);
+                  }}>
+                    Move To...
+                  </button>
                   <button type="button" className="context-item" onClick={() => {
                     openDeleteConfirm(contextMenu.tabId, "remote");
                     setContextMenu(null);

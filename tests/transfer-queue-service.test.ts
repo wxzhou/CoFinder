@@ -2,7 +2,7 @@ import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
 import { TransferQueueService } from "../src/main/services/TransferQueueService";
-import type { EnqueueDownloadRequest, EnqueueUploadRequest } from "../src/shared/types/ipc";
+import type { EnqueueDownloadRequest, EnqueueUploadRequest, RemoteCopyMoveConflictPolicy } from "../src/shared/types/ipc";
 import type { TransferTaskItem } from "../src/shared/types/models";
 
 class FakeProc extends EventEmitter {
@@ -51,6 +51,8 @@ function createService(options?: {
   remoteDecompress?: (connectionId: string, path: string) => Promise<string>;
   localMd5?: (path: string) => Promise<string>;
   remoteMd5?: (connectionId: string, path: string) => Promise<string>;
+  remoteCopy?: (connectionId: string, sourcePath: string, destinationPath: string, options: { conflictPolicy: RemoteCopyMoveConflictPolicy; forceDestinationDirectory: boolean }) => Promise<string>;
+  remoteMove?: (connectionId: string, sourcePath: string, destinationPath: string, options: { conflictPolicy: RemoteCopyMoveConflictPolicy; forceDestinationDirectory: boolean }) => Promise<string>;
   remoteUploadFallback?: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
   remoteDownloadFallback?: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
   compressionConcurrency?: number;
@@ -80,6 +82,8 @@ function createService(options?: {
     remoteDecompress: options?.remoteDecompress,
     localMd5: options?.localMd5,
     remoteMd5: options?.remoteMd5,
+    remoteCopy: options?.remoteCopy,
+    remoteMove: options?.remoteMove,
     remoteUploadFallback: options?.remoteUploadFallback,
     remoteDownloadFallback: options?.remoteDownloadFallback,
     compressionConcurrency: options?.compressionConcurrency
@@ -436,6 +440,56 @@ describe("TransferQueueService state machine", () => {
     });
     expect(localMd5).toHaveBeenCalledWith("/tmp/source.txt");
     expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("runs remote copy as a visible remote mutation job without spawning rsync", async () => {
+    const remoteCopy = vi.fn(async () => "/remote/dst/source.txt");
+    const { service, spawnProcess } = createService({ remoteCopy });
+
+    await service.enqueueRemoteCopy({
+      tabId: "tab-a",
+      connectionId: "c1",
+      sources: ["/remote/src/source.txt"],
+      destinationPath: "/remote/dst/",
+      conflictPolicy: "rename"
+    });
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("remoteCopy");
+      expect(task.status).toBe("success");
+      expect(task.destination).toBe("/remote/dst/source.txt");
+      expect(task.progressText).toBe("Remote copy completed.");
+    });
+    expect(remoteCopy).toHaveBeenCalledWith("c1", "/remote/src/source.txt", "/remote/dst/", {
+      conflictPolicy: "rename",
+      forceDestinationDirectory: true
+    });
+    expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("keeps remote move pending while a parent delete lock is running", async () => {
+    let finishDelete!: (value: number) => void;
+    const remoteDelete = vi.fn(() => new Promise<number>((resolve) => { finishDelete = resolve; }));
+    const remoteMove = vi.fn(async () => "/remote/archive/child");
+    const { service } = createService({ remoteDelete, remoteMove });
+
+    await service.enqueueDelete({ tabId: "tab-a", pane: "remote", connectionId: "c1", paths: ["/remote/folder"] });
+    await service.enqueueRemoteMove({
+      tabId: "tab-a",
+      connectionId: "c1",
+      sources: ["/remote/folder/child"],
+      destinationPath: "/remote/archive/"
+    });
+
+    await vi.waitFor(() => {
+      expect(remoteDelete).toHaveBeenCalledTimes(1);
+      expect(remoteMove).not.toHaveBeenCalled();
+      expect(service.list().map((task) => task.status)).toEqual(["running", "pending"]);
+    });
+
+    finishDelete(1);
+    await vi.waitFor(() => expect(remoteMove).toHaveBeenCalledTimes(1));
   });
 
   it("runs compression lane jobs in parallel up to the configured concurrency", async () => {
