@@ -46,12 +46,20 @@
   flex-shrink: 0;
   height: var(--cfv12-title-h);
   display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  padding: 0 12px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 60px;
   background: var(--cfv12-bg-chrome);
   border-bottom: 1px solid var(--cfv12-sep);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  -webkit-app-region: drag;
+}
+
+.cfv12-title-leading {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  height: 100%;
 }
 
 .cfv12-traffic {
@@ -120,12 +128,15 @@
 .cfv12-core {
   flex: 1;
   display: flex;
+  position: relative;
   min-height: 0;
 }
 
 .cfv12-sidebar {
   width: var(--cfv12-sidebar-w);
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
   background: var(--cfv12-bg-sidebar);
   border-right: 1px solid var(--cfv12-sep);
   overflow: auto;
@@ -134,14 +145,29 @@
 
 .cfv12-sidebar-wrap {
   flex: 0 0 auto;
-  min-width: 180px;
   max-width: 420px;
   min-height: 0;
   display: flex;
+  overflow: hidden;
+  transition: width 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: width;
 }
 
 .cfv12-sidebar-wrap .cfv12-sidebar {
   width: 100%;
+  flex: 0 0 100%;
+  transition:
+    opacity 150ms ease,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.cfv12-sidebar-wrap.is-collapsed {
+  pointer-events: none;
+}
+
+.cfv12-sidebar-wrap.is-collapsed .cfv12-sidebar {
+  opacity: 0;
+  transform: translateX(-14px);
 }
 
 .cfv12-sidebar-resizer {
@@ -149,6 +175,17 @@
   cursor: col-resize;
   background: transparent;
   border-right: 1px solid var(--cfv12-sep);
+  transition:
+    flex-basis 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 120ms ease,
+    border-color 180ms ease;
+}
+
+.cfv12-sidebar-resizer.is-collapsed {
+  flex-basis: 0;
+  opacity: 0;
+  pointer-events: none;
+  border-right-color: transparent;
 }
 
 .cfv12-sidebar-resizer:hover {
@@ -399,32 +436,88 @@
 .cfv12-tabsHost .tab-bar {
   flex: 1;
   min-width: 0;
-  height: calc(100% - 5px);
-  margin-top: 5px;
+  height: 100%;
+  margin-top: 0;
   border-bottom: none;
   background: transparent;
-  padding: 0 10px 0 0;
-  gap: 2px;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  -webkit-app-region: drag;
 }
 
 .cfv12-tabsHost .tab-item {
-  height: calc(100% - 1px);
-  margin-top: 0;
-  border-radius: 7px 7px 0 0;
-  font-size: 11px;
+  flex: 0 0 148px;
+  min-width: 148px;
+  height: 30px;
+  margin-top: 6px;
+  margin-right: 0;
+  border: 0;
+  border-radius: 12px 12px 0 0;
+  font-size: 12px;
   font-weight: 500;
   max-width: 200px;
+  -webkit-app-region: no-drag;
+}
+
+.cfv12-tabsHost .tab-item:not(.is-active) {
+  background: #f4f4f4;
+}
+
+.cfv12-tabsHost .tab-item::before,
+.cfv12-tabsHost .tab-item::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.cfv12-tabsHost .tab-item:not(.is-active)::after {
+  right: 0;
+  top: 9px;
+  width: 1px;
+  height: 14px;
+  background: color-mix(in srgb, var(--cfv12-fg-faint) 34%, transparent);
+}
+
+.cfv12-tabsHost .tab-item:not(.is-active):has(+ .tab-item.is-active)::after {
+  opacity: 0;
+}
+
+.cfv12-tabsHost .tab-item.is-active::before,
+.cfv12-tabsHost .tab-item.is-active::after {
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+  background: transparent;
+}
+
+.cfv12-tabsHost .tab-item.is-active::before {
+  left: -10px;
+  opacity: 1;
+  background: radial-gradient(circle at 0 0, transparent 0 10px, var(--bg-pane) 10.5px);
+}
+
+.cfv12-tabsHost .tab-item.is-active::after {
+  right: -10px;
+  opacity: 1;
+  background: radial-gradient(circle at 100% 0, transparent 0 10px, var(--bg-pane) 10.5px);
 }
 
 .cfv12-tabsHost .tab-item.is-active {
   font-weight: 600;
-  margin-bottom: -1px;
+  margin-bottom: 0;
 }
 
 .cfv12-tabsHost .tab-add {
-  height: 26px;
-  align-self: center;
-  margin-bottom: 5px;
+  height: 30px;
+  align-self: flex-end;
+  margin: 0 0 0 8px;
+  -webkit-app-region: no-drag;
+}
+
+.cfv12-tabsHost .tab-add svg {
+  transform: translateY(1px);
 }
 
 /* File panes: real lists from App (M2) */

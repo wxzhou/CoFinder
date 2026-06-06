@@ -37,7 +37,11 @@ import { RemotePreviewService } from "../services/RemotePreviewService";
 import { RemoteEditService } from "../services/RemoteEditService";
 import { buildSshTerminalCommand } from "./sshTerminalCommand";
 import type {
+  EnqueueDecompressRequest,
+  EnqueueDeleteRequest,
   EnqueueDownloadRequest,
+  EnqueueGzipRequest,
+  EnqueueMd5Request,
   EnqueueUploadRequest,
   IpcResponse,
   ProfileUpsertPayload,
@@ -56,7 +60,18 @@ import type { EntryType, ServerProfile } from "../../shared/types/models";
 const localFileService = new LocalFileService();
 const connectionManager = new ConnectionManager();
 const remoteFileService = new RemoteFileService(connectionManager);
-const transferQueueService = new TransferQueueService();
+const transferQueueService = new TransferQueueService({
+  localDelete: (paths) => localFileService.deletePaths(paths),
+  remoteDelete: (connectionId, paths) => remoteFileService.deletePaths(connectionId, paths),
+  localGzip: (targetPath, options) => localFileService.compressFileGzip(targetPath, options),
+  remoteGzip: (connectionId, targetPath, options) => remoteFileService.compressFileGzip(connectionId, targetPath, options),
+  localDecompress: (targetPath) => localFileService.decompressPath(targetPath),
+  remoteDecompress: (connectionId, targetPath) => remoteFileService.decompressPath(connectionId, targetPath),
+  localMd5: (targetPath) => localFileService.generateMd5File(targetPath),
+  remoteMd5: (connectionId, targetPath) => remoteFileService.generateMd5File(connectionId, targetPath),
+  remoteUploadFallback: (connectionId, localPath, remotePath) => remoteFileService.uploadPathToRemote(connectionId, localPath, remotePath),
+  remoteDownloadFallback: (connectionId, remotePath, localPath) => remoteFileService.downloadPathToLocal(connectionId, remotePath, localPath)
+});
 const userData = app.getPath("userData");
 const mainLogFilePath = path.join(userData, "main.log");
 const settingsService = new SettingsService(defaultSettingsPath(userData));
@@ -191,6 +206,28 @@ export function registerIpcHandlers(): void {
       return ok({ created: true as const, path: createdPath });
     } catch (error) {
       return toIpcError(error, "LOCAL_CREATE_FILE_FAILED", "Failed to create local text file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.local.compressGzip, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:compressGzip request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const compressedPath = await localFileService.compressFileGzip(targetPath);
+      return ok({ compressed: true as const, path: compressedPath });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_COMPRESS_FAILED", "Failed to compress local file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.local.touch, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:touch request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      await localFileService.touchPath(targetPath, { timestamp: optionalString(body.timestamp) });
+      return ok({ touched: true as const });
+    } catch (error) {
+      return toIpcError(error, "LOCAL_TOUCH_FAILED", "Failed to touch local path.");
     }
   });
 
@@ -348,6 +385,30 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.remote.compressGzip, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:compressGzip request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const compressedPath = await remoteFileService.compressFileGzip(connectionId, targetPath);
+      return ok({ compressed: true as const, path: compressedPath });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_COMPRESS_FAILED", "Failed to compress remote file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.touch, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:touch request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      await remoteFileService.touchPath(connectionId, targetPath, { timestamp: optionalString(body.timestamp) });
+      return ok({ touched: true as const });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_TOUCH_FAILED", "Failed to touch remote path.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.remote.chmod, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:chmod request.");
@@ -476,11 +537,18 @@ export function registerIpcHandlers(): void {
       const tabId = requiredId(body.tabId, "tabId", "REMOTE_INVALID_INPUT");
       const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
       const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const opener = body.opener === "default" ? "default" : "text";
       const settings = await settingsService.get();
       return ok({
-        session: await remoteEditService.openTextEditSession(
+        session: await remoteEditService.openLocalCopySession(
           { tabId, connectionId, remotePath: targetPath },
-          { textEditor: settings.general.defaultTextEditor }
+          {
+            opener,
+            textEditor: settings.general.defaultTextEditor,
+            allowBinaryText: optionalBoolean(body.allowBinaryText),
+            allowLargeFile: optionalBoolean(body.allowLargeFile),
+            allowExecutable: optionalBoolean(body.allowExecutable)
+          }
         )
       });
     } catch (error) {
@@ -625,6 +693,62 @@ export function registerIpcHandlers(): void {
         return ok(data);
       } catch (error) {
         return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected transfer queue error.");
+      }
+    }
+  );
+
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueDelete,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueDelete request.");
+        const req = parseDeleteRequest(body);
+        const data = await transferQueueService.enqueueDelete(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
+      }
+    }
+  );
+
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueGzip,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueGzip request.");
+        const req = parseGzipRequest(body, (await settingsService.get()).transfer.deleteSourceAfterGzip);
+        const data = await transferQueueService.enqueueGzip(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
+      }
+    }
+  );
+
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueDecompress,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueDecompress request.");
+        const req = parseDecompressRequest(body);
+        const data = await transferQueueService.enqueueDecompress(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
+      }
+    }
+  );
+
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueMd5,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueMd5 request.");
+        const req = parseMd5Request(body);
+        const data = await transferQueueService.enqueueMd5(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
       }
     }
   );
@@ -1171,6 +1295,59 @@ function parseDownloadRequest(body: Record<string, unknown>): EnqueueDownloadReq
     conflictPolicy: parseConflictPolicy(body.conflictPolicy),
     preserveTimestamps: optionalBoolean(body.preserveTimestamps),
     localTargetOverrides: parseStringMap(body.localTargetOverrides, "localTargetOverrides")
+  };
+}
+
+function parseDeleteRequest(body: Record<string, unknown>): EnqueueDeleteRequest {
+  const pane = body.pane === "remote" ? "remote" : "local";
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    pane,
+    connectionId: optionalString(body.connectionId),
+    paths: Array.isArray(body.paths)
+      ? body.paths.map((v) =>
+          pane === "remote"
+            ? normalizeRemotePathInput(v, "TRANSFER_INVALID_REQUEST", "path")
+            : validateLocalPathInput(v, "TRANSFER_INVALID_REQUEST", "path")
+        )
+      : []
+  };
+}
+
+function parseGzipRequest(body: Record<string, unknown>, defaultDeleteSourceAfterSuccess: boolean): EnqueueGzipRequest {
+  const pane = body.pane === "remote" ? "remote" : "local";
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    pane,
+    connectionId: optionalString(body.connectionId),
+    path: pane === "remote"
+      ? normalizeRemotePathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
+      : validateLocalPathInput(body.path, "TRANSFER_INVALID_REQUEST", "path"),
+    deleteSourceAfterSuccess: optionalBoolean(body.deleteSourceAfterSuccess) ?? defaultDeleteSourceAfterSuccess
+  };
+}
+
+function parseDecompressRequest(body: Record<string, unknown>): EnqueueDecompressRequest {
+  const pane = body.pane === "remote" ? "remote" : "local";
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    pane,
+    connectionId: optionalString(body.connectionId),
+    path: pane === "remote"
+      ? normalizeRemotePathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
+      : validateLocalPathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
+  };
+}
+
+function parseMd5Request(body: Record<string, unknown>): EnqueueMd5Request {
+  const pane = body.pane === "remote" ? "remote" : "local";
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    pane,
+    connectionId: optionalString(body.connectionId),
+    path: pane === "remote"
+      ? normalizeRemotePathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
+      : validateLocalPathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
   };
 }
 

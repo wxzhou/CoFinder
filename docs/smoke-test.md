@@ -8,11 +8,11 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 
 **Legacy classic UI:** use **`?ui=v11`**, **`?legacy=1`**, **`COFINDER_LEGACY_UI=1`**, or a build with **`VITE_COFINDER_LEGACY_UI=1`** — then run overlapping **V1.1 baseline** checks below for parity.
 
-- **Layout:** sidebar, toolbar, tab strip, dual panes, bottom transfer drawer render without overlap; inactive pane reads visually cooler than the focused pane.
-- **Toolbar:** back / forward / up / refresh follow the **focused** pane; plug opens Site Manager when disconnected and **disconnects** when connected; upload/download/delete/Get Info / inspector toggle match enabled states of the classic panes.
+- **Layout:** sidebar, tab strip, dual panes, per-pane toolbars, and bottom Jobs pane render without overlap; inactive pane reads visually cooler than the focused pane.
+- **Pane toolbars:** local and remote toolbar buttons operate on their own pane without needing active-pane preselection; Copy Path appears once per pane on the breadcrumb row.
 - **Remote (M4):** disconnected pane shows embedded connect + profile list + **Open Site Manager**; connect and failures surface in-pane; connected list matches M2 behavior.
 - **Inspector (M3):** single-click selection timing, double-click folder navigation, Cmd/Ctrl+A immediate reveal — no inspector flash regressions.
-- **Transfers (M5):** enqueue from context menu or toolbar; drawer shows live tasks, **Pin** / **Clear** / expand; cancel pending / stop running.
+- **Jobs (M5):** enqueue from context menu or toolbar; drawer shows live upload/download/delete/gzip jobs, **Pin** / **Clear** / expand; cancel pending / stop running transfer jobs.
 - **Then:** run **Local / Remote / Tabs / Transfer / Multi-select / Quick Look / Selection regression** sections below on the same v12 session (behavior must match V1.1).
 
 ## V1.1 baseline (still required for classic UI and v12 parity)
@@ -46,7 +46,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 ## V1.6 preferences MVP
 
-- **Open Preferences:** in default V12 UI, click the toolbar Preferences button; in legacy classic UI, use the top-bar Preferences button. Confirm the modal opens and closes cleanly.
+- **Open Preferences:** in default V12 UI, click the sidebar footer Preferences button; in legacy classic UI, use the top-bar Preferences button. Confirm the modal opens and closes cleanly.
 - **Settings round-trip:** change row density, queue auto-hide delay, default pane ratio, and default local path. Save, quit, relaunch, and confirm values persist.
 - **Default local path:** set a temporary local test directory as default, relaunch, and confirm the first local pane opens there. Reset to blank when done.
 - **Restore last local path:** enable restore last session, navigate the active local pane to another isolated test directory, quit, relaunch, and confirm the first local pane opens at that last local path. Remote connections must not auto-reconnect.
@@ -55,13 +55,13 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Conflict policy:** set default conflict policy to `rename`, trigger an upload/download conflict, and confirm CoFinder keeps both without prompting. Repeat with `skip` on a two-file transfer, then reset to `prompt`.
 - **Queue auto-hide:** set delay to 1 second, run a successful small transfer, and confirm the queue hides after success when not pinned.
 - **Timestamp preservation:** with preserve timestamps enabled, run a small transfer and confirm modification time is preserved where the filesystem/server supports it. Disable it, repeat with a new file, and confirm rsync no longer preserves the original mtime.
-- **Appearance:** toggle compact/comfortable density, default inspector visibility, pane ratio, and sidebar visibility; relaunch and confirm settings apply.
+- **Appearance:** toggle compact/comfortable density, default inspector visibility, pane ratio, and sidebar visibility; relaunch and confirm settings apply. In V12, also use the fixed titlebar sidebar button beside the traffic lights and `Cmd+Option+B` to hide/show the sidebar; confirm the button does not move between expanded and collapsed states.
 - **Shortcut display:** confirm Preferences shows the implemented shortcut list and that the bindings still match the V1.3 shortcut smoke section.
 
 ## V1.7 search, filter, and navigation
 
 - **Local quick filter:** open a local folder with several files/folders, type a substring in the local filter box, and confirm only matching names remain. Clear the filter and confirm the full current listing returns.
-- **Remote quick filter:** connect to the remote test root, type a substring in the remote filter box or focus the remote pane and use the V12 toolbar filter, and confirm filtering is local to the already-loaded listing with no navigation.
+- **Remote quick filter:** connect to the remote test root, type a substring in the remote pane toolbar filter, and confirm filtering is local to the already-loaded listing with no navigation.
 - **Selection safety:** select several rows, change the filter, and confirm the selection is cleared instead of leaving hidden selected rows active.
 - **Local autocomplete:** navigate to two or more local folders, type the beginning of a known recent/favorite path in the local path field, and confirm suggestions appear. Pick one and press Enter to navigate.
 - **Remote autocomplete:** navigate to two or more remote folders under the current profile, type the beginning of a visited path, and confirm suggestions appear without extra remote listing until you submit the path.
@@ -100,7 +100,8 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Folder target:** upload a local folder `xyz` into a remote target and confirm the result is `target/xyz`, not `target/xyz/xyz`.
 - **Unicode paths:** upload/download files and folders with Chinese characters in local and remote paths.
 - **Create/delete:** create local and remote folders, create local and remote text files, and delete local and remote folders inside isolated test roots.
-- **Remote preview:** open a remote `.bed` or tab-delimited text file and a common image; binary unsupported files should show a clear unsupported message.
+- **Remote Open/Edit:** open a remote `.bed` or tab-delimited text file with `Edit`; save in the configured editor and confirm upload-back. Use remote `Open` on a common image or document and confirm the default macOS app opens an app-managed local copy. Try forcing `Edit` on a binary file and confirm CoFinder asks before opening it in the text editor.
+- **Remote source/script Open:** use remote `Open` or double-click on `.sh`, `.py`, `.R`, `.m`, or `.cpp` files with executable permissions. Confirm CoFinder opens the configured text editor without an executable-file warning and does not execute the file.
 - **Inspector:** `Cmd+I`, context-menu Show Inspector, and toolbar Inspector should reveal the Inspector without opening a modal; directory selections should show file/folder child counts.
 - **Navigation/layout:** verify Home, Copy Current Path (`Cmd+Option+C`), active-pane indicator, macOS CoFinder > Preferences, restore-last-path behavior, and persisted sidebar resizing.
 - **Scope cuts:** confirm there is no UI implying remote edit auto-sync, full auto-update install, App Store distribution, or cross-platform support.
@@ -113,7 +114,75 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Breadcrumb path entry:** in a V12 local pane, confirm no separate full path address field appears next to breadcrumb. Click empty breadcrumb space or double-click the breadcrumb, type a valid local path, press Enter, and confirm navigation.
 - **Remote breadcrumb path entry:** connect to the isolated remote test root, press `Cmd+L`, type another allowed remote path, press Enter, and confirm navigation. Press Escape from edit mode and confirm breadcrumb mode returns without navigation.
 - **Breadcrumb copy path:** click the breadcrumb Copy Path icon for local and remote panes and confirm the clipboard contains the pane current path.
-- **Navigation row:** confirm Filter names, Recent, History, and Clear Recent remain available and do not squeeze the breadcrumb path display.
+
+## V2.8.1 toolbar cleanup
+
+- **No global toolbar:** confirm the V12 shell has no top global toolbar between the tab strip and dual-pane workspace.
+- **Local pane toolbar:** verify Back, Forward, Enclosing folder, Home, Refresh, Toggle Inspector, Upload, New Folder, New Text File, Delete, Open Terminal Here, Filter names, Recent, History, and Clear Recent are all on one local toolbar row and operate on the local pane.
+- **Remote pane toolbar:** after connecting, verify Back, Forward, Enclosing folder, Home, Refresh, Toggle Inspector, Download, Edit Remote Text File, New Folder, New Text File, Delete, Open SSH Terminal Here, Filter names, Recent, History, and Clear Recent are all on one remote toolbar row and operate on the remote pane.
+- **Copy path placement:** confirm each pane has exactly one breadcrumb-row Copy Path button and the former global Copy Current Path button is absent.
+- **Disconnect placement:** confirm remote Disconnect is available from the Connected status menu, not from the remote pane toolbar.
+- **Remote status placement:** confirm Connected/Offline/Connecting/Error appears immediately beside the remote pane title.
+- **Preferences placement:** click the lower-left sidebar gear and confirm the Preferences modal opens.
+- **Compact history controls:** confirm Recent, History, and Clear Recent appear as icon controls with tooltips/accessible labels and still perform their original actions.
+- **Danger color:** connect to a remote profile and confirm the Connected status menu's Disconnect action is visibly red.
+
+## V2.8.2 selection and Inspector shortcuts
+
+- **Local Shift range:** sort/filter a local folder if useful, click one visible file, then `Shift`-click another visible file; confirm exactly the two files and visible rows between them are selected.
+- **Remote Shift range:** repeat the same range-selection check in a connected remote folder.
+- **Multi-select Inspector shortcut:** select multiple local files and press `Cmd+I`; confirm the Inspector opens with multi-selection summary. Repeat on remote while connected.
+- **Inspector shortcut toggle:** select a single file, press `Cmd+I` to open Inspector, press `Cmd+I` again, and confirm the Inspector closes. Repeat for local and remote.
+
+## V2.8.3 Inspector and keyboard selection
+
+- **Folder Inspector size:** select a local folder, open Inspector, and confirm Size shows a calculated folder size rather than `—`. Repeat on a remote folder.
+- **Name-column selection:** select a row and confirm the blue selection background appears only behind the Name column. Click Date modified, Size, Kind, and blank list space; each should clear selection.
+- **Keyboard row movement:** select one visible row, press `Down` and `Up`, and confirm selection moves one visible row at a time instead of scrolling the whole list.
+- **Keyboard range extension:** select one row, press `Shift+Down` several times and `Shift+Up` once; confirm the contiguous range extends and shrinks from the anchor. Repeat in local and remote panes.
+- **Page navigation shortcuts:** confirm `Cmd+Up` / `Cmd+Down` still jump to list top/bottom and `Option+Up` / `Option+Down` still page up/down.
+- **Inspector icon polish:** open Inspector for a file and a folder. Confirm the top preview icon is larger, has no rounded-square wrapper, and document icons have rounded page/fold corners.
+
+## V2.8.4 Inspector and remote-edit polish
+
+- **Document icon depth:** compare a file row and Inspector file preview with Finder-style document icons; confirm the page has subtle depth, fold shading, and rounded geometry.
+- **Disconnect placement:** connect to a remote profile and confirm Disconnect is absent from the remote toolbar. Open the Connected status menu beside the remote title and confirm Disconnect is available there.
+- **Delete separation:** confirm the remote toolbar Delete button is no longer adjacent to any Disconnect control.
+- **Progressive folder Inspector:** select a large local folder and a large remote folder. Confirm the Inspector appears quickly, Size / Files / Folders show loading while directory details are calculated, and update in place when done.
+- **Remote edit completion:** edit and save a remote text file. Confirm successful upload completion appears in Jobs and auto-hides like a normal successful transfer, while the Remote edits panel does not keep a persistent uploaded row.
+
+## V2.8.5 file-list columns and tab chrome
+
+- **Three-significant-digit sizes:** check file-list Size cells, Inspector size, selected size, and total size. Values should use three significant digits, for example `1.00 KB`, `12.3 MB`, and `123 GB`.
+- **Column resizing:** drag the boundaries between Name / Date modified / Size / Kind and confirm widths update without breaking row alignment.
+- **Column visibility menu:** right-click a V12 file-list header. Confirm Name is checked and disabled, and Date modified / Size / Kind / Permission / Owner can be toggled.
+- **Permission and Owner columns:** enable Permission and Owner and confirm they render available metadata or `—`.
+- **Icon polish:** confirm tab close, new tab, and sort direction controls are icons, not literal `x`, `+`, `^`, or `v` text.
+- **Tab chrome:** confirm the first tab aligns with the macOS traffic-light row and the native `CoFinder` title text is not visible above the app.
+
+## V2.8.6 toolbar and long-list polish
+
+- **Grouped toolbar capsules:** confirm local and remote toolbar buttons are grouped into navigation, file action, and history capsules without changing the surrounding header layout.
+- **Toolbar glyph size:** confirm toolbar icons are larger but button height, inter-button spacing, color, and stroke weight remain stable.
+- **Refresh icon:** confirm both local and remote Refresh icons use the longer-tailed circular arrows.
+- **Sticky file headers:** open a folder with enough files to scroll and confirm the file-list header stays visible while scrolling.
+
+## V2.8.7 creation flow and stale connection fixes
+
+- **Blank-space deselect:** select one or more files in a long local folder, scroll if needed, click blank file-list space below the rows, and confirm selection clears. Repeat in a connected remote folder.
+- **New Folder naming:** click local and remote New Folder and confirm the dialog opens with `New Folder` fully selected so typing immediately replaces it.
+- **New Text File naming:** click local and remote New Text File and confirm the dialog asks for a file name instead of silently creating `Untitled.txt`.
+- **Stale remote connection:** connect to a disposable remote test root, let the machine sleep or network drop, then try Refresh or path navigation. Confirm CoFinder no longer remains misleadingly Connected when the SFTP session is stale and prompts reconnect behavior.
+- **Inspector labels:** select a local and remote file, open Inspector, and confirm the metadata row says `Kind` and Owner is present, using `—` when unavailable.
+- **Remote Owner display:** enable the Owner column on a remote pane and open Inspector for the same item; confirm both show a username when the server can resolve the UID.
+- **Remote preview cache reuse:** open a remote text file, update the remote file from another session, then open it again while the editor remains open. Confirm the same local cache path is reused and refreshed rather than creating a second temporary preview path.
+- **Remote auto-refresh preference:** open Preferences and confirm the Auto-refresh checkbox, interval field, and `seconds` label are grouped together. With the checkbox off, confirm the interval field appears disabled/grey. Enable it, set a short interval such as 5 seconds, then change the connected test directory from another session and confirm the active remote pane refreshes. Disable the setting afterward.
+- **Remote initial loading state:** connect to a remote profile and confirm the remote pane shows a loading message during the first list instead of briefly claiming the folder is empty.
+- **Folder upload details:** upload a local folder with several files to the disposable remote test root. Expand Jobs and confirm the parent task shows folder completed/total files, current file name, current file progress/speed/ETA, and a collapsible child list with running, pending, and completed file states.
+- **Jobs pane redundancy:** expand Jobs and confirm title, active/queued summary, All / Running / Failed / Done filters, Pin/Clear/Retry failed, and Hide are consolidated into one top row.
+- **Context menu split:** right-click a selected local file and confirm only item actions appear. Right-click blank local list space while the file remains selected and confirm only current-folder actions appear. Repeat for remote.
+- **Context menu placement:** right-click a row near the lower edge of the file list and confirm the menu moves upward enough to remain fully visible.
+- **Gzip compression:** right-click a single local file and choose Compress as gzip; confirm `<name>.gz` appears and a second attempt reports that the gzip target already exists. Repeat on a single remote file in the disposable remote test root. Confirm folders and multi-selection do not show the gzip action.
 
 ## V2.5 remote text edit MVP
 
@@ -121,27 +190,27 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Edit save upload:** modify and save that local edit-cache copy in the editor. Confirm CoFinder reports the upload, the remote pane refreshes when viewing the file's parent folder, and reopening/downloading the remote file shows the saved content.
 - **Edit conflict:** open a remote text file for Edit, change the remote file from another shell/session before saving the local edit, then save locally. Confirm CoFinder reports a conflict, does not overwrite the remote file, and keeps the local edit copy available.
 - **Edit status UI:** while an edit session is active, confirm the Remote edits panel lists the remote path and state. Test Reveal, Save Back Now, Stop Monitoring, and Discard Local Copy. For a conflict/failed session, also test Re-download, Force upload after the confirmation prompt, Remote Copy, and Copy Paths.
-- **Open remains read-only:** use right-click `Open` or double-click on the same remote text file and confirm it still follows the read-only remote preview path, separate from Edit.
-- **Unsupported edit:** select a remote directory, a multi-selection, and a binary file in turn; confirm Edit is disabled where possible or shows a clear unsupported message without starting an edit session.
+- **Open uses editable local copy:** use right-click `Open`, double-click, or Space on the same remote text file and confirm it opens an app-managed local copy. Save a change and confirm CoFinder uploads back after conflict checks.
+- **Unsupported / confirmed edit:** select a remote directory and a multi-selection in turn; confirm Edit/Open are unavailable where appropriate. Select a binary file and choose `Edit`; confirm CoFinder asks before forcing the text editor.
 
 ## V2.7 V12 UI regression
 
-- **Task filters:** expand the transfer drawer and switch All / Running / Failed / Done. Confirm filtering does not clear unresolved failed tasks.
+- **Task filters:** expand the Jobs pane and switch All / Running / Failed / Done. Confirm filtering does not clear unresolved failed tasks.
 - **Empty panes:** open empty local and remote directories and confirm the empty state is visible and not mistaken for a broken list.
 - **Inspector density:** open Inspector on local and remote single selections and confirm metadata remains scannable without auto-opening on ordinary single click.
 - **Layout checklist:** run `docs/dev/v12-layout-regression-checks.md` before release candidates.
 
 ## V1.3 interaction efficiency and remote preview
 
-- **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.
+- **Shortcuts:** verify `F2` rename, Delete/Backspace delete confirmation, `Cmd+I` Get Info, `Cmd+Shift+C` copy path, `Cmd+Option+C` copy current path, `Cmd+Option+B` toggle sidebar, `Cmd+R` refresh, `Cmd+N` / `Cmd+W` tab actions, `Cmd+[` / `Cmd+]` tab switching, `Cmd+U` upload, `Cmd+D` download, `Cmd+1` / `Cmd+2` pane focus, and `Cmd+K` Site Manager. Repeat inside text fields to confirm native text behavior is not hijacked.
 - **Pane splitter:** drag the V12 pane divider; quit/reopen dev session and confirm ratio persists; double-click divider and confirm 50/50 reset.
 - **Tab reorder:** drag tabs into a new order; confirm active tab and local/remote pane state stay with the tab.
 - **Local favorites:** add current local folder; reorder/remove it; verify hover-only up/down arrow buttons and full path subtitle; restore default locations; confirm clicks affect local pane only.
 - **Remote favorites:** connect using a saved profile; add current remote path; reorder/remove it; verify hover-only up/down arrow buttons and full path subtitle; click a remote favorite and confirm only the remote pane navigates.
-- **Remote preview:** double-click a remote text file with no obvious text extension, or right-click it and choose `Open`; repeat to confirm cached reopen. Update the remote file and confirm CoFinder re-downloads before opening. Repeat with a PNG/JPEG/GIF/WebP image. Try a binary file and confirm an unsupported message.
-- **Remote Quick Look:** press Space on a single selected remote text/image file and confirm the read-only remote preview opens. Right-click the same file and choose `Quick Look`; confirm this uses the same read-only preview path and remains separate from `Edit`.
-- **Read-only cache:** after a remote preview opens, attempt to save edits in the local viewer and confirm the cached file behaves as read-only. If you force-edit the cached file outside the app, open the same remote file again and confirm CoFinder re-downloads the remote version instead of showing the local edit.
-- **Preview cleanup:** cache files live under the macOS temp directory in `remote-preview/<tab-hash>/` (for example `find "$(getconf DARWIN_USER_TEMP_DIR)remote-preview" -type f`). Open a remote preview, disconnect or close the tab, and confirm the cache entry is cleared.
+- **Remote Open:** double-click a remote file with no obvious text extension, or right-click it and choose `Open`; confirm the default macOS app opens an app-managed local copy. Save a change and confirm upload-back or conflict handling.
+- **Remote Space key:** press Space on a single selected remote file and confirm it follows remote `Open` semantics. Right-click the same file and confirm there is no separate remote `Quick Look` item.
+- **Remote Edit:** right-click a remote text file and choose `Edit`; confirm the configured text editor opens. Try a binary file and confirm the force-open prompt appears before the text editor is launched.
+- **Local-copy cleanup:** local-copy files live under the macOS temp directory in `remote-edit/<tab-hash>/`. Open a remote local-copy session, use the Remote edits panel `Discard` action, and confirm the local copy is removed. Quit-time cleanup should also close remaining local-copy watchers.
 
 ## Test Workspace
 
@@ -164,6 +233,42 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - Try a non-existent remote path and verify current directory state remains usable.
 - Disconnect and reconnect from Site Manager.
 - For V1.8 remote operation tests, use only `/mnt/gpfs1/Users/zhouwenxiong/CoFinder_test` on `sge` or another isolated disposable test root.
+
+## V2.8.8 Jobs pane and destructive task queue
+
+- **Jobs pane identity:** enqueue one upload, one download, one delete, and one gzip job; confirm the bottom drawer is labeled Jobs and shows each type with a matching icon/text label.
+- **SFTP fallback:** with a password-auth SFTP connection that can browse remotely but lacks passwordless rsync SSH, upload and download disposable files/folders and confirm each job succeeds over SFTP instead of staying failed with rsync exit code 255.
+
+- **Delete jobs:** delete a disposable local file/folder and a disposable remote file/folder. Confirm the confirmation dialog closes immediately after confirmation and the delete appears as a job while the panes remain usable.
+- **Large remote delete:** create a disposable deep remote folder tree under the isolated test root, delete the top folder, and confirm the job succeeds without reporting a false missing path.
+- **Gzip jobs:** gzip a disposable local file and remote file. Confirm `.gz` appears after success and the job is visible in Jobs.
+- **Gzip no overwrite:** create a matching `.gz` target first, run gzip, and confirm the job fails without overwriting the target.
+- **Gzip source preference:** with the new preference off, confirm source files remain after successful gzip. Enable the preference on disposable files only and confirm source deletion happens only after success.
+- **Remote gzip locality:** run remote gzip on a disposable remote file and confirm the app does not create a download-compress-upload transfer pair; it appears as a single remote gzip job.
+- **Job navigation safety:** start a slow delete/gzip in an isolated folder, navigate elsewhere, refresh panes, and confirm the job continues independently.
+- **Filters/actions:** confirm All / Running / Failed / Done filters include all job types; retry failed and clear completed still work.
+- **Jobs pane resize:** expand Jobs, drag the top edge upward/downward, and confirm the pane height changes while the header row stays usable; double-click the edge to reset height.
+- **Auto-hide:** leave Jobs unpinned after successful jobs and confirm it auto-hides according to the queue auto-hide delay preference.
+
+## V2.8.9 file operation submenu
+
+- **Submenu placement:** right-click a single local file and a single remote file. Confirm `Touch`, `Change Timestamp...`, `Compress`, `Decompress`, and `Generate MD5` appear under `File Operation`; confirm remote also includes `Change Permissions`.
+- **Touch:** run `File Operation -> Touch` on a disposable local file and remote file, refresh, and confirm the modified time updates without creating new paths.
+- **Change Timestamp:** run `Change Timestamp...`, fill Year / Month / Day / Hour / Minute / Second, confirm auto-advance between fields, submit, refresh, and confirm the modified time matches.
+- **File compression:** compress a disposable local and remote file. Confirm `.gz` output appears, the source is preserved unless the gzip-source-delete preference is enabled, and a second attempt fails without overwrite.
+- **Folder compression:** compress a disposable local and remote folder. Confirm `.tar.gz` output appears and the folder contents can be recovered by Decompress.
+- **Decompress:** decompress `.gz`, `.tar.gz`, and `.tgz` fixtures where practical. Confirm existing extraction targets cause a failed job or error and do not overwrite.
+- **Generate MD5:** run `Generate MD5` on a disposable local and remote file. Confirm `<name>.md5` appears, includes an MD5 hash plus the original basename, runs as a visible Jobs task, and a second attempt fails without overwrite.
+- **Future non-goals:** confirm there are no shipped `grep` or `less` commands yet; those remain planned in `docs/dev/V2.0.x_REMOTE_CONTENT_TOOLS_PLAN.md`.
+
+## V2.8.9 toolbar icon polish
+
+- **Requested toolbar glyphs:** confirm local and remote pane toolbars use the refreshed Home, Toggle Inspector, Upload/Download, and Delete icons.
+- **Layout stability:** confirm toolbar height, capsule grouping, button spacing, disabled states, and Delete danger coloring are unchanged from v1.8.8.
+- **Preferences tabs:** open Preferences and confirm General, Navigation, Jobs, Remote, Appearance, Shortcuts, and Diagnostics tabs switch without losing unsaved draft changes. Confirm Shortcuts is read-only reference text and Diagnostics actions still work.
+- **Auto reconnect:** enable Remote -> Auto-reconnect after sleep or network resume, connect to a disposable remote root, sleep/wake or temporarily drop network, then trigger Refresh. Confirm CoFinder attempts one reconnect before showing a reconnect failure.
+- **Paired path restore:** enable Navigation -> Restore local path on connect and Restore remote path on connect. Connect a saved profile, navigate both panes, switch away/back or relaunch, reconnect the same profile, and confirm the remembered profile-specific local/remote pair is restored. Repeat with a local selection or active job and confirm local restore is skipped rather than clearing context.
+- **Transfer reliability carry-forward:** repeat the V2.8.8 SFTP fallback and large remote delete checks before packaging a v1.9.0 build.
 
 ## Tabs Smoke (M3)
 

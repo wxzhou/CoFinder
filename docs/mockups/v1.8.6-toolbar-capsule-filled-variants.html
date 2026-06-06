@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CoFinder v1.8.6 Filled Capsule Toolbar Variants</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --text: #20242b;
+        --muted: #6d7480;
+        --line: #dce2e8;
+        --pane: #ffffff;
+        --chrome: #eef5ff;
+        --row: #edf0f3;
+        --blue: #4c9fe0;
+        --blue-fill: #dceeff;
+        --green: #2f8a55;
+        --green-fill: #dcf3e6;
+        --red: #c64a40;
+        --red-fill: #ffe4e1;
+        --purple: #7467b6;
+        --purple-fill: #ece8ff;
+        --ink: #556171;
+        --ink-fill: #eef1f5;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #f2f3f5;
+        color: var(--text);
+        font: 14px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      }
+
+      main {
+        max-width: 1380px;
+        margin: 0 auto;
+        padding: 28px;
+      }
+
+      h1 {
+        margin: 0 0 6px;
+        font-size: 20px;
+      }
+
+      .intro {
+        margin: 0 0 24px;
+        color: var(--muted);
+      }
+
+      .concept {
+        margin-bottom: 26px;
+        border: 1px solid #d9dde3;
+        border-radius: 10px;
+        overflow: hidden;
+        background: var(--pane);
+        box-shadow: 0 10px 30px rgba(31, 35, 41, 0.06);
+      }
+
+      .concept-head {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 16px;
+        align-items: end;
+        padding: 16px 18px 12px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(#fff, #fafbfc);
+      }
+
+      h2 {
+        margin: 0;
+        font-size: 15px;
+      }
+
+      .concept-head p {
+        margin: 3px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .tag {
+        color: #596575;
+        font-size: 12px;
+        white-space: nowrap;
+      }
+
+      .workspace {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 310px;
+      }
+
+      .pane {
+        min-width: 0;
+        border-right: 1px solid var(--line);
+      }
+
+      .pane:last-child {
+        border-right: 0;
+      }
+
+      .pane-top {
+        padding: 12px 14px 0;
+        background: var(--chrome);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .pane-title {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 9px;
+      }
+
+      .pane-title strong {
+        font-size: 16px;
+      }
+
+      .pane-title span {
+        color: var(--muted);
+      }
+
+      .ok-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #78cf84;
+      }
+
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #69717c;
+        font-weight: 600;
+        margin-bottom: 10px;
+      }
+
+      .crumbs b {
+        color: var(--text);
+        background: rgba(0, 0, 0, 0.055);
+        padding: 2px 7px;
+        border-radius: 5px;
+      }
+
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 10px;
+      }
+
+      .cluster {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 4px;
+        border: 1px solid #dbe2ea;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.74);
+      }
+
+      .tb {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 8px;
+        background: transparent;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--ink);
+      }
+
+      .tb svg {
+        width: 23px;
+        height: 23px;
+        display: block;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      .filter {
+        min-width: 190px;
+        height: 32px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: #7a8089;
+        display: flex;
+        align-items: center;
+        padding: 0 10px;
+      }
+
+      .file-head,
+      .file-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 150px 86px 120px;
+        gap: 10px;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--row);
+      }
+
+      .file-head {
+        color: #9aa0a8;
+        font-weight: 600;
+      }
+
+      .name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .folder {
+        width: 18px;
+        height: 14px;
+        border-radius: 4px 4px 3px 3px;
+        background: linear-gradient(#75bbf1, #4a9ee0);
+      }
+
+      .doc {
+        width: 14px;
+        height: 18px;
+        border-radius: 4px;
+        border: 1.4px solid #aeb5be;
+        background: #fff;
+      }
+
+      .nav {
+        color: var(--ink);
+      }
+
+      .transfer {
+        color: var(--blue);
+      }
+
+      .create {
+        color: var(--green);
+      }
+
+      .edit {
+        color: var(--purple);
+      }
+
+      .danger,
+      .disconnect {
+        color: var(--red);
+      }
+
+      .v1 .tb.nav {
+        background: var(--ink-fill);
+      }
+
+      .v1 .tb.transfer {
+        background: var(--blue-fill);
+      }
+
+      .v1 .tb.create {
+        background: var(--green-fill);
+      }
+
+      .v1 .tb.edit {
+        background: var(--purple-fill);
+      }
+
+      .v1 .tb.danger,
+      .v1 .tb.disconnect {
+        background: var(--red-fill);
+      }
+
+      .v2 .tb {
+        width: 36px;
+        height: 34px;
+      }
+
+      .v2 .tb svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      .v2 .cluster {
+        background: #fff;
+        box-shadow: inset 0 -1px rgba(31, 35, 41, 0.04), 0 1px 2px rgba(31, 35, 41, 0.04);
+      }
+
+      .v2 .tb.nav {
+        color: #4d5968;
+      }
+
+      .v2 .tb.transfer {
+        color: #2479c8;
+      }
+
+      .v2 .tb.create {
+        color: #16744a;
+      }
+
+      .v2 .tb.danger,
+      .v2 .tb.disconnect {
+        color: #c33e34;
+      }
+
+      .v3 .cluster {
+        border-color: #d4dbe3;
+        background: linear-gradient(#ffffff, #f5f7fa);
+      }
+
+      .v3 .tb {
+        width: 35px;
+        height: 34px;
+      }
+
+      .v3 .tb svg {
+        width: 24px;
+        height: 24px;
+      }
+
+      .v3 .nav {
+        color: #3f4a59;
+      }
+
+      .v3 .transfer {
+        color: #2f6ea8;
+      }
+
+      .v3 .create {
+        color: #2d7549;
+      }
+
+      .v3 .danger,
+      .v3 .disconnect {
+        color: #ad3d35;
+      }
+
+      @media (max-width: 980px) {
+        main {
+          padding: 18px;
+        }
+
+        .workspace {
+          grid-template-columns: 1fr;
+        }
+
+        .pane {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>CoFinder v1.8.6 Filled Capsule Toolbar Variants</h1>
+      <p class="intro">All three keep the grouped capsule structure from Option C. The icons are larger and use filled color areas so the toolbar is easier to scan.</p>
+
+      <section class="concept v1">
+        <div class="concept-head">
+          <div>
+            <h2>C1 — Soft filled chips</h2>
+            <p>Every icon sits on a lightly tinted chip. Strongest readability; color categories are immediately visible.</p>
+          </div>
+          <div class="tag">Most comfortable · Most colorful</div>
+        </div>
+        <div class="workspace">
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>Experiment</strong><span>Local</span></div>
+              <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+              <div class="toolbar">
+                <span class="cluster">
+                  <button class="tb nav" aria-label="Back"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M14.8 5.6a1.2 1.2 0 0 1 0 1.7L10.1 12l4.7 4.7a1.2 1.2 0 1 1-1.7 1.7l-5.5-5.6a1.2 1.2 0 0 1 0-1.6l5.5-5.6a1.2 1.2 0 0 1 1.7 0z"/></svg></button>
+                  <button class="tb nav" aria-label="Forward"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M9.2 5.6a1.2 1.2 0 0 0 0 1.7l4.7 4.7-4.7 4.7a1.2 1.2 0 1 0 1.7 1.7l5.5-5.6a1.2 1.2 0 0 0 0-1.6l-5.5-5.6a1.2 1.2 0 0 0-1.7 0z"/></svg></button>
+                  <button class="tb nav" aria-label="Up"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 6.2c.34 0 .66.14.9.38l5.2 5.2a1.28 1.28 0 0 1-1.8 1.82L13.3 10.6v7a1.3 1.3 0 1 1-2.6 0v-7l-3 3a1.28 1.28 0 0 1-1.8-1.82l5.2-5.2c.24-.24.56-.38.9-.38z"/></svg></button>
+                  <button class="tb nav" aria-label="Home"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M4.7 11.2 12 4.8l7.3 6.4a1.2 1.2 0 1 1-1.6 1.8l-.7-.6v6.1A1.5 1.5 0 0 1 15.5 20h-7A1.5 1.5 0 0 1 7 18.5v-6.1l-.7.6a1.2 1.2 0 1 1-1.6-1.8zm5 7.1h4.6v-4.5H9.7v4.5z"/></svg></button>
+                </span>
+                <span class="cluster">
+                  <button class="tb transfer" aria-label="Upload"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.2c.34 0 .66.13.9.37l4.35 4.25a1.2 1.2 0 0 1-1.68 1.72l-2.32-2.27v8.1a1.25 1.25 0 1 1-2.5 0v-8.1l-2.32 2.27a1.2 1.2 0 1 1-1.68-1.72l4.35-4.25c.24-.24.56-.37.9-.37z"/><path fill="currentColor" opacity=".55" d="M5.8 18.1h12.4a1.25 1.25 0 1 1 0 2.5H5.8a1.25 1.25 0 1 1 0-2.5z"/></svg></button>
+                  <button class="tb create" aria-label="New folder"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".35" d="M3.5 7.2A2.2 2.2 0 0 1 5.7 5h4.1l2.1 2.2h6.4a2.2 2.2 0 0 1 2.2 2.2v7.4a2.2 2.2 0 0 1-2.2 2.2H5.7a2.2 2.2 0 0 1-2.2-2.2V7.2z"/><path fill="currentColor" d="M14.9 10.3a1.05 1.05 0 0 1 1.05 1.05v2.1h2.1a1.05 1.05 0 1 1 0 2.1h-2.1v2.1a1.05 1.05 0 1 1-2.1 0v-2.1h-2.1a1.05 1.05 0 1 1 0-2.1h2.1v-2.1a1.05 1.05 0 0 1 1.05-1.05z"/></svg></button>
+                  <button class="tb create" aria-label="New text file"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".34" d="M7 3.5h6.8L18.5 8v11.2A1.8 1.8 0 0 1 16.7 21H7a1.8 1.8 0 0 1-1.8-1.8V5.3A1.8 1.8 0 0 1 7 3.5z"/><path fill="currentColor" d="M13.4 4.1V8h4.1l-4.1-3.9zM12 11a1.05 1.05 0 0 1 1.05 1.05v2h2a1.05 1.05 0 1 1 0 2.1h-2v2a1.05 1.05 0 1 1-2.1 0v-2h-2a1.05 1.05 0 1 1 0-2.1h2v-2A1.05 1.05 0 0 1 12 11z"/></svg></button>
+                  <button class="tb danger" aria-label="Delete"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".32" d="M7 8h10l-.65 10.35A2.5 2.5 0 0 1 13.85 20h-3.7a2.5 2.5 0 0 1-2.5-1.65L7 8z"/><path fill="currentColor" d="M9.2 5.2A1.7 1.7 0 0 1 10.9 3.5h2.2a1.7 1.7 0 0 1 1.7 1.7v.55h3.35a1.05 1.05 0 0 1 0 2.1H5.85a1.05 1.05 0 1 1 0-2.1H9.2V5.2z"/></svg></button>
+                </span>
+                <span class="cluster">
+                  <button class="tb nav" aria-label="Terminal"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".28" d="M4 5.2h16v13.6H4z"/><path fill="currentColor" d="M8 9.3a1 1 0 0 1 1.4 0l2.2 2.2a1 1 0 0 1 0 1.4l-2.2 2.2A1 1 0 0 1 8 13.7l1.5-1.5L8 10.7a1 1 0 0 1 0-1.4zm5 5.2h4a1 1 0 1 1 0 2h-4a1 1 0 1 1 0-2z"/></svg></button>
+                </span>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+            <div class="file-row"><span class="name"><i class="folder"></i> 260429</span><span>2026/5/14 11:38</span><span>—</span><span>Folder</span></div>
+            <div class="file-row"><span class="name"><i class="doc"></i> align_ilmn_1.sh</span><span>2026/5/4 20:46</span><span>1.48 KB</span><span>Document</span></div>
+          </div>
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>sge</strong><span>zhouwenxiong@10.0.32.10:22</span><i class="ok-dot"></i><span>Connected</span></div>
+              <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> Users <span>›</span> <b>260429</b></div>
+              <div class="toolbar">
+                <span class="cluster">
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M14.8 5.6a1.2 1.2 0 0 1 0 1.7L10.1 12l4.7 4.7a1.2 1.2 0 1 1-1.7 1.7l-5.5-5.6a1.2 1.2 0 0 1 0-1.6l5.5-5.6a1.2 1.2 0 0 1 1.7 0z"/></svg></button>
+                  <button class="tb transfer"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 19.8c-.34 0-.66-.13-.9-.37l-4.35-4.25a1.2 1.2 0 0 1 1.68-1.72l2.32 2.27v-8.1a1.25 1.25 0 1 1 2.5 0v8.1l2.32-2.27a1.2 1.2 0 1 1 1.68 1.72l-4.35 4.25c-.24.24-.56.37-.9.37z"/><path fill="currentColor" opacity=".55" d="M5.8 3.4h12.4a1.25 1.25 0 1 1 0 2.5H5.8a1.25 1.25 0 1 1 0-2.5z"/></svg></button>
+                  <button class="tb edit"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".3" d="M5.5 17.7 6.4 14l7.9-7.9 3.6 3.6-7.9 7.9-3.7.9a.7.7 0 0 1-.8-.8z"/><path fill="currentColor" d="M16 4.4a1.9 1.9 0 0 1 2.7 0l.9.9a1.9 1.9 0 0 1 0 2.7l-.8.8-3.6-3.6.8-.8z"/></svg></button>
+                </span>
+                <span class="cluster">
+                  <button class="tb create"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".35" d="M3.5 7.2A2.2 2.2 0 0 1 5.7 5h4.1l2.1 2.2h6.4a2.2 2.2 0 0 1 2.2 2.2v7.4a2.2 2.2 0 0 1-2.2 2.2H5.7a2.2 2.2 0 0 1-2.2-2.2V7.2z"/><path fill="currentColor" d="M14.9 10.3a1.05 1.05 0 0 1 1.05 1.05v2.1h2.1a1.05 1.05 0 1 1 0 2.1h-2.1v2.1a1.05 1.05 0 1 1-2.1 0v-2.1h-2.1a1.05 1.05 0 1 1 0-2.1h2.1v-2.1a1.05 1.05 0 0 1 1.05-1.05z"/></svg></button>
+                  <button class="tb danger"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".32" d="M7 8h10l-.65 10.35A2.5 2.5 0 0 1 13.85 20h-3.7a2.5 2.5 0 0 1-2.5-1.65L7 8z"/><path fill="currentColor" d="M9.2 5.2A1.7 1.7 0 0 1 10.9 3.5h2.2a1.7 1.7 0 0 1 1.7 1.7v.55h3.35a1.05 1.05 0 0 1 0 2.1H5.85a1.05 1.05 0 1 1 0-2.1H9.2V5.2z"/></svg></button>
+                  <button class="tb disconnect"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".28" d="M4.5 5.5h7v13h-7z"/><path fill="currentColor" d="M15 7.2a1.1 1.1 0 0 1 1.55 0l3.9 4a1.1 1.1 0 0 1 0 1.55l-3.9 4A1.1 1.1 0 0 1 15 15.2l2-2H9.2a1.2 1.2 0 0 1 0-2.4H17l-2-2a1.1 1.1 0 0 1 0-1.6z"/></svg></button>
+                </span>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Owner</span></div>
+            <div class="file-row"><span class="name"><i class="folder"></i> result_ilmn</span><span>2026/5/14 09:34</span><span>—</span><span>zhouwenxiong</span></div>
+            <div class="file-row"><span class="name"><i class="doc"></i> postrun_test.log</span><span>2026/5/12 22:11</span><span>4.10 MB</span><span>zhouwenxiong</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="concept v2">
+        <div class="concept-head">
+          <div>
+            <h2>C2 — Large filled symbol, neutral button</h2>
+            <p>Buttons stay quiet, but icons themselves become bigger and more filled. This is less colorful than C1 and may age better.</p>
+          </div>
+          <div class="tag">Balanced · Good default candidate</div>
+        </div>
+        <div class="workspace">
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>Experiment</strong><span>Local</span></div>
+              <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+              <div class="toolbar">
+                <span class="cluster">
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M14.7 5.4 8.1 12l6.6 6.6-1.9 1.9L4.3 12l8.5-8.5z"/></svg></button>
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="m9.3 5.4 6.6 6.6-6.6 6.6 1.9 1.9 8.5-8.5-8.5-8.5z"/></svg></button>
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.2 20.4 13h-5.1v7H8.7v-7H3.6z"/></svg></button>
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M3.6 11.6 12 4.1l8.4 7.5-1.6 1.8-1.1-1v7.1H6.3v-7.1l-1.1 1z"/></svg></button>
+                </span>
+                <span class="cluster">
+                  <button class="tb transfer"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M10.3 17.5V9.1L7.5 12 5.6 10.1 12 3.7l6.4 6.4-1.9 1.9-2.8-2.9v8.4z"/><path fill="currentColor" opacity=".45" d="M5 18.6h14v2.6H5z"/></svg></button>
+                  <button class="tb create"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".32" d="M3 6h7.5l2 2H21v11H3z"/><path fill="currentColor" d="M14 10.5h2.5v3H19v2.4h-2.5v3H14v-3h-2.5v-2.4H14z"/></svg></button>
+                  <button class="tb create"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".3" d="M6 3h8l4 4v14H6z"/><path fill="currentColor" d="M13 3.5V8h4.5M10.8 11.5h2.4V14h2.5v2.4h-2.5V19h-2.4v-2.6H8.3V14h2.5z"/></svg></button>
+                  <button class="tb danger"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M8 8h8l-.6 11H8.6z"/><path fill="currentColor" opacity=".5" d="M9 5h6l.6 2.2H20v2.2H4V7.2h4.4z"/></svg></button>
+                </span>
+                <span class="cluster"><button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".28" d="M3.5 5h17v14h-17z"/><path fill="currentColor" d="m7.4 9 3.4 3-3.4 3-.9-1 2.1-2-2.1-2zM12 15h5v1.7h-5z"/></svg></button></span>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+            <div class="file-row"><span class="name"><i class="folder"></i> 260429</span><span>2026/5/14 11:38</span><span>—</span><span>Folder</span></div>
+            <div class="file-row"><span class="name"><i class="doc"></i> rescue_cyg2.sh</span><span>2026/5/14 19:43</span><span>1.3 KB</span><span>Document</span></div>
+          </div>
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>sge</strong><i class="ok-dot"></i><span>Connected</span></div>
+              <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> <b>260429</b></div>
+              <div class="toolbar">
+                <span class="cluster">
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M14.7 5.4 8.1 12l6.6 6.6-1.9 1.9L4.3 12l8.5-8.5z"/></svg></button>
+                  <button class="tb transfer"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M13.7 6.5v8.4l2.8-2.9 1.9 1.9L12 20.3l-6.4-6.4L7.5 12l2.8 2.9V6.5z"/><path fill="currentColor" opacity=".45" d="M5 2.8h14v2.6H5z"/></svg></button>
+                  <button class="tb edit"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".36" d="m5 16.9 1.1-4.3 7.8-7.8 4.3 4.3-7.8 7.8L6.1 18z"/><path fill="currentColor" d="m15.3 3.4 1.4-1.4 5.3 5.3-1.4 1.4z"/></svg></button>
+                </span>
+                <span class="cluster">
+                  <button class="tb create"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".32" d="M3 6h7.5l2 2H21v11H3z"/><path fill="currentColor" d="M14 10.5h2.5v3H19v2.4h-2.5v3H14v-3h-2.5v-2.4H14z"/></svg></button>
+                  <button class="tb danger"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M8 8h8l-.6 11H8.6z"/><path fill="currentColor" opacity=".5" d="M9 5h6l.6 2.2H20v2.2H4V7.2h4.4z"/></svg></button>
+                  <button class="tb disconnect"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".3" d="M4 5h7v14H4z"/><path fill="currentColor" d="m16 6.5 5.5 5.5-5.5 5.5-1.8-1.8 2.4-2.4H8.5v-2.6h8.1l-2.4-2.4z"/></svg></button>
+                </span>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Permission</span></div>
+            <div class="file-row"><span class="name"><i class="folder"></i> logs</span><span>2026/5/15 11:06</span><span>—</span><span>rwxr-xr-x</span></div>
+            <div class="file-row"><span class="name"><i class="doc"></i> postrun_ilmn.sh</span><span>2026/5/12 23:11</span><span>796 B</span><span>rw-r--r--</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="concept v3">
+        <div class="concept-head">
+          <div>
+            <h2>C3 — Dense professional filled strokes</h2>
+            <p>Less “button color,” more object color. Icons are large and filled, but the toolbar still reads sober and work-focused.</p>
+          </div>
+          <div class="tag">Most professional · Lowest color noise</div>
+        </div>
+        <div class="workspace">
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>Experiment</strong><span>Local</span></div>
+              <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+              <div class="toolbar">
+                <span class="cluster">
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M13.6 5.1 6.7 12l6.9 6.9 1.9-1.9-5-5 5-5z"/></svg></button>
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="m10.4 5.1 6.9 6.9-6.9 6.9L8.5 17l5-5-5-5z"/></svg></button>
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.6 20 13h-4.8v6.5H8.8V13H4z"/></svg></button>
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.2 3.8 11.5 5.5 13l.9-.8v7.3h11.2v-7.3l.9.8 1.7-1.5z"/></svg></button>
+                </span>
+                <span class="cluster">
+                  <button class="tb transfer"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M10.7 16.2V8.4L8.2 11 6.5 9.2 12 3.8l5.5 5.4-1.7 1.8-2.5-2.6v7.8z"/><path fill="currentColor" opacity=".38" d="M5 18h14v2.8H5z"/></svg></button>
+                  <button class="tb create"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".28" d="M3 6.8h7.2l2 2H21v9.8H3z"/><path fill="currentColor" d="M14.2 10.8h2.3v2.9h2.9V16h-2.9v2.9h-2.3V16h-2.9v-2.3h2.9z"/></svg></button>
+                  <button class="tb create"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".28" d="M6.1 3.2h8.1L18 7v13.8H6.1z"/><path fill="currentColor" d="M13.5 3.5V8h4.2M10.8 11.8h2.4v2.5h2.5v2.3h-2.5v2.5h-2.4v-2.5H8.3v-2.3h2.5z"/></svg></button>
+                  <button class="tb danger"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".28" d="M7.3 8.3h9.4l-.7 10.2H8z"/><path fill="currentColor" d="M9.1 4.7h5.8l.5 2.1h4.1V9H4.5V6.8h4.1z"/></svg></button>
+                </span>
+                <span class="cluster"><button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".24" d="M3.6 5.2h16.8v13.6H3.6z"/><path fill="currentColor" d="m7.8 9.4 3 2.6-3 2.6-1.1-1.2 1.8-1.4-1.8-1.4zM12.4 15h5v1.8h-5z"/></svg></button></span>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+            <div class="file-row"><span class="name"><i class="folder"></i> 260429</span><span>2026/5/14 11:38</span><span>—</span><span>Folder</span></div>
+            <div class="file-row"><span class="name"><i class="doc"></i> rescue_cyg2_merge_temp_bams.sh</span><span>2026/5/14 19:43</span><span>1.3 KB</span><span>Document</span></div>
+          </div>
+          <div class="pane">
+            <div class="pane-top">
+              <div class="pane-title"><strong>sge</strong><i class="ok-dot"></i><span>Connected</span></div>
+              <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> <b>260429</b></div>
+              <div class="toolbar">
+                <span class="cluster">
+                  <button class="tb nav"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M13.6 5.1 6.7 12l6.9 6.9 1.9-1.9-5-5 5-5z"/></svg></button>
+                  <button class="tb transfer"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M13.3 7.8v7.8l2.5-2.6 1.7 1.8L12 20.2l-5.5-5.4L8.2 13l2.5 2.6V7.8z"/><path fill="currentColor" opacity=".38" d="M5 3.2h14V6H5z"/></svg></button>
+                  <button class="tb edit"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".3" d="m5 17.3 1.2-4.5 8.2-8.2 4 4-8.2 8.2z"/><path fill="currentColor" d="m16 3 5 5-1.5 1.5-5-5z"/></svg></button>
+                </span>
+                <span class="cluster">
+                  <button class="tb create"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".28" d="M3 6.8h7.2l2 2H21v9.8H3z"/><path fill="currentColor" d="M14.2 10.8h2.3v2.9h2.9V16h-2.9v2.9h-2.3V16h-2.9v-2.3h2.9z"/></svg></button>
+                  <button class="tb danger"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".28" d="M7.3 8.3h9.4l-.7 10.2H8z"/><path fill="currentColor" d="M9.1 4.7h5.8l.5 2.1h4.1V9H4.5V6.8h4.1z"/></svg></button>
+                  <button class="tb disconnect"><svg viewBox="0 0 24 24"><path fill="currentColor" opacity=".26" d="M4.2 5.2h7.2v13.6H4.2z"/><path fill="currentColor" d="m15.8 6.5 5.3 5.5-5.3 5.5-1.8-1.8 2.2-2.3H8.6v-2.8h7.6L14 8.3z"/></svg></button>
+                </span>
+                <div class="spacer"></div>
+                <div class="filter">Filter names</div>
+              </div>
+            </div>
+            <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Owner</span></div>
+            <div class="file-row"><span class="name"><i class="folder"></i> bulk-foodie-pipeline</span><span>2026/5/14 11:38</span><span>—</span><span>zhouwenxiong</span></div>
+            <div class="file-row"><span class="name"><i class="doc"></i> align_cyg_1.log</span><span>2026/5/2 00:55</span><span>516 B</span><span>zhouwenxiong</span></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

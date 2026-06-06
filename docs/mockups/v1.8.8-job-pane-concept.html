@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CoFinder v1.8.8 Job Pane Concept</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f4f5f7;
+        --panel: #ffffff;
+        --chrome: #f7f8fa;
+        --text: #202124;
+        --muted: #6f7782;
+        --faint: #9aa2ad;
+        --line: #dde2e8;
+        --blue: #0a84ff;
+        --blue-soft: #e9f3ff;
+        --green: #248a3d;
+        --green-soft: #e9f7ed;
+        --red: #c7352d;
+        --red-soft: #fff0ef;
+        --amber: #9a6a00;
+        --amber-soft: #fff7df;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      }
+      main {
+        max-width: 1440px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+      .intro {
+        margin: 0 0 16px;
+        max-width: 960px;
+        color: var(--muted);
+      }
+      .app {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--panel);
+        box-shadow: 0 18px 42px rgba(22, 28, 36, 0.08);
+      }
+      .tabs {
+        height: 42px;
+        display: flex;
+        align-items: end;
+        gap: 1px;
+        padding: 0 14px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(#fbfbfc, #eff1f4);
+      }
+      .traffic {
+        display: flex;
+        gap: 8px;
+        margin: 0 18px 14px 0;
+      }
+      .traffic span {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+      .traffic span:nth-child(1) { background: #ff5f57; }
+      .traffic span:nth-child(2) { background: #febc2e; }
+      .traffic span:nth-child(3) { background: #28c840; }
+      .tab {
+        height: 34px;
+        min-width: 184px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 0 14px;
+        border-radius: 10px 10px 0 0;
+        background: #fff;
+        border: 1px solid var(--line);
+        border-bottom: 0;
+        font-weight: 600;
+      }
+      .workspace {
+        min-height: 408px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+      .pane {
+        min-width: 0;
+        border-right: 1px solid var(--line);
+        background: #fff;
+      }
+      .pane:last-child { border-right: 0; }
+      .pane-head {
+        padding: 12px 14px 10px;
+        border-bottom: 1px solid var(--line);
+        background: #fbfcfd;
+      }
+      .pane-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+      }
+      .pane-title strong {
+        color: var(--text);
+        font-size: 17px;
+      }
+      .status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #34c759;
+      }
+      .crumbs {
+        margin-top: 7px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        white-space: nowrap;
+        overflow: hidden;
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .crumbs b {
+        color: var(--text);
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: rgba(0,0,0,.06);
+      }
+      .tools {
+        margin-top: 8px;
+        display: flex;
+        gap: 7px;
+      }
+      .capsule {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        height: 34px;
+        padding: 2px;
+        border-radius: 11px;
+        background: #fff;
+        border: 1px solid rgba(0,0,0,.04);
+      }
+      .tool {
+        width: 30px;
+        height: 30px;
+        border-radius: 8px;
+        display: grid;
+        place-items: center;
+        color: #111;
+      }
+      .tool svg {
+        width: 23px;
+        height: 23px;
+        stroke: currentColor;
+        stroke-width: 2.2;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .files {
+        display: grid;
+        grid-template-columns: 1.4fr 120px 88px 96px;
+      }
+      .head, .row { display: contents; }
+      .head span {
+        position: sticky;
+        top: 0;
+        background: #f8f9fb;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 700;
+        padding: 8px 14px;
+        border-bottom: 1px solid var(--line);
+      }
+      .row span {
+        padding: 9px 14px;
+        border-bottom: 1px solid rgba(0,0,0,.045);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .name {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+      }
+      .ico {
+        width: 18px;
+        height: 15px;
+        border-radius: 4px;
+        background: #79b8ff;
+        display: inline-block;
+      }
+      .doc {
+        width: 14px;
+        height: 18px;
+        border-radius: 3px;
+        background: linear-gradient(135deg, #ffffff 0 74%, #d9e1ec 75%);
+        border: 1px solid #cbd3dd;
+      }
+      .job-pane {
+        border-top: 1px solid var(--line);
+        background: #fafbfc;
+      }
+      .job-resizer {
+        height: 3px;
+        display: block;
+        cursor: ns-resize;
+        background: #fafbfc;
+        border-bottom: 0;
+      }
+      .job-resizer::before {
+        display: none;
+      }
+      .job-top {
+        min-height: 38px;
+        display: grid;
+        grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 10px;
+        padding: 5px 12px;
+        border-bottom: 1px solid var(--line);
+        background: #f6f7f9;
+      }
+      .job-title {
+        font-weight: 700;
+        font-size: 12px;
+      }
+      .job-summary {
+        color: var(--muted);
+        font-weight: 600;
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .chip {
+        height: 25px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        background: #fff;
+        font-weight: 650;
+      }
+      .chip.active {
+        color: #0b3a75;
+        border-color: #b8d7ff;
+        background: var(--blue-soft);
+      }
+      .job-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .btn {
+        height: 25px;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: #fff;
+        color: var(--muted);
+        padding: 0 9px;
+        font-weight: 650;
+      }
+      .job-list {
+        height: 300px;
+        overflow: auto;
+      }
+      .job {
+        display: grid;
+        grid-template-columns: 86px 104px minmax(240px, 1fr) 220px auto;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-bottom: 1px solid rgba(0,0,0,.055);
+        background: #fff;
+      }
+      .job.running {
+        background: #edf5ff;
+      }
+      .badge {
+        display: inline-flex;
+        width: fit-content;
+        align-items: center;
+        justify-content: center;
+        min-width: 62px;
+        height: 20px;
+        border-radius: 5px;
+        font-size: 10px;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+      .running .badge { color: #045ebd; background: #d9ebff; }
+      .done .badge { color: var(--green); background: var(--green-soft); }
+      .failed .badge { color: var(--red); background: var(--red-soft); }
+      .queued .badge { color: var(--amber); background: var(--amber-soft); }
+      .kind {
+        color: var(--muted);
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 800;
+        text-transform: uppercase;
+        font-size: 10px;
+      }
+      .kind svg {
+        width: 18px;
+        height: 18px;
+        display: block;
+        stroke: currentColor;
+        stroke-width: 1.25;
+        fill: none;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .kind.upload { color: var(--green); }
+      .kind.download { color: var(--blue); }
+      .kind.gzip { color: #d97900; }
+      .kind.delete { color: var(--red); }
+      .job-main {
+        min-width: 0;
+      }
+      .job-path {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 650;
+      }
+      .job-sub {
+        margin-top: 2px;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 11px;
+      }
+      .progress {
+        display: grid;
+        gap: 4px;
+      }
+      .progress-line {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 11px;
+        font-weight: 650;
+      }
+      .bar {
+        height: 5px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #dfe6ef;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--blue);
+      }
+      .bar.green i { background: var(--green); }
+      .job-tools {
+        display: flex;
+        gap: 6px;
+      }
+      .mini {
+        width: 26px;
+        height: 24px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--muted);
+        display: grid;
+        place-items: center;
+        font-weight: 800;
+      }
+      .details {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 14px;
+        margin-top: 18px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: #fff;
+        padding: 14px;
+      }
+      .card h2 {
+        margin: 0 0 8px;
+        font-size: 15px;
+      }
+      .card ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+      }
+      .card li + li { margin-top: 5px; }
+      .pref-row {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 34px;
+        margin: 9px 0 10px;
+        padding: 8px 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fbfcfd;
+        color: var(--text);
+        font-weight: 650;
+      }
+      .pref-row input {
+        width: 14px;
+        height: 14px;
+        margin: 0;
+      }
+      .pref-note {
+        margin: 0;
+        color: var(--muted);
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: .94em;
+        color: #334155;
+        background: #f1f5f9;
+        border: 1px solid #e2e8f0;
+        border-radius: 4px;
+        padding: 1px 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>CoFinder v1.8.8 Job Pane Concept</h1>
+      <p class="intro">
+        Prototype only. The current Transfer pane becomes a Job pane: upload, download, delete, and gzip jobs share one queue surface, one filter row, and one place for progress, status, retry/cancel, and diagnostics.
+      </p>
+      <section class="app" aria-label="CoFinder job pane mockup">
+        <div class="tabs">
+          <div class="traffic"><span></span><span></span><span></span></div>
+          <div class="tab">Experiment <span style="margin-left:auto;color:#7b8490">×</span></div>
+        </div>
+        <div class="workspace">
+          <section class="pane">
+            <div class="pane-head">
+              <div class="pane-title"><strong>20260513_bam_to_赛纳</strong><span>Local</span></div>
+              <div class="crumbs">Users › zwx › Experiment › <b>20260513_bam_to_赛纳</b></div>
+              <div class="tools">
+                <div class="capsule">
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
+                </div>
+                <div class="capsule">
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 19V6M7 11l5-5 5 5M5 20h14"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M4 7h7l2 2h7v9H4z"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M8 4h7l4 4v12H8zM15 4v5h5"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M6 7h12M9 7V5h6v2M8 10v9M16 10v9"/></svg></span>
+                </div>
+              </div>
+            </div>
+            <div class="files">
+              <div class="head"><span>Name</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+              <div class="row"><span class="name"><i class="ico"></i>fastq</span><span>Today 09:40</span><span>—</span><span>Folder</span></div>
+              <div class="row"><span class="name"><i class="doc"></i>sample_001.bam</span><span>Today 09:38</span><span>8.42 GB</span><span>Document</span></div>
+              <div class="row"><span class="name"><i class="doc"></i>bam.md5.txt</span><span>Today 09:32</span><span>612 B</span><span>Text</span></div>
+            </div>
+          </section>
+          <section class="pane">
+            <div class="pane-head">
+              <div class="pane-title"><strong>sge</strong><span>zhouwenxiong@10.0.32.10:22</span><i class="status-dot"></i><span>Connected</span></div>
+              <div class="crumbs">/ › mnt › gpfs › Users › zhouwenxiong › <b>Experiment</b></div>
+              <div class="tools">
+                <div class="capsule">
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg></span>
+                </div>
+                <div class="capsule">
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M12 5v13M7 13l5 5 5-5M5 20h14"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M4 7h7l2 2h7v9H4z"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M7 17l10-10 3 3-10 10H7zM15 7l2 2"/></svg></span>
+                  <span class="tool"><svg viewBox="0 0 24 24"><path d="M6 7h12M9 7V5h6v2M8 10v9M16 10v9"/></svg></span>
+                </div>
+              </div>
+            </div>
+            <div class="files">
+              <div class="head"><span>Name</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+              <div class="row"><span class="name"><i class="ico"></i>20260518_foodie_eval</span><span>Today 10:10</span><span>—</span><span>Folder</span></div>
+              <div class="row"><span class="name"><i class="doc"></i>sample_001.bam.gz</span><span>Today 10:03</span><span>4.10 GB</span><span>Gzip</span></div>
+              <div class="row"><span class="name"><i class="doc"></i>summary.tsv</span><span>Today 09:50</span><span>1.2 MB</span><span>Text</span></div>
+            </div>
+          </section>
+        </div>
+        <section class="job-pane">
+          <div class="job-resizer" title="Drag to resize Job pane height"></div>
+          <div class="job-top">
+            <div class="job-title">Jobs</div>
+            <div class="job-summary">3 running, 2 queued</div>
+            <div class="chips">
+              <span class="chip active">All 7</span>
+              <span class="chip">Running 3</span>
+              <span class="chip">Queued 2</span>
+              <span class="chip">Failed 1</span>
+              <span class="chip">Done 1</span>
+            </div>
+            <div class="job-actions">
+              <button class="btn">Pin</button>
+              <button class="btn">Clear done</button>
+              <button class="btn">Retry failed</button>
+            </div>
+            <button class="btn">Hide</button>
+          </div>
+          <div class="job-list">
+            <div class="job running">
+              <span class="badge">Running</span>
+              <span class="kind upload"><svg viewBox="0 0 20 20"><path d="M4 14h12M6 10l4-4 4 4M10 6v8"/></svg>Upload</span>
+              <div class="job-main">
+                <div class="job-path">/Volumes/SANDISK ELE/20260513_bam_to_赛纳 → sge:/mnt/gpfs/Users/zhouwenxiong/Experiment/20260518_foodie_eval</div>
+                <div class="job-sub">Folder 2/9 files · Current H00260120CPL0071F1S_001.truesc.sorted.bam · 2.22 MB/s · ETA 02:25:49</div>
+              </div>
+              <div class="progress">
+                <div class="progress-line"><span>Folder</span><span>2 / 9 files</span></div>
+                <div class="bar green"><i style="width:22%"></i></div>
+                <div class="progress-line"><span>Current file</span><span>15%</span></div>
+                <div class="bar"><i style="width:15%"></i></div>
+              </div>
+              <div class="job-tools"><button class="mini">■</button><button class="mini">▾</button></div>
+            </div>
+            <div class="job running">
+              <span class="badge">Running</span>
+              <span class="kind delete"><svg viewBox="0 0 20 20"><path d="M6.7 7.4l.5 8.2c.04.64.57 1.15 1.21 1.15h3.18c.64 0 1.17-.51 1.21-1.15l.5-8.2"/><path d="M5 7.4h10"/><path d="M8.2 5.7h3.6M9 4.2h2l.45 1.5h-2.9L9 4.2z"/><path d="M9 9.4v4.7M11 9.4v4.7"/></svg>Delete</span>
+              <div class="job-main">
+                <div class="job-path">Delete remote folder sge:/mnt/gpfs/Users/zhouwenxiong/Experiment/old_run</div>
+                <div class="job-sub">Recursive delete · current: logs/align_034.txt · exact total unknown without pre-scan</div>
+              </div>
+              <div class="progress">
+                <div class="progress-line"><span>Deleted</span><span>128 entries</span></div>
+                <div class="bar"><i style="width:100%;background:linear-gradient(90deg,var(--red),#f4b4ae)"></i></div>
+              </div>
+              <div class="job-tools"><button class="mini">■</button></div>
+            </div>
+            <div class="job running">
+              <span class="badge">Running</span>
+              <span class="kind gzip"><svg viewBox="0 0 20 20"><path d="M5.4 5.1h7.7c.75 0 1.35.6 1.35 1.35v3.15H6.75c-.75 0-1.35-.6-1.35-1.35V5.1z"/><path d="M4.85 9.3h7.75c.75 0 1.35.6 1.35 1.35v4.25H6.2c-.75 0-1.35-.6-1.35-1.35V9.3z"/><path d="M7.3 5.1v4.5M6.75 9.3v5.6"/></svg>Gzip</span>
+              <div class="job-main">
+                <div class="job-path">Compress remote file sge:/mnt/gpfs/Users/zhouwenxiong/Experiment/sample_002.bam</div>
+                <div class="job-sub">Remote background command · output: sample_002.bam.gz · source preserved by Preference default</div>
+              </div>
+              <div class="progress">
+                <div class="progress-line"><span>Remote job</span><span>PID 184229 · running</span></div>
+                <div class="bar"><i style="width:100%;background:linear-gradient(90deg,#f0a020,#ffd28a)"></i></div>
+              </div>
+              <div class="job-tools"><button class="mini">■</button></div>
+            </div>
+            <div class="job queued">
+              <span class="badge">Queued</span>
+              <span class="kind gzip"><svg viewBox="0 0 20 20"><path d="M5.4 5.1h7.7c.75 0 1.35.6 1.35 1.35v3.15H6.75c-.75 0-1.35-.6-1.35-1.35V5.1z"/><path d="M4.85 9.3h7.75c.75 0 1.35.6 1.35 1.35v4.25H6.2c-.75 0-1.35-.6-1.35-1.35V9.3z"/><path d="M7.3 5.1v4.5M6.75 9.3v5.6"/></svg>Gzip</span>
+              <div class="job-main">
+                <div class="job-path">Compress local file /Users/zwx/Experiment/bam.md5.txt</div>
+                <div class="job-sub">Will create bam.md5.txt.gz · no overwrite</div>
+              </div>
+              <div class="progress"><div class="progress-line"><span>Waiting</span><span>serial job lane</span></div><div class="bar"><i style="width:0%"></i></div></div>
+              <div class="job-tools"><button class="mini">×</button></div>
+            </div>
+            <div class="job failed">
+              <span class="badge">Failed</span>
+              <span class="kind gzip"><svg viewBox="0 0 20 20"><path d="M5.4 5.1h7.7c.75 0 1.35.6 1.35 1.35v3.15H6.75c-.75 0-1.35-.6-1.35-1.35V5.1z"/><path d="M4.85 9.3h7.75c.75 0 1.35.6 1.35 1.35v4.25H6.2c-.75 0-1.35-.6-1.35-1.35V9.3z"/><path d="M7.3 5.1v4.5M6.75 9.3v5.6"/></svg>Gzip</span>
+              <div class="job-main">
+                <div class="job-path">Compress remote file sge:/mnt/gpfs/Users/zhouwenxiong/Experiment/sample_001.bam</div>
+                <div class="job-sub">sample_001.bam.gz already exists. CoFinder did not overwrite it.</div>
+              </div>
+              <div class="progress"><div class="progress-line"><span>Error</span><span>target exists</span></div><div class="bar"><i style="width:100%;background:var(--red)"></i></div></div>
+              <div class="job-tools"><button class="mini">↻</button><button class="mini">⧉</button></div>
+            </div>
+            <div class="job done">
+              <span class="badge">Done</span>
+              <span class="kind download"><svg viewBox="0 0 20 20"><path d="M4 14h12M6 10l4 4 4-4M10 6v8"/></svg>Download</span>
+              <div class="job-main">
+                <div class="job-path">sge:/mnt/gpfs/Users/zhouwenxiong/Experiment/summary.tsv → /Users/zwx/Downloads</div>
+                <div class="job-sub">Finished 12 seconds ago · 1.2 MB</div>
+              </div>
+              <div class="progress"><div class="progress-line"><span>Complete</span><span>100%</span></div><div class="bar green"><i style="width:100%"></i></div></div>
+              <div class="job-tools"><button class="mini">✓</button></div>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="details">
+        <div class="card">
+          <h2>Job Model</h2>
+          <ul>
+            <li>Unified kinds: upload, download, delete, gzip.</li>
+            <li>Status: queued, running, done, failed, canceled, stopped.</li>
+            <li>Each job records source path, destination/output path, parent folder to refresh, and tab/pane origin.</li>
+            <li>The top edge of the Job pane is a drag handle; height is user-adjustable and should persist.</li>
+            <li>Completion refreshes the original parent folder only if that pane is still showing it.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Concurrency</h2>
+          <ul>
+            <li>Transfers remain serial by default to keep rsync behavior predictable.</li>
+            <li>Delete and gzip become explicit jobs with path locks, so duplicate or overlapping operations are rejected early.</li>
+            <li>UI navigation does not cancel jobs; jobs update the Job pane independently.</li>
+            <li>Upload/download can show byte progress. Delete/gzip may show stage, entries visited, PID, elapsed time, and indeterminate activity unless pre-scanned.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Remote Gzip</h2>
+          <ul>
+            <li>Runs remotely through SSH/SFTP job execution instead of download-compress-upload.</li>
+            <li>Default command behavior preserves the source and writes to a temporary output before renaming it into place.</li>
+            <li>If the target <code>.gz</code> already exists, the job fails without overwriting.</li>
+            <li>If compression fails, the source file remains untouched and any temporary output is cleaned up when possible.</li>
+            <li>Remote progress is not exact without extra tooling. CoFinder can poll PID/output size and show elapsed time rather than pretending to know a reliable percent.</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h2>Preference</h2>
+          <label class="pref-row">
+            <input type="checkbox" disabled />
+            <span>Delete source file after gzip compression</span>
+          </label>
+          <p class="pref-note">
+            Default: off. When enabled, CoFinder deletes the original only after the gzip job finishes successfully; failed jobs keep the source.
+          </p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

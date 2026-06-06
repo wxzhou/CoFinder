@@ -1,10 +1,21 @@
 import fs from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { pipeline } from "node:stream/promises";
+import { createGunzip, createGzip } from "node:zlib";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
 import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo } from "../../shared/types/ipc";
+import { parseTimestampInput } from "../../shared/timestampInput";
 import { normalizeLocalPath } from "../utils/pathSafety";
+import { modeToRwx } from "./permissionDisplay";
+
+const execFileAsync = promisify(execFile);
+const localOwnerNameCache = new Map<number, string>();
 
 class LocalFileServiceError extends Error {
   constructor(
@@ -43,6 +54,7 @@ export class LocalFileService {
       dirEntries.map(async (dirent): Promise<LocalFileEntry> => {
         const fullPath = normalizeLocalPath(path.join(normalizedPath, dirent.name));
         const fileStats = await fs.lstat(fullPath);
+        const uid = typeof (fileStats as { uid?: unknown }).uid === "number" ? (fileStats as { uid: number }).uid : undefined;
 
         return {
           name: dirent.name,
@@ -50,7 +62,8 @@ export class LocalFileService {
           type: this.mapEntryType(dirent),
           size: fileStats.size,
           mtime: fileStats.mtime.toISOString(),
-          permissions: (fileStats.mode & 0o777).toString(8).padStart(3, "0"),
+          permissions: modeToRwx(fileStats.mode),
+          owner: uid !== undefined ? await resolveLocalOwnerName(uid) : undefined,
           isHidden: dirent.name.startsWith(".")
         };
       })
@@ -142,6 +155,79 @@ export class LocalFileService {
     }
   }
 
+  async compressFileGzip(targetPath: string, options?: { deleteSourceAfterSuccess?: boolean }): Promise<string> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    let destinationPath = normalizeLocalPath(`${normalizedPath}.gz`);
+    try {
+      const stats = await fs.lstat(normalizedPath);
+      if (stats.isFile()) {
+        await pipeline(createReadStream(normalizedPath), createGzip(), createWriteStream(destinationPath, { flags: "wx" }));
+        if (options?.deleteSourceAfterSuccess) await fs.rm(normalizedPath, { force: false });
+      } else if (stats.isDirectory()) {
+        destinationPath = normalizeLocalPath(`${normalizedPath}.tar.gz`);
+        await ensureLocalTargetAbsent(destinationPath);
+        await execFileAsync("tar", ["-czf", destinationPath, "-C", path.dirname(normalizedPath), path.basename(normalizedPath)]);
+        if (options?.deleteSourceAfterSuccess) await fs.rm(normalizedPath, { recursive: true, force: false });
+      } else {
+        throw new LocalFileServiceError("COMPRESS_FAILED", "Only files and folders can be compressed.");
+      }
+      return destinationPath;
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      if (code !== "EEXIST") await fs.rm(destinationPath, { force: true }).catch(() => {});
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapCompressError(error, normalizedPath);
+    }
+  }
+
+  async decompressPath(targetPath: string): Promise<string> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const destinationPath = localDecompressDestination(normalizedPath);
+    try {
+      await fs.lstat(normalizedPath);
+      if (isTarGzipPath(normalizedPath)) {
+        await ensureTarExtractionTargetsAbsent(normalizedPath);
+        await execFileAsync("tar", ["-xzf", normalizedPath, "-C", path.dirname(normalizedPath)]);
+      } else if (normalizedPath.endsWith(".gz")) {
+        await pipeline(createReadStream(normalizedPath), createGunzip(), createWriteStream(destinationPath, { flags: "wx" }));
+      } else {
+        throw new LocalFileServiceError("COMPRESS_FAILED", "Selected item is not a supported compressed file.");
+      }
+      return destinationPath;
+    } catch (error) {
+      const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+      if (code !== "EEXIST" && normalizedPath.endsWith(".gz") && !isTarGzipPath(normalizedPath)) await fs.rm(destinationPath, { force: true }).catch(() => {});
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapDecompressError(error, normalizedPath);
+    }
+  }
+
+  async generateMd5File(targetPath: string): Promise<string> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const destinationPath = normalizeLocalPath(`${normalizedPath}.md5`);
+    try {
+      const stats = await fs.lstat(normalizedPath);
+      if (!stats.isFile()) throw new LocalFileServiceError("COMPRESS_FAILED", "Only files can have an MD5 sidecar generated.");
+      const hash = await md5File(normalizedPath);
+      await fs.writeFile(destinationPath, `${hash}  ${path.basename(normalizedPath)}\n`, { encoding: "utf8", flag: "wx" });
+      return destinationPath;
+    } catch (error) {
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapMd5Error(error, normalizedPath);
+    }
+  }
+
+  async touchPath(targetPath: string, options?: { timestamp?: string }): Promise<void> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    try {
+      await fs.lstat(normalizedPath);
+      const timestamp = options?.timestamp ? parseTimestampInput(options.timestamp) : new Date();
+      await fs.utimes(normalizedPath, timestamp, timestamp);
+    } catch (error) {
+      throw this.mapTouchError(error, normalizedPath);
+    }
+  }
+
   async getPathInfo(targetPath: string, options?: { includeDirectorySize?: boolean }): Promise<PathInfo> {
     const normalizedPath = normalizeLocalPath(targetPath);
     try {
@@ -156,7 +242,7 @@ export class LocalFileService {
         size,
         mtime: stats.mtime.toISOString(),
         permissions: modeToRwx(stats.mode),
-        owner: typeof (stats as { uid?: unknown }).uid === "number" ? String((stats as { uid: number }).uid) : undefined,
+        owner: typeof (stats as { uid?: unknown }).uid === "number" ? await resolveLocalOwnerName((stats as { uid: number }).uid) : undefined,
         group: typeof (stats as { gid?: unknown }).gid === "number" ? String((stats as { gid: number }).gid) : undefined,
         ...counts
       };
@@ -221,6 +307,37 @@ export class LocalFileService {
     return new LocalFileServiceError("INFO_FAILED", `Failed to get path info: ${requestedPath}`);
   }
 
+  private mapCompressError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    if (code === "EEXIST") return new LocalFileServiceError("COMPRESS_FAILED", "Gzip target already exists.");
+    return new LocalFileServiceError("COMPRESS_FAILED", `Failed to compress path: ${requestedPath}`);
+  }
+
+  private mapDecompressError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    if (code === "EEXIST") return new LocalFileServiceError("COMPRESS_FAILED", "Decompress target already exists.");
+    return new LocalFileServiceError("COMPRESS_FAILED", `Failed to decompress path: ${requestedPath}`);
+  }
+
+  private mapMd5Error(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    if (code === "EEXIST") return new LocalFileServiceError("COMPRESS_FAILED", "MD5 target already exists.");
+    return new LocalFileServiceError("COMPRESS_FAILED", `Failed to generate MD5 for path: ${requestedPath}`);
+  }
+
+  private mapTouchError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    return new LocalFileServiceError("TOUCH_FAILED", `Failed to touch path: ${requestedPath}`);
+  }
+
   private async getDirectorySize(dirPath: string): Promise<number> {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     let total = 0;
@@ -243,6 +360,51 @@ function validateNewChildName(name: string): string {
     throw new LocalFileServiceError("UNKNOWN", "Name is invalid.");
   }
   return trimmed;
+}
+
+function isTarGzipPath(input: string): boolean {
+  return input.endsWith(".tar.gz") || input.endsWith(".tgz");
+}
+
+function localDecompressDestination(input: string): string {
+  if (input.endsWith(".tar.gz")) return input.slice(0, -7);
+  if (input.endsWith(".tgz")) return input.slice(0, -4);
+  if (input.endsWith(".gz")) return input.slice(0, -3);
+  throw new LocalFileServiceError("COMPRESS_FAILED", "Selected item is not a supported compressed file.");
+}
+
+async function ensureLocalTargetAbsent(targetPath: string): Promise<void> {
+  try {
+    await fs.lstat(targetPath);
+    throw new LocalFileServiceError("COMPRESS_FAILED", "Target already exists.");
+  } catch (error) {
+    if (error instanceof LocalFileServiceError) throw error;
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code !== "ENOENT") throw error;
+  }
+}
+
+async function ensureTarExtractionTargetsAbsent(archivePath: string): Promise<void> {
+  const { stdout } = await execFileAsync("tar", ["-tzf", archivePath]);
+  const parent = path.dirname(archivePath);
+  const topLevel = new Set(
+    stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim().replace(/^\.\//, "").split("/").filter(Boolean)[0])
+      .filter(Boolean)
+  );
+  for (const name of topLevel) await ensureLocalTargetAbsent(path.join(parent, name));
+}
+
+async function md5File(filePath: string): Promise<string> {
+  const hash = createHash("md5");
+  await new Promise<void>((resolve, reject) => {
+    const stream = createReadStream(filePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", resolve);
+  });
+  return hash.digest("hex");
 }
 
 async function nextAvailableLocalTextFile(parentPath: string): Promise<string> {
@@ -280,10 +442,20 @@ function unique(items: string[]): string[] {
   return out;
 }
 
-function modeToRwx(mode: number): string {
-  const perm = mode & 0o777;
-  const chunks = [(perm >> 6) & 0b111, (perm >> 3) & 0b111, perm & 0b111];
-  return chunks
-    .map((chunk) => `${chunk & 0b100 ? "r" : "-"}${chunk & 0b010 ? "w" : "-"}${chunk & 0b001 ? "x" : "-"}`)
-    .join("");
+async function resolveLocalOwnerName(uid: number): Promise<string> {
+  const cached = localOwnerNameCache.get(uid);
+  if (cached) return cached;
+  try {
+    const { stdout } = await execFileAsync("id", ["-nu", String(uid)]);
+    const name = stdout.trim();
+    if (name) {
+      localOwnerNameCache.set(uid, name);
+      return name;
+    }
+  } catch {
+    // Fall back to the numeric uid when the local account database is unavailable.
+  }
+  const fallback = String(uid);
+  localOwnerNameCache.set(uid, fallback);
+  return fallback;
 }

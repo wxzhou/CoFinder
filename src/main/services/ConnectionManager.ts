@@ -18,7 +18,9 @@ export class ConnectionManager {
       host: config.host,
       port: config.port,
       username: config.username,
-      password: config.password
+      password: config.password,
+      keepaliveInterval: 15_000,
+      keepaliveCountMax: 3
     });
 
     const homePath = await client.realPath(".");
@@ -29,6 +31,12 @@ export class ConnectionManager {
       config,
       homePath: homePath || "/"
     };
+    const forgetConnection = () => {
+      this.connections.delete(id);
+    };
+    client.on("close", forgetConnection);
+    client.on("end", forgetConnection);
+    client.on("error", forgetConnection);
     this.connections.set(id, connection);
     return connection;
   }

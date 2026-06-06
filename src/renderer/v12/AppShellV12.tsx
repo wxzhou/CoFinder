@@ -61,6 +61,7 @@ function mockToolbar(): ReactElement {
 
 export type AppShellV12Props = {
   titleTabs: ReactNode;
+  titleLeading?: ReactNode;
   sidebar?: ReactNode;
   /** `null` = no top strip. Omit for no default banner. */
   banner?: ReactNode | null;
@@ -85,6 +86,7 @@ export function AppShellV12(props: AppShellV12Props): ReactElement {
     <div className="cfv12-root v12m-root">
       <header className="cfv12-titlestrip v12m-titlestrip" aria-label="Window title and tabs">
         {/* Decorative traffic lights live only in `V12UiMockup` (?mockup=v12). Electron provides real lights. */}
+        {props.titleLeading ? <div className="cfv12-title-leading">{props.titleLeading}</div> : null}
         <div className="cfv12-tabsHost v12m-titlebar-tabs">{props.titleTabs}</div>
       </header>
 

@@ -4,6 +4,8 @@ declare module "ssh2-sftp-client" {
     port: number;
     username: string;
     password?: string;
+    keepaliveInterval?: number;
+    keepaliveCountMax?: number;
   };
 
   type SftpListItem = {
@@ -19,6 +21,7 @@ declare module "ssh2-sftp-client" {
   export default class SftpClient {
     connect(config: SftpConnectOptions): Promise<void>;
     end(): Promise<void>;
+    on(eventType: "close" | "end" | "error", callback: (error?: Error) => void): void;
     list(path: string): Promise<SftpListItem[]>;
     stat(path: string): Promise<{ type: string; size?: number; modifyTime?: number }>;
     realPath(path: string): Promise<string>;

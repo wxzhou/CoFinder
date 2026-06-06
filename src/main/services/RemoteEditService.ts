@@ -5,6 +5,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionManager } from "./ConnectionManager";
 import { RemotePreviewError, sniffPreviewKind, darwinTextPreviewOpenArgs } from "./RemotePreviewService";
+import { isSourceLikePath } from "../../shared/sourceFileTypes";
 import {
   remoteEditRemoteChanged,
   remoteEditSessionKey,
@@ -14,11 +15,24 @@ import {
 } from "./RemoteEditSessionModel";
 
 type RemoteEditClient = {
-  stat: (remotePath: string) => Promise<{ type?: string | number; size?: number; modifyTime?: number }>;
+  stat: (remotePath: string) => Promise<{ type?: string | number; size?: number; modifyTime?: number; mode?: number }>;
   fastGet?: (remotePath: string, localPath: string) => Promise<unknown>;
   get?: (remotePath: string, localPath?: string) => Promise<unknown>;
   put?: (localPath: string, remotePath: string) => Promise<unknown>;
 };
+
+export type RemoteLocalCopyOpener = "text" | "default";
+
+type RemoteLocalCopyOpenOptions = {
+  textEditor?: string;
+  opener?: RemoteLocalCopyOpener;
+  allowBinaryText?: boolean;
+  allowLargeFile?: boolean;
+  allowExecutable?: boolean;
+};
+
+const TEXT_OPEN_CONFIRM_BYTES = 5 * 1024 * 1024;
+const DEFAULT_OPEN_CONFIRM_BYTES = 100 * 1024 * 1024;
 
 export class RemoteEditService {
   private readonly sessions = new Map<string, RemoteEditSession>();
@@ -43,6 +57,20 @@ export class RemoteEditService {
     request: { tabId: string; connectionId: string; remotePath: string },
     options: { textEditor?: string } = {}
   ): Promise<RemoteEditSession> {
+    return this.openLocalCopySession(request, { ...options, opener: "text" });
+  }
+
+  async openDefaultSession(
+    request: { tabId: string; connectionId: string; remotePath: string },
+    options: Omit<RemoteLocalCopyOpenOptions, "opener" | "textEditor"> = {}
+  ): Promise<RemoteEditSession> {
+    return this.openLocalCopySession(request, { ...options, opener: "default" });
+  }
+
+  async openLocalCopySession(
+    request: { tabId: string; connectionId: string; remotePath: string },
+    options: RemoteLocalCopyOpenOptions = {}
+  ): Promise<RemoteEditSession> {
     const connection = this.connectionManager.getConnection(request.connectionId);
     if (!connection) throw new RemotePreviewError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
     const client = connection.client as unknown as RemoteEditClient;
@@ -52,23 +80,28 @@ export class RemoteEditService {
     if (stat.type === "d" || stat.type === "directory" || stat.type === 2) {
       throw new RemotePreviewError("REMOTE_PREVIEW_UNSUPPORTED", "Remote edit supports files only.");
     }
+    const requestedOpener = options.opener ?? "text";
+    const opener: RemoteLocalCopyOpener = requestedOpener === "default" && isSourceLikePath(request.remotePath) ? "text" : requestedOpener;
     const baseline = remoteEditBaselineFromStat(stat);
-    if (baseline.size > 5 * 1024 * 1024) {
-      throw new RemotePreviewError("REMOTE_PREVIEW_UNSUPPORTED", "Remote edit supports text files up to 5 MB in this version.");
+    if (requiresLargeFileConfirmation(opener, baseline.size) && !options.allowLargeFile) {
+      throw new RemotePreviewError("REMOTE_PREVIEW_UNSUPPORTED", largeFileMessage(opener, baseline.size));
+    }
+    if (opener === "default" && isExecutableMode(stat.mode) && !options.allowExecutable) {
+      throw new RemotePreviewError("REMOTE_PREVIEW_UNSUPPORTED", "Remote file appears to be executable. Confirm before opening it with the default app.");
     }
 
     const key = remoteEditSessionKey(request.tabId, request.connectionId, request.remotePath);
     const existing = this.sessions.get(key);
     if (existing) {
       this.startWatcher(existing);
-      await openTextEditor(existing.localPath, options.textEditor);
+      await openLocalCopy(existing.localPath, opener, options.textEditor);
       return existing;
     }
 
     const localPath = await this.allocateLocalPath(request.tabId, request.remotePath);
     await downloadRemoteFile(client, request.remotePath, localPath);
     const sample = await readSample(localPath);
-    if (sniffPreviewKind(sample) !== "text") {
+    if (opener === "text" && sniffPreviewKind(sample) !== "text" && !options.allowBinaryText) {
       await fs.unlink(localPath).catch(() => {});
       throw new RemotePreviewError("REMOTE_PREVIEW_UNSUPPORTED", "Remote edit supports sniffed text files only.");
     }
@@ -91,7 +124,7 @@ export class RemoteEditService {
     this.sessions.set(key, session);
     this.onSessionChange(session);
     this.startWatcher(session);
-    await openTextEditor(localPath, options.textEditor);
+    await openLocalCopy(localPath, opener, options.textEditor);
     return session;
   }
 
@@ -381,6 +414,40 @@ async function openTextEditor(localPath: string, textEditor?: string): Promise<v
     child.once("error", reject);
     child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error(`open exited with ${code ?? "unknown"}`))));
   });
+}
+
+async function openDefaultApp(localPath: string): Promise<void> {
+  if (process.platform !== "darwin") return;
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn("open", [localPath], { stdio: "ignore" });
+    child.once("error", reject);
+    child.once("exit", (code) => (code === 0 ? resolve() : reject(new Error(`open exited with ${code ?? "unknown"}`))));
+  });
+}
+
+async function openLocalCopy(localPath: string, opener: RemoteLocalCopyOpener, textEditor?: string): Promise<void> {
+  if (opener === "default") {
+    await openDefaultApp(localPath);
+    return;
+  }
+  await openTextEditor(localPath, textEditor);
+}
+
+function requiresLargeFileConfirmation(opener: RemoteLocalCopyOpener, size: number): boolean {
+  const threshold = opener === "text" ? TEXT_OPEN_CONFIRM_BYTES : DEFAULT_OPEN_CONFIRM_BYTES;
+  return size > threshold;
+}
+
+function largeFileMessage(opener: RemoteLocalCopyOpener, size: number): string {
+  const roundedMb = Math.max(1, Math.round(size / (1024 * 1024)));
+  if (opener === "text") {
+    return `Remote text edit opens files up to 5 MB without confirmation. This file is about ${roundedMb} MB.`;
+  }
+  return `Remote open downloads files up to 100 MB without confirmation. This file is about ${roundedMb} MB.`;
+}
+
+function isExecutableMode(mode: number | undefined): boolean {
+  return typeof mode === "number" && (mode & 0o111) !== 0;
 }
 
 function safeHash(input: string): string {

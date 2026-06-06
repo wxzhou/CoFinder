@@ -63,6 +63,60 @@ export function applyRowSelection<T extends RowLike>(
   };
 }
 
+function visibleSelectedIndexes(rowPaths: string[], selectedFullPaths: string[]): number[] {
+  return selectedFullPaths
+    .map((path) => rowPaths.indexOf(path))
+    .filter((index) => index >= 0)
+    .sort((a, b) => a - b);
+}
+
+function rangeFocusIndex(rowPaths: string[], current: SelectionState): number | null {
+  const indexes = visibleSelectedIndexes(rowPaths, current.selectedFullPaths);
+  if (!indexes.length) return null;
+  const anchorIndex = current.selectionAnchorFullPath ? rowPaths.indexOf(current.selectionAnchorFullPath) : -1;
+  if (anchorIndex >= 0) {
+    const first = indexes[0]!;
+    const last = indexes[indexes.length - 1]!;
+    if (anchorIndex === first) return last;
+    if (anchorIndex === last) return first;
+  }
+  return indexes[indexes.length - 1]!;
+}
+
+export function applyKeyboardRowSelection<T extends RowLike>(
+  rows: T[],
+  current: SelectionState,
+  direction: -1 | 1,
+  options: { extend: boolean }
+): SelectionState {
+  const rowPaths = rows.map((row) => row.fullPath);
+  if (rowPaths.length === 0) return clearSelectionState();
+
+  const currentFocus = rangeFocusIndex(rowPaths, current);
+  const fallback = direction > 0 ? 0 : rowPaths.length - 1;
+  const nextIndex =
+    currentFocus === null ? fallback : Math.max(0, Math.min(rowPaths.length - 1, currentFocus + direction));
+  const nextPath = rowPaths[nextIndex]!;
+
+  if (options.extend) {
+    const anchorPath =
+      current.selectionAnchorFullPath && rowPaths.includes(current.selectionAnchorFullPath)
+        ? current.selectionAnchorFullPath
+        : rowPaths[currentFocus ?? nextIndex]!;
+    const anchorIndex = rowPaths.indexOf(anchorPath);
+    const [start, end] = anchorIndex <= nextIndex ? [anchorIndex, nextIndex] : [nextIndex, anchorIndex];
+    return {
+      selectedFullPaths: rowPaths.slice(start, end + 1),
+      selectionAnchorFullPath: anchorPath
+    };
+  }
+
+  return {
+    selectedFullPaths: [nextPath],
+    selectionAnchorFullPath: nextPath
+  };
+}
+
 export function normalizeContextSelection(currentSelected: string[], clickedPath: string): string[] {
   if (currentSelected.includes(clickedPath)) return currentSelected;
   return [clickedPath];

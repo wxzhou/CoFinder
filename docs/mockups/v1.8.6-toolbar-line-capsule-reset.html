@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CoFinder v1.8.6 Line Capsule Toolbar Reset</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f5f6f8;
+        --pane: #ffffff;
+        --active-pane: #eef6ff;
+        --inactive-pane: #f8fafc;
+        --text: #202124;
+        --muted: #707781;
+        --line: #dfe4ea;
+        --icon: #111111;
+        --disabled: #b9c0ca;
+        --danger: #d9534f;
+      }
+
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--text);
+        font: 14px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      }
+      main {
+        max-width: 1540px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0 0 6px;
+        font-size: 24px;
+        letter-spacing: 0;
+      }
+      .intro {
+        margin: 0 0 18px;
+        max-width: 980px;
+        color: var(--muted);
+      }
+      .concept {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+        background: var(--pane);
+        box-shadow: 0 12px 28px rgba(20, 26, 33, 0.06);
+      }
+      .concept-head {
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--line);
+        background: linear-gradient(#fff, #fafbfc);
+      }
+      h2 {
+        margin: 0 0 4px;
+        font-size: 17px;
+      }
+      .concept-head p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .workspace {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        min-height: 340px;
+      }
+      .pane {
+        min-width: 0;
+        border-right: 1px solid var(--line);
+        background: var(--pane);
+      }
+      .pane:last-child { border-right: 0; }
+      .pane-top {
+        padding: 14px 14px 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      .pane.local .pane-top { background: var(--active-pane); }
+      .pane.remote .pane-top { background: var(--inactive-pane); }
+      .pane-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+      }
+      .pane-title strong {
+        color: var(--text);
+        font-size: 18px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #75d889;
+      }
+      .crumbs {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        height: 34px;
+        margin-top: 4px;
+        color: #676d77;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .crumbs b {
+        padding: 3px 7px;
+        border-radius: 7px;
+        background: rgba(0,0,0,.06);
+        color: #202124;
+      }
+      .location-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+      }
+      .location-row .crumbs {
+        margin-top: 0;
+      }
+      .path-copy {
+        width: 34px;
+        height: 34px;
+        display: inline-grid;
+        place-items: center;
+        padding: 0;
+        border: 0;
+        border-radius: 9px;
+        background: #ffffff;
+        color: var(--icon);
+      }
+      .path-copy svg {
+        width: 32px;
+        height: 32px;
+        display: block;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        min-width: 0;
+      }
+      .capsule {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        height: 38px;
+        padding: 2px;
+        border: 0;
+        border-radius: 12px;
+        background: #ffffff;
+      }
+      .tb {
+        display: inline-grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: var(--icon);
+      }
+      .tb.danger { color: var(--danger); }
+      .tb.disabled {
+        color: var(--disabled);
+        cursor: default;
+      }
+      .tb svg {
+        width: 32px;
+        height: 32px;
+        display: block;
+      }
+      .tb path,
+      .tb rect,
+      .tb circle,
+      .tb line,
+      .tb polyline,
+      .path-copy path,
+      .path-copy rect {
+        vector-effect: non-scaling-stroke;
+      }
+      .filter {
+        flex: 1 1 170px;
+        min-width: 120px;
+        height: 34px;
+        display: flex;
+        align-items: center;
+        padding: 0 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        color: #7b818a;
+      }
+      .file-head, .file-row {
+        display: grid;
+        grid-template-columns: 1.8fr 1.2fr .55fr .7fr;
+        gap: 10px;
+        align-items: center;
+        height: 32px;
+        padding: 0 14px;
+        border-bottom: 1px solid #edf0f3;
+      }
+      .file-head {
+        color: #8b9098;
+        font-weight: 700;
+      }
+      .file-row { color: #6f747d; }
+      .name {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        overflow: hidden;
+        color: #202124;
+        font-weight: 600;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .mini-folder {
+        width: 18px;
+        height: 14px;
+        border-radius: 3px;
+        background: linear-gradient(#8ccaff, #50a4ed);
+      }
+      .mini-doc {
+        width: 14px;
+        height: 18px;
+        border: 1px solid #aeb3ba;
+        border-radius: 3px;
+        background: linear-gradient(#fff, #f0f0ef);
+      }
+      .sheet {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(116px, 1fr));
+        gap: 8px;
+        padding: 12px 14px 16px;
+        border-top: 1px solid var(--line);
+        background: #fbfcfd;
+      }
+      .sheet-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        color: #68707b;
+        font-size: 12px;
+      }
+      .sheet-item .tb {
+        width: 30px;
+        height: 30px;
+      }
+      .sheet-item .tb svg {
+        width: 29px;
+        height: 29px;
+      }
+
+      @media (max-width: 1000px) {
+        main { padding: 16px; }
+        .workspace { grid-template-columns: 1fr; }
+        .pane { border-right: 0; border-bottom: 1px solid var(--line); }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>CoFinder v1.8.6 Line Capsule Toolbar Reset</h1>
+      <p class="intro">
+        Reset direction based on the v1.8.5 toolbar: white capsule groups independent of pane focus, no internal borders or dividers,
+        very large line-only glyphs, black icons by default, gray disabled icons, and red line-only Delete.
+      </p>
+
+      <section class="concept">
+        <div class="concept-head">
+          <h2>Single Baseline Proposal</h2>
+          <p>One coherent direction instead of decorative variants. This is meant to be the implementation target if approved.</p>
+        </div>
+        <div class="workspace">
+          <div class="pane local">
+            <div class="pane-top">
+              <div class="pane-title"><strong>Experiment</strong><span>Local</span></div>
+              <div class="location-row">
+                <div class="crumbs">Macintosh HD <span>›</span> Users <span>›</span> zwx <span>›</span> <b>Experiment</b></div>
+                <button class="path-copy" title="Copy path" aria-label="Copy path"></button>
+              </div>
+              <div id="local-toolbar"></div>
+            </div>
+            <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Kind</span></div>
+            <div class="file-row"><span class="name"><i class="mini-folder"></i>260429</span><span>2026/5/14 11:38</span><span>—</span><span>Folder</span></div>
+            <div class="file-row"><span class="name"><i class="mini-doc"></i>postrun_test.log</span><span>2026/5/12 22:11</span><span>4.10 MB</span><span>Document</span></div>
+          </div>
+          <div class="pane remote">
+            <div class="pane-top">
+              <div class="pane-title"><strong>sge</strong><span>zhouwenxiong@10.0.32.10:22</span><i class="dot"></i><span>Connected</span></div>
+              <div class="location-row">
+                <div class="crumbs">/ <span>›</span> mnt <span>›</span> gpfs <span>›</span> Users <span>›</span> <b>260429</b></div>
+                <button class="path-copy" title="Copy path" aria-label="Copy path"></button>
+              </div>
+              <div id="remote-toolbar"></div>
+            </div>
+            <div class="file-head"><span>Name ^</span><span>Date modified</span><span>Size</span><span>Owner</span></div>
+            <div class="file-row"><span class="name"><i class="mini-folder"></i>result_ilmn</span><span>2026/5/14 09:34</span><span>—</span><span>zhouwenxiong</span></div>
+            <div class="file-row"><span class="name"><i class="mini-doc"></i>align_ilmn_1.sh</span><span>2026/5/4 20:46</span><span>1.48 KB</span><span>zhouwenxiong</span></div>
+          </div>
+        </div>
+        <div id="sheet" class="sheet"></div>
+      </section>
+    </main>
+
+    <script>
+      const localActions = [
+        ["back", "Back", "nav"],
+        ["forward", "Forward", "nav", "disabled"],
+        ["up", "Enclosing folder", "nav"],
+        ["home", "Home", "nav"],
+        ["refresh", "Refresh", "nav"],
+        ["inspector", "Toggle inspector", "nav"],
+        ["upload", "Upload", "nav"],
+        ["folderPlus", "New folder", "nav"],
+        ["filePlus", "New text file", "nav"],
+        ["delete", "Delete", "danger"],
+        ["terminal", "Open terminal here", "nav"],
+        ["recent", "Recent", "nav"],
+        ["history", "History", "nav"],
+        ["clearRecent", "Clear recent", "nav"]
+      ];
+      const remoteActions = [
+        ["back", "Back", "nav", "disabled"],
+        ["forward", "Forward", "nav", "disabled"],
+        ["up", "Enclosing folder", "nav"],
+        ["home", "Home", "nav"],
+        ["refresh", "Refresh", "nav"],
+        ["inspector", "Toggle inspector", "nav"],
+        ["download", "Download", "nav"],
+        ["edit", "Edit remote text file", "nav"],
+        ["folderPlus", "New folder", "nav"],
+        ["filePlus", "New text file", "nav"],
+        ["delete", "Delete", "danger"],
+        ["terminal", "Open SSH terminal here", "nav"],
+        ["recent", "Recent", "nav"],
+        ["history", "History", "nav"],
+        ["clearRecent", "Clear recent", "nav"]
+      ];
+      const groups = {
+        local: [[0, 6], [6, 11], [11, 14]],
+        remote: [[0, 6], [6, 12], [12, 15]]
+      };
+
+      function line(body) {
+        return `<svg viewBox="0 0 28 28" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.05" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
+      }
+      function icon(name) {
+        const icons = {
+          back: line(`<path d="M17.5 5.5 9 14l8.5 8.5"/>`),
+          forward: line(`<path d="m10.5 5.5 8.5 8.5-8.5 8.5"/>`),
+          up: line(`<path d="m5.5 17.5 8.5-8.5 8.5 8.5"/>`),
+          home: line(`<path d="M5 13.2 14 5l9 8.2"/><path d="M7.7 11.8v10.4h12.6V11.8"/>`),
+          refresh: line(`<path d="M8.1 8.2A8.1 8.1 0 0 1 21.7 11"/><path d="M21.8 5.5V11h-5.5"/><path d="M19.9 19.8A8.1 8.1 0 0 1 6.3 17"/><path d="M6.2 22.5V17h5.5"/>`),
+          inspector: line(`<path d="M5.5 5.5v17"/><rect x="10" y="5.5" width="12.5" height="17" rx="2.7"/>`),
+          upload: line(`<path d="M14 22V6.5"/><path d="m7.8 12.7 6.2-6.2 6.2 6.2"/><path d="M5.5 22.2h17"/>`),
+          download: line(`<path d="M14 6v15.5"/><path d="m7.8 15.3 6.2 6.2 6.2-6.2"/><path d="M5.5 5.8h17"/>`),
+          folderPlus: line(`<path d="M4.2 9.5c0-.9.7-1.6 1.6-1.6h4.6l2.1 2.1h9.7c.9 0 1.6.7 1.6 1.6v8.6c0 .9-.7 1.6-1.6 1.6H5.8c-.9 0-1.6-.7-1.6-1.6z"/><path d="M17.8 13.4v6.2"/><path d="M14.7 16.5h6.2"/>`),
+          filePlus: line(`<path d="M7 5.6C7 4.7 7.7 4 8.6 4h7.1L21 9.3v13.1c0 .9-.7 1.6-1.6 1.6H8.6c-.9 0-1.6-.7-1.6-1.6z"/><path d="M15.1 4v5.9c0 .8.6 1.4 1.4 1.4H21"/><path d="M14 13.8v6.4"/><path d="M10.8 17h6.4"/>`),
+          delete: line(`<path d="M7.2 8.4h13.6"/><path d="M10.1 8.4V5.2h7.8v3.2"/><path d="m9.1 11.2.8 12h8.2l.8-12"/><path d="M12.4 13.8v6.5"/><path d="M15.6 13.8v6.5"/>`),
+          terminal: line(`<rect x="4.5" y="5.5" width="19" height="17" rx="2.8"/><path d="m8.5 10.6 3.5 3.4-3.5 3.4"/><path d="M14.4 17.4h5.2"/>`),
+          copyPath: line(`<g transform="translate(.7 .9) scale(1.55)"><rect x="7" y="5" width="8" height="10" rx="1"/><path d="M5 13.5H4.5a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1H11a1 1 0 0 1 1 1V5"/></g>`),
+          edit: line(`<g transform="translate(-1.2 -1) scale(1.22)"><path d="M5.5 17.7 6.4 14l7.9-7.9 3.6 3.6-7.9 7.9-3.7.9a.7.7 0 0 1-.8-.8z"/><path d="M16.9 3.5a1.9 1.9 0 0 1 2.7 0l.9.9a1.9 1.9 0 0 1 0 2.7l-.8.8-3.6-3.6.8-.8z"/></g>`),
+          recent: line(`<circle cx="14" cy="14" r="9.1"/><path d="M14 8v6.3l4.3 2.6"/>`),
+          history: line(`<path d="M7.2 8.4H4.1V5.3"/><path d="M4.6 8a9 9 0 1 1 1.5 12.2"/><path d="M14 9v5.2l3.6 2.2"/>`),
+          clearRecent: line(`<circle cx="12.3" cy="12.2" r="7.2"/><path d="M12.3 7.7v5.1l3 1.8"/><path d="m18.6 18.2 4.2 4.2"/><path d="m22.8 18.2-4.2 4.2"/>`)
+        };
+        return icons[name] || line("");
+      }
+      function button(action) {
+        const [name, label, tone, state] = action;
+        const classes = ["tb", tone === "danger" ? "danger" : "", state === "disabled" ? "disabled" : ""].filter(Boolean).join(" ");
+        return `<button class="${classes}" title="${label}" aria-label="${label}">${icon(name)}</button>`;
+      }
+      function toolbar(actions, groupSpec) {
+        const capsules = groupSpec.map(([start, end]) => `<span class="capsule">${actions.slice(start, end).map(button).join("")}</span>`);
+        return `<div class="toolbar">${capsules[0]}${capsules[1]}<div class="filter">Filter names</div>${capsules[2]}</div>`;
+      }
+      document.getElementById("local-toolbar").innerHTML = toolbar(localActions, groups.local);
+      document.getElementById("remote-toolbar").innerHTML = toolbar(remoteActions, groups.remote);
+      document.querySelectorAll(".path-copy").forEach((element) => {
+        element.innerHTML = icon("copyPath");
+      });
+      const unique = [...localActions, ...remoteActions].filter((item, i, arr) => arr.findIndex((x) => x[0] === item[0]) === i);
+      const sheetActions = [...unique, ["copyPath", "Copy path", "nav"]];
+      document.getElementById("sheet").innerHTML = sheetActions.map((action) => `<div class="sheet-item">${button(action)}<span>${action[1]}</span></div>`).join("");
+    </script>
+  </body>
+</html>

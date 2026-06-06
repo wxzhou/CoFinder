@@ -1,9 +1,17 @@
-import type { DragEvent, KeyboardEvent, MouseEvent, ReactElement } from "react";
+import { useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
 import type { FileEntry, SortDirection, SortKey } from "../../../shared/types/models";
-import { V12Icon } from "./V12Icons";
+import { V12Icon, V12TbIcon } from "./V12Icons";
 
 /** Alias for callers that only need the shared list shape (extends IPC file entries). */
 export type V12VisualFileRow = FileEntry;
+export type V12FileColumnKey = "name" | "mtime" | "size" | "kind" | "permissions" | "owner";
+export type V12FileColumn = {
+  key: V12FileColumnKey;
+  label: string;
+  width: number;
+  visible: boolean;
+  required?: boolean;
+};
 
 export type V12VisualFileListProps<T extends FileEntry> = {
   pane: "local" | "remote";
@@ -12,8 +20,12 @@ export type V12VisualFileListProps<T extends FileEntry> = {
   sortKey: SortKey;
   sortDirection: SortDirection;
   selectedFullPaths: string[];
+  columns: V12FileColumn[];
+  onColumnWidthChange: (key: V12FileColumnKey, width: number) => void;
+  onColumnVisibilityChange: (key: V12FileColumnKey, visible: boolean) => void;
   onSort: (key: SortKey) => void;
   onRowClick: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
+  onRowDetailClick?: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
   onRowContextMenu: (entry: T, event: MouseEvent<HTMLDivElement>) => void;
   onRowDoubleClick: (entry: T) => void;
   onBackgroundMouseDown: (event: MouseEvent<HTMLDivElement>) => void;
@@ -37,7 +49,6 @@ export type V12VisualFileListProps<T extends FileEntry> = {
     | null;
   formatSize: (bytes: number) => string;
   formatTime: (iso: string) => string;
-  sortMark: (direction: SortDirection) => string;
   /** Human-readable kind column (mock uses “Folder” / “Document”). */
   formatKind: (entry: T) => string;
   emptyMessage?: string;
@@ -49,26 +60,137 @@ function rowSelClass(selected: boolean, paneActive: boolean): string {
 }
 
 export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListProps<T>): ReactElement {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const visibleColumns = props.columns.filter((column) => column.visible || column.required);
+  const gridTemplateColumns = visibleColumns.map((column) => `${column.width}px`).join(" ");
+  const gridStyle: CSSProperties = { gridTemplateColumns, minWidth: "100%", width: "max-content" };
+  const startResize = (column: V12FileColumn, event: MouseEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startWidth = column.width;
+    const minWidth = column.key === "name" ? 160 : column.key === "mtime" ? 112 : 72;
+    const onMove = (moveEvent: globalThis.MouseEvent) => {
+      props.onColumnWidthChange(column.key, Math.max(minWidth, startWidth + moveEvent.clientX - startX));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+  const renderSort = (key: V12FileColumnKey) => {
+    if (key !== props.sortKey) return null;
+    return <V12TbIcon name={props.sortDirection === "asc" ? "sort-asc" : "sort-desc"} />;
+  };
+  const sortKeyForColumn = (key: V12FileColumnKey): SortKey | null => {
+    if (key === "name" || key === "mtime" || key === "size") return key;
+    return null;
+  };
+  const cellValue = (entry: T, key: V12FileColumnKey): ReactElement | string => {
+    const row = entry as FileEntry & { permissions?: string; owner?: string };
+    if (key === "name") {
+      const isDir = entry.type === "directory";
+      const renaming = props.inlineRename?.sourcePath === entry.fullPath;
+      return (
+        <div className="v12m-lname">
+          <span className={`v12m-file-ico ${isDir ? "v12m-file-ico--dir" : "v12m-file-ico--file"}`}>
+            <V12Icon name={isDir ? "folder" : "doc"} />
+          </span>
+          {renaming && props.inlineRename ? (
+            <input
+              className="v12m-lname-txt v12m-lname-input"
+              style={{ border: "1px solid rgba(10,132,255,0.35)", borderRadius: 4, padding: "0 4px" }}
+              autoFocus
+              value={props.inlineRename.draftName}
+              onFocus={(e) => e.currentTarget.select()}
+              onChange={(e) => props.inlineRename?.onChange(e.target.value)}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              onDoubleClick={(e) => e.stopPropagation()}
+              onBlur={() => props.inlineRename?.onBlur()}
+              onKeyDown={(e) => props.inlineRename?.onKeyDown(e)}
+            />
+          ) : (
+            <span className="v12m-lname-txt" title={entry.name}>
+              {entry.name}
+            </span>
+          )}
+        </div>
+      );
+    }
+    if (key === "mtime") return props.formatTime(entry.mtime);
+    if (key === "size") return entry.type === "directory" ? "—" : props.formatSize(entry.size);
+    if (key === "kind") return props.formatKind(entry);
+    if (key === "permissions") return row.permissions || "—";
+    if (key === "owner") return row.owner || "—";
+    return "—";
+  };
   return (
-    <>
-      <div className="v12m-list-head">
-        <span className="v12m-col-name">
-          <button type="button" className="v12m-pathfinder-seg" style={{ padding: 0, textAlign: "left" }} onClick={() => props.onSort("name")}>
-            Name {props.sortKey === "name" ? props.sortMark(props.sortDirection) : ""}
-          </button>
-        </span>
-        <span>
-          <button type="button" className="v12m-pathfinder-seg" style={{ padding: 0 }} onClick={() => props.onSort("mtime")}>
-            Date modified {props.sortKey === "mtime" ? props.sortMark(props.sortDirection) : ""}
-          </button>
-        </span>
-        <span>
-          <button type="button" className="v12m-pathfinder-seg" style={{ padding: 0 }} onClick={() => props.onSort("size")}>
-            Size {props.sortKey === "size" ? props.sortMark(props.sortDirection) : ""}
-          </button>
-        </span>
-        <span className="v12m-kind">Kind</span>
+    <div
+      className="v12m-file-grid-scroll"
+      onMouseDown={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("[data-pane-row],.v12m-list,.v12m-list-head,.v12m-column-menu,button,input,textarea,select")) return;
+        props.onBackgroundMouseDown(event);
+      }}
+      onContextMenu={(event) => {
+        const target = event.target as HTMLElement | null;
+        if (target?.closest("[data-pane-row],.v12m-list,.v12m-list-head,.v12m-column-menu")) return;
+        props.onBackgroundContextMenu?.(event);
+      }}
+    >
+      <div
+        className="v12m-list-head"
+        style={gridStyle}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setMenu({ x: event.clientX, y: event.clientY });
+        }}
+      >
+        {visibleColumns.map((column) => {
+          const sortKey = sortKeyForColumn(column.key);
+          return (
+            <span key={column.key} className={`v12m-hcell v12m-hcell--${column.key}`}>
+              <button
+                type="button"
+                className="v12m-pathfinder-seg v12m-hbtn"
+                disabled={!sortKey}
+                onClick={() => {
+                  if (sortKey) props.onSort(sortKey);
+                }}
+              >
+                <span>{column.label}</span>
+                {renderSort(column.key)}
+              </button>
+              <span className="v12m-col-resize" role="separator" aria-hidden onMouseDown={(event) => startResize(column, event)} />
+            </span>
+          );
+        })}
       </div>
+      {menu ? (
+        <div className="v12m-column-menu" style={{ left: `${menu.x}px`, top: `${menu.y}px` }}>
+          {props.columns.map((column) => {
+            const checked = column.visible || column.required;
+            return (
+              <button
+                key={column.key}
+                type="button"
+                className="v12m-column-menu-item"
+                disabled={column.required}
+                onClick={() => {
+                  if (!column.required) props.onColumnVisibilityChange(column.key, !column.visible);
+                  setMenu(null);
+                }}
+              >
+                <span className={column.required ? "is-muted" : ""}>{checked ? <V12TbIcon name="check" /> : null}</span>
+                {column.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       <div
         className="v12m-list"
         role="list"
@@ -82,56 +204,40 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
         {props.entries.map((entry) => {
           const selected = props.selectedFullPaths.includes(entry.fullPath);
           const sel = rowSelClass(selected, props.isPaneActive);
-          const renaming = props.inlineRename?.sourcePath === entry.fullPath;
-          const isDir = entry.type === "directory";
           return (
             <div
               key={entry.fullPath}
               role="listitem"
-              draggable={!renaming}
+              draggable={props.inlineRename?.sourcePath !== entry.fullPath}
               data-pane-row="true"
               data-marquee-pane={props.pane}
               data-full-path={entry.fullPath}
               className={`v12m-lrow ${sel} ${props.getRowClassName?.(entry) ?? ""}`.trim()}
+              style={gridStyle}
               onDragStart={(e) => props.onRowDragStart?.(entry, e)}
               onDragOver={(e) => props.onRowDragOver?.(entry, e)}
               onDrop={(e) => props.onRowDrop?.(entry, e)}
               onDragEnd={(e) => props.onRowDragEnd?.(e)}
-              onClick={(e) => props.onRowClick(entry, e)}
+              onClick={(e) => {
+                const target = e.target as HTMLElement | null;
+                if (target?.closest(".v12m-lname")) {
+                  props.onRowClick(entry, e);
+                  return;
+                }
+                props.onRowDetailClick?.(entry, e);
+              }}
               onContextMenu={(e) => props.onRowContextMenu(entry, e)}
               onDoubleClick={() => props.onRowDoubleClick(entry)}
             >
-              <div className="v12m-lname">
-                <span className={`v12m-file-ico ${isDir ? "v12m-file-ico--dir" : "v12m-file-ico--file"}`}>
-                  <V12Icon name={isDir ? "folder" : "doc"} />
+              {visibleColumns.map((column) => (
+                <span key={column.key} className={column.key === "name" ? "v12m-namecell" : `v12m-lcell v12m-lcell--${column.key}`}>
+                  {cellValue(entry, column.key)}
                 </span>
-                {renaming && props.inlineRename ? (
-                  <input
-                    className="v12m-lname-txt"
-                    style={{ border: "1px solid rgba(10,132,255,0.35)", borderRadius: 4, padding: "0 4px" }}
-                    autoFocus
-                    value={props.inlineRename.draftName}
-                    onFocus={(e) => e.currentTarget.select()}
-                    onChange={(e) => props.inlineRename?.onChange(e.target.value)}
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    onDoubleClick={(e) => e.stopPropagation()}
-                    onBlur={() => props.inlineRename?.onBlur()}
-                    onKeyDown={(e) => props.inlineRename?.onKeyDown(e)}
-                  />
-                ) : (
-                  <span className="v12m-lname-txt" title={entry.name}>
-                    {entry.name}
-                  </span>
-                )}
-              </div>
-              <span className="v12m-lcell">{props.formatTime(entry.mtime)}</span>
-              <span className="v12m-lcell">{isDir ? "—" : props.formatSize(entry.size)}</span>
-              <span className="v12m-lcell v12m-kind">{props.formatKind(entry)}</span>
+              ))}
             </div>
           );
         })}
       </div>
-    </>
+    </div>
   );
 }

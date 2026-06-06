@@ -1,8 +1,13 @@
+import { randomUUID } from "node:crypto";
+import { createReadStream } from "node:fs";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
 import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse } from "../../shared/types/ipc";
+import { timestampInputToTouchStamp } from "../../shared/timestampInput";
 import { ConnectionManager } from "./ConnectionManager";
 import { isSafeHostOrUsername, normalizeRemotePosixPath } from "../utils/pathSafety";
+import { modeToRwx, rightsToRwx } from "./permissionDisplay";
 
 const posixPath = path.posix;
 type RemoteListItem = {
@@ -22,6 +27,28 @@ type RemoteStatItem = {
   owner?: number | string;
   group?: number | string;
   mode?: number;
+};
+type RemoteCompressClient = {
+  stat: (path: string) => Promise<RemoteStatItem>;
+  client?: {
+    exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
+  };
+};
+type RemoteCommandClient = {
+  client?: {
+    exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
+  };
+};
+type RemoteDownloadClient = {
+  stat: (path: string) => Promise<RemoteStatItem>;
+  list: (path: string) => Promise<RemoteListItem[]>;
+  fastGet?: (remotePath: string, localPath: string) => Promise<unknown>;
+  get?: (remotePath: string, localPath?: string) => Promise<unknown>;
+};
+type RemoteUploadClient = {
+  mkdir: (path: string, recursive?: boolean) => Promise<unknown>;
+  fastPut?: (localPath: string, remotePath: string) => Promise<unknown>;
+  put?: (input: Buffer | NodeJS.ReadableStream | string, path: string) => Promise<unknown>;
 };
 
 export type RemoteDirectorySizeOptions = {
@@ -48,6 +75,8 @@ class RemoteServiceError extends Error {
 }
 
 export class RemoteFileService {
+  private readonly ownerNameCache = new WeakMap<object, Map<string, string>>();
+
   constructor(private readonly connectionManager: ConnectionManager) {}
 
   async connect(config: ConnectionConfig): Promise<RemoteConnectResponse> {
@@ -100,7 +129,12 @@ export class RemoteFileService {
         normalizedPath,
         listAttempted: true
       });
-      const entries = (await connection.client.list(normalizedPath)) as RemoteListItem[];
+      const entries = (await withTimeout(
+        connection.client.list(normalizedPath),
+        15_000,
+        "Remote connection did not respond. Please reconnect."
+      )) as RemoteListItem[];
+      const ownerNames = await this.resolveRemoteOwnerNames(connection.client, entries);
       this.log("remote:listDirectory success", {
         connectionId,
         normalizedPath,
@@ -109,7 +143,7 @@ export class RemoteFileService {
       });
       return {
         path: normalizedPath,
-        entries: entries.map((entry) => this.mapRemoteEntry(normalizedPath, entry))
+        entries: entries.map((entry) => this.mapRemoteEntry(normalizedPath, entry, ownerNames))
       };
     } catch (error) {
       const raw = this.extractRawError(error);
@@ -121,6 +155,12 @@ export class RemoteFileService {
         errorCode: raw.code,
         errorMessage: raw.message
       });
+
+      const mappedError = this.mapListError(error);
+      if (mappedError.code === "REMOTE_DISCONNECTED") {
+        void this.connectionManager.disconnect(connectionId).catch(() => undefined);
+        throw mappedError;
+      }
 
       // Optional diagnostic only. Do not use stat to pre-reject directory browsing.
       try {
@@ -141,7 +181,7 @@ export class RemoteFileService {
         });
       }
 
-      throw this.mapListError(error);
+      throw mappedError;
     }
   }
 
@@ -188,9 +228,10 @@ export class RemoteFileService {
 
     const normalizedPaths = unique(paths.map((item) => this.normalizeRemotePath(item)));
     let deleted = 0;
+    const client = connection.client as unknown as RemoteDeleteClient;
     for (const targetPath of normalizedPaths) {
       try {
-        await this.deleteRemotePathRecursive(connection.client as unknown as RemoteDeleteClient, targetPath);
+        await this.deleteRemotePath(client, targetPath);
         deleted += 1;
       } catch (error) {
         throw this.mapDeleteError(error);
@@ -267,12 +308,140 @@ export class RemoteFileService {
     }
   }
 
+  async compressFileGzip(connectionId: string, targetPath: string, options?: { deleteSourceAfterSuccess?: boolean }): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const client = connection.client as unknown as RemoteCompressClient;
+    try {
+      const sourceStat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      const sourceType = resolveRemoteType(sourceStat);
+      if (sourceType !== "file" && sourceType !== "directory") throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only remote files and folders can be compressed.");
+      const destinationPath = this.normalizeRemotePath(sourceType === "directory" ? `${normalizedPath}.tar.gz` : `${normalizedPath}.gz`);
+      try {
+        await client.stat(destinationPath);
+        throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Compression target already exists.");
+      } catch (error) {
+        if (error instanceof RemoteServiceError) throw error;
+        const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : "";
+        if (!/No such file|ENOENT|no such path|does not exist/i.test(message)) throw error;
+      }
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote command execution is unavailable for gzip.");
+      const tempPath = `${destinationPath}.cofinder-${Date.now()}-${randomUUID().slice(0, 8)}.tmp`;
+      const command = sourceType === "directory"
+        ? buildRemoteTarGzipCommand(normalizedPath, destinationPath, tempPath, !!options?.deleteSourceAfterSuccess)
+        : buildRemoteGzipCommand(normalizedPath, destinationPath, tempPath, !!options?.deleteSourceAfterSuccess);
+      await execRemoteCommand(exec, command);
+      return destinationPath;
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapCompressError(error);
+    }
+  }
+
+  async decompressPath(connectionId: string, targetPath: string): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const client = connection.client as unknown as RemoteCompressClient;
+    try {
+      const sourceStat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      if (resolveRemoteType(sourceStat) !== "file") throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only compressed remote files can be decompressed.");
+      const destinationPath = remoteDecompressDestination(normalizedPath);
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote command execution is unavailable for decompress.");
+      const tempPath = `${destinationPath}.cofinder-${Date.now()}-${randomUUID().slice(0, 8)}.tmp`;
+      const command = remoteIsTarGzipPath(normalizedPath)
+        ? buildRemoteTarDecompressCommand(normalizedPath)
+        : buildRemoteGunzipCommand(normalizedPath, destinationPath, tempPath);
+      await execRemoteCommand(exec, command);
+      return destinationPath;
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapCompressError(error);
+    }
+  }
+
+  async generateMd5File(connectionId: string, targetPath: string): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const destinationPath = this.normalizeRemotePath(`${normalizedPath}.md5`);
+    const client = connection.client as unknown as RemoteCompressClient;
+    try {
+      const sourceStat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      if (resolveRemoteType(sourceStat) !== "file") throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only files can have an MD5 sidecar generated.");
+      try {
+        await client.stat(destinationPath);
+        throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "MD5 target already exists.");
+      } catch (error) {
+        if (error instanceof RemoteServiceError) throw error;
+        const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : "";
+        if (!/No such file|ENOENT|no such path|does not exist/i.test(message)) throw error;
+      }
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote command execution is unavailable for MD5.");
+      const tempPath = `${destinationPath}.cofinder-${Date.now()}-${randomUUID().slice(0, 8)}.tmp`;
+      await execRemoteCommand(exec, buildRemoteMd5Command(normalizedPath, destinationPath, tempPath));
+      return destinationPath;
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapCompressError(error);
+    }
+  }
+
+  async touchPath(connectionId: string, targetPath: string, options?: { timestamp?: string }): Promise<void> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const client = connection.client as unknown as RemoteCompressClient;
+    try {
+      await client.stat(normalizedPath);
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_TOUCH_FAILED", "Remote command execution is unavailable for touch.");
+      const touchStamp = options?.timestamp ? timestampInputToTouchStamp(options.timestamp) : undefined;
+      await execRemoteCommand(exec, buildRemoteTouchCommand(normalizedPath, touchStamp), {
+        code: "REMOTE_TOUCH_FAILED",
+        message: "Remote touch command failed."
+      });
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapTouchError(error);
+    }
+  }
+
+  async downloadPathToLocal(connectionId: string, remotePath: string, localTargetPath: string): Promise<void> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedRemotePath = this.normalizeRemotePath(remotePath);
+    const normalizedLocalPath = path.resolve(localTargetPath);
+    try {
+      await this.downloadRemotePathRecursive(connection.client as unknown as RemoteDownloadClient, normalizedRemotePath, normalizedLocalPath);
+    } catch (error) {
+      throw this.mapDownloadError(error);
+    }
+  }
+
+  async uploadPathToRemote(connectionId: string, localPath: string, remoteTargetPath: string): Promise<void> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedLocalPath = path.resolve(localPath);
+    const normalizedRemotePath = this.normalizeRemotePath(remoteTargetPath);
+    try {
+      await this.uploadLocalPathRecursive(connection.client as unknown as RemoteUploadClient, normalizedLocalPath, normalizedRemotePath);
+    } catch (error) {
+      throw this.mapUploadError(error);
+    }
+  }
+
   async getPathInfo(connectionId: string, targetPath: string, options?: { includeDirectorySize?: boolean }): Promise<PathInfo> {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
     const normalizedPath = this.normalizeRemotePath(targetPath);
     try {
       const stat = (await connection.client.stat(normalizedPath)) as RemoteStatItem;
+      const parentEntry = await this.findParentListEntry(connection.client, normalizedPath).catch(() => undefined);
       const type = resolveRemoteType(stat);
       const size = type === "directory" && options?.includeDirectorySize !== false
         ? await this.getRemoteDirectorySize(connection.client as unknown as RemoteDeleteClient, normalizedPath)
@@ -280,7 +449,10 @@ export class RemoteFileService {
       const counts = type === "directory"
         ? await this.getRemoteDirectoryChildCounts(connection.client as unknown as RemoteDeleteClient, normalizedPath)
         : {};
-      const rights = stat.rights ? rightsToRwx(stat.rights) : undefined;
+      const ownerValue = stat.owner ?? parentEntry?.owner;
+      const groupValue = stat.group ?? parentEntry?.group;
+      const ownerNames = await this.resolveRemoteOwnerNames(connection.client, [stat, ...(parentEntry ? [parentEntry] : [])]);
+      const rights = stat.rights ? rightsToRwx(stat.rights) : parentEntry?.rights ? rightsToRwx(parentEntry.rights) : undefined;
       return {
         name: posixPath.basename(normalizedPath),
         fullPath: normalizedPath,
@@ -288,8 +460,8 @@ export class RemoteFileService {
         size,
         mtime: new Date(stat.modifyTime ?? Date.now()).toISOString(),
         permissions: rights ?? (typeof stat.mode === "number" ? modeToRwx(stat.mode) : undefined),
-        owner: stat.owner !== undefined ? String(stat.owner) : undefined,
-        group: stat.group !== undefined ? String(stat.group) : undefined,
+        owner: ownerValue !== undefined ? ownerNames.get(String(ownerValue)) ?? String(ownerValue) : undefined,
+        group: groupValue !== undefined ? String(groupValue) : undefined,
         ...counts
       };
     } catch (error) {
@@ -336,7 +508,7 @@ export class RemoteFileService {
     return trimmed;
   }
 
-  private mapRemoteEntry(basePath: string, entry: RemoteListItem): RemoteFileEntry {
+  private mapRemoteEntry(basePath: string, entry: RemoteListItem, ownerNames: Map<string, string>): RemoteFileEntry {
     const fullPath = basePath === "/" ? `/${entry.name}` : posixPath.join(basePath, entry.name);
     return {
       name: entry.name,
@@ -344,11 +516,48 @@ export class RemoteFileService {
       type: entry.type === "d" ? "directory" : entry.type === "-" ? "file" : entry.type === "l" ? "symlink" : "unknown",
       size: entry.size ?? 0,
       mtime: new Date((entry.modifyTime ?? Date.now())).toISOString(),
-      permissions: entry.rights ? `${entry.rights.user}${entry.rights.group}${entry.rights.other}` : undefined,
-      owner: entry.owner !== undefined ? String(entry.owner) : undefined,
+      permissions: entry.rights ? rightsToRwx(entry.rights) : undefined,
+      owner: entry.owner !== undefined ? ownerNames.get(String(entry.owner)) ?? String(entry.owner) : undefined,
       group: entry.group !== undefined ? String(entry.group) : undefined,
       isHidden: entry.name.startsWith(".")
     };
+  }
+
+  private async findParentListEntry(client: unknown, normalizedPath: string): Promise<RemoteListItem | undefined> {
+    const parentPath = posixPath.dirname(normalizedPath);
+    if (!parentPath || parentPath === normalizedPath) return undefined;
+    const name = posixPath.basename(normalizedPath);
+    const listClient = client as { list?: (path: string) => Promise<unknown[]> };
+    if (typeof listClient.list !== "function") return undefined;
+    const entries = (await listClient.list(parentPath)) as RemoteListItem[];
+    return entries.find((entry) => entry.name === name);
+  }
+
+  private async resolveRemoteOwnerNames(client: unknown, entries: Array<{ owner?: number | string }>): Promise<Map<string, string>> {
+    const ownerIds = Array.from(
+      new Set(
+        entries
+          .map((entry) => (entry.owner === undefined ? "" : String(entry.owner)))
+          .filter((owner) => /^\d+$/.test(owner))
+      )
+    );
+    const out = new Map<string, string>();
+    const cacheKey = typeof client === "object" && client !== null ? client : null;
+    const cache = cacheKey ? this.ownerNameCache.get(cacheKey) ?? new Map<string, string>() : null;
+    if (cacheKey && cache && !this.ownerNameCache.has(cacheKey)) this.ownerNameCache.set(cacheKey, cache);
+    await Promise.all(
+      ownerIds.map(async (uid) => {
+        const cached = cache?.get(uid);
+        if (cached) {
+          out.set(uid, cached);
+          return;
+        }
+        const name = await resolveRemoteUidName(client, uid);
+        if (name !== uid) cache?.set(uid, name);
+        out.set(uid, name);
+      })
+    );
+    return out;
   }
 
   private mapError(error: unknown): RemoteServiceError {
@@ -370,6 +579,7 @@ export class RemoteFileService {
   }
 
   private mapListError(error: unknown): RemoteServiceError {
+    if (error instanceof RemoteServiceError) return error;
     const message =
       typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote list failed";
     if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
@@ -381,7 +591,7 @@ export class RemoteFileService {
     if (/EACCES|Permission denied/i.test(message)) {
       return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
     }
-    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+    if (/Not connected|Connection lost|No response from server|did not respond|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
       return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
     }
     return new RemoteServiceError("REMOTE_LIST_FAILED", "Failed to list remote directory.", message);
@@ -403,6 +613,22 @@ export class RemoteFileService {
       return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
     }
     return new RemoteServiceError("REMOTE_RENAME_FAILED", "Failed to rename remote path.", message);
+  }
+
+  private async deleteRemotePath(client: RemoteDeleteClient, targetPath: string): Promise<void> {
+    assertSafeRemoteDeletePath(targetPath);
+    if (await this.deleteRemotePathWithCommandIfAvailable(client, targetPath)) return;
+    await this.deleteRemotePathRecursive(client, targetPath);
+  }
+
+  private async deleteRemotePathWithCommandIfAvailable(client: RemoteDeleteClient, targetPath: string): Promise<boolean> {
+    const exec = (client as RemoteCommandClient).client?.exec?.bind((client as RemoteCommandClient).client);
+    if (!exec) return false;
+    await execRemoteCommand(exec, buildRemoteDeleteCommand(targetPath), {
+      code: "REMOTE_DELETE_FAILED",
+      message: "Remote delete command failed."
+    });
+    return true;
   }
 
   private async deleteRemotePathRecursive(client: RemoteDeleteClient, targetPath: string): Promise<void> {
@@ -453,6 +679,37 @@ export class RemoteFileService {
       else fileCount += 1;
     }
     return { fileCount, folderCount };
+  }
+
+  private async downloadRemotePathRecursive(client: RemoteDownloadClient, remotePath: string, localTargetPath: string): Promise<void> {
+    const stat = (await client.stat(remotePath)) as RemoteStatItem;
+    if (resolveRemoteType(stat) === "directory") {
+      await fs.mkdir(localTargetPath, { recursive: true });
+      const entries = (await client.list(remotePath)) as RemoteListItem[];
+      for (const entry of entries) {
+        if (entry.name === "." || entry.name === "..") continue;
+        const childRemotePath = remotePath === "/" ? `/${entry.name}` : posixPath.join(remotePath, entry.name);
+        await this.downloadRemotePathRecursive(client, childRemotePath, path.join(localTargetPath, entry.name));
+      }
+      return;
+    }
+    await fs.mkdir(path.dirname(localTargetPath), { recursive: true });
+    await downloadRemoteFileToLocal(client, remotePath, localTargetPath);
+  }
+
+  private async uploadLocalPathRecursive(client: RemoteUploadClient, localPath: string, remoteTargetPath: string): Promise<void> {
+    const stat = await fs.stat(localPath);
+    if (stat.isDirectory()) {
+      await ensureRemoteDirectory(client, remoteTargetPath);
+      const entries = await fs.readdir(localPath, { withFileTypes: true });
+      for (const entry of entries) {
+        await this.uploadLocalPathRecursive(client, path.join(localPath, entry.name), posixPath.join(remoteTargetPath, entry.name));
+      }
+      return;
+    }
+    if (!stat.isFile()) throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only files and folders can be uploaded over SFTP.");
+    await ensureRemoteDirectory(client, posixPath.dirname(remoteTargetPath));
+    await uploadLocalFileToRemote(client, localPath, remoteTargetPath);
   }
 
   private async getRemoteDirectorySizeLimited(
@@ -529,6 +786,19 @@ export class RemoteFileService {
   }
 
   private mapDeleteError(error: unknown): RemoteServiceError {
+    if (error instanceof RemoteServiceError) {
+      const detail = `${error.message}\n${error.detail ?? ""}`;
+      if (/No such file|ENOENT|no such path|does not exist/i.test(detail)) {
+        return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", detail);
+      }
+      if (/EACCES|Permission denied/i.test(detail)) {
+        return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", detail);
+      }
+      if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(detail)) {
+        return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", detail);
+      }
+      return error;
+    }
     const message =
       typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote delete failed";
     if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
@@ -592,6 +862,70 @@ export class RemoteFileService {
     return new RemoteServiceError("REMOTE_DUPLICATE_FAILED", "Failed to duplicate remote file.", message);
   }
 
+  private mapCompressError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote gzip compression failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/already exists|EEXIST/i.test(message)) {
+      return new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Gzip target already exists.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Failed to compress remote file.", message);
+  }
+
+  private mapTouchError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote touch failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_TOUCH_FAILED", "Failed to touch remote path.", message);
+  }
+
+  private mapDownloadError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote download failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "Failed to download remote path.", message);
+  }
+
+  private mapUploadError(error: unknown): RemoteServiceError {
+    if (error instanceof RemoteServiceError) return error;
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote upload failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Local or remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied|permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "Failed to upload local path.", message);
+  }
+
   private extractRawError(error: unknown): { name: string; code: string; message: string } {
     const err = error as { name?: unknown; code?: unknown; message?: unknown };
     return {
@@ -635,6 +969,207 @@ function unique(items: string[]): string[] {
   return out;
 }
 
+type RemoteExec = (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
+type RemoteCommandFailureOptions = {
+  code: RemoteErrorCode;
+  message: string;
+};
+
+const REMOTE_DELETE_NOT_FOUND_SENTINEL = "__COFINDER_REMOTE_DELETE_NOT_FOUND__";
+
+function buildRemoteDeleteCommand(targetPath: string): string {
+  const target = shellQuote(targetPath);
+  const sentinel = shellQuote(REMOTE_DELETE_NOT_FOUND_SENTINEL);
+  return `if [ ! -e ${target} ] && [ ! -L ${target} ]; then printf '%s\\n' ${sentinel} >&2; exit 66; fi; rm -rf -- ${target}`;
+}
+
+function buildRemoteGzipCommand(sourcePath: string, destinationPath: string, tempPath: string, deleteSourceAfterSuccess: boolean): string {
+  const src = shellQuote(sourcePath);
+  const dst = shellQuote(destinationPath);
+  const tmp = shellQuote(tempPath);
+  const removeSource = deleteSourceAfterSuccess ? ` && rm -- ${src}` : "";
+  return [
+    `rm -f -- ${tmp}`,
+    `gzip -c -- ${src} > ${tmp}`,
+    `mv -- ${tmp} ${dst}${removeSource}`
+  ].join(" && ");
+}
+
+function buildRemoteTarGzipCommand(sourcePath: string, destinationPath: string, tempPath: string, deleteSourceAfterSuccess: boolean): string {
+  const src = shellQuote(sourcePath);
+  const parent = shellQuote(posixPath.dirname(sourcePath) || "/");
+  const base = shellQuote(posixPath.basename(sourcePath));
+  const dst = shellQuote(destinationPath);
+  const tmp = shellQuote(tempPath);
+  const removeSource = deleteSourceAfterSuccess ? ` && rm -rf -- ${src}` : "";
+  return [
+    `rm -f -- ${tmp}`,
+    `tar -czf ${tmp} -C ${parent} -- ${base}`,
+    `mv -- ${tmp} ${dst}${removeSource}`
+  ].join(" && ");
+}
+
+function remoteIsTarGzipPath(input: string): boolean {
+  return input.endsWith(".tar.gz") || input.endsWith(".tgz");
+}
+
+function remoteDecompressDestination(input: string): string {
+  if (input.endsWith(".tar.gz")) return input.slice(0, -7);
+  if (input.endsWith(".tgz")) return input.slice(0, -4);
+  if (input.endsWith(".gz")) return input.slice(0, -3);
+  throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Selected item is not a supported compressed file.");
+}
+
+function buildRemoteGunzipCommand(sourcePath: string, destinationPath: string, tempPath: string): string {
+  const src = shellQuote(sourcePath);
+  const dst = shellQuote(destinationPath);
+  const tmp = shellQuote(tempPath);
+  return [
+    `if [ -e ${dst} ] || [ -L ${dst} ]; then printf '%s\\n' 'Decompress target already exists.' >&2; exit 73; fi`,
+    `rm -f -- ${tmp}`,
+    `gzip -cd -- ${src} > ${tmp}`,
+    `mv -- ${tmp} ${dst}`
+  ].join(" && ");
+}
+
+function buildRemoteTarDecompressCommand(sourcePath: string): string {
+  const src = shellQuote(sourcePath);
+  const parent = shellQuote(posixPath.dirname(sourcePath) || "/");
+  return [
+    `for p in $(tar -tzf ${src} | awk -F/ 'NF {print $1}' | sort -u); do if [ -e ${parent}/"$p" ] || [ -L ${parent}/"$p" ]; then printf '%s\\n' 'Decompress target already exists.' >&2; exit 73; fi; done`,
+    `tar -xzf ${src} -C ${parent}`
+  ].join(" && ");
+}
+
+function buildRemoteMd5Command(sourcePath: string, destinationPath: string, tempPath: string): string {
+  const src = shellQuote(sourcePath);
+  const parent = shellQuote(posixPath.dirname(sourcePath) || "/");
+  const base = shellQuote(posixPath.basename(sourcePath));
+  const dst = shellQuote(destinationPath);
+  const tmp = shellQuote(tempPath);
+  return [
+    `if [ -e ${dst} ] || [ -L ${dst} ]; then printf '%s\\n' 'MD5 target already exists.' >&2; exit 73; fi`,
+    `rm -f -- ${tmp}`,
+    `cd ${parent} && md5sum -- ${base} > ${tmp}`,
+    `mv -- ${tmp} ${dst}`
+  ].join(" && ");
+}
+
+function buildRemoteTouchCommand(targetPath: string, touchStamp?: string): string {
+  const target = shellQuote(targetPath);
+  const timestampArgs = touchStamp ? `-t ${shellQuote(touchStamp)} ` : "";
+  return `if [ ! -e ${target} ] && [ ! -L ${target} ]; then exit 66; fi; touch ${timestampArgs}-- ${target}`;
+}
+
+function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\\''`)}'`;
+}
+
+function assertSafeRemoteDeletePath(targetPath: string): void {
+  if (!targetPath || targetPath === "/" || targetPath === "." || targetPath === "..") {
+    throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Refusing to delete unsafe remote path.");
+  }
+}
+
+async function downloadRemoteFileToLocal(client: RemoteDownloadClient, remotePath: string, localPath: string): Promise<void> {
+  if (typeof client.fastGet === "function") {
+    await client.fastGet(remotePath, localPath);
+    return;
+  }
+  if (typeof client.get === "function") {
+    const result = await client.get(remotePath, localPath);
+    if (Buffer.isBuffer(result)) await fs.writeFile(localPath, result);
+    return;
+  }
+  throw new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "SFTP download is unavailable for this connection.");
+}
+
+async function ensureRemoteDirectory(client: RemoteUploadClient, remotePath: string): Promise<void> {
+  if (!remotePath || remotePath === "." || remotePath === "/") return;
+  await client.mkdir(remotePath, true);
+}
+
+async function uploadLocalFileToRemote(client: RemoteUploadClient, localPath: string, remotePath: string): Promise<void> {
+  if (typeof client.fastPut === "function") {
+    await client.fastPut(localPath, remotePath);
+    return;
+  }
+  if (typeof client.put === "function") {
+    await client.put(createReadStream(localPath), remotePath);
+    return;
+  }
+  throw new RemoteServiceError("REMOTE_UNKNOWN_ERROR", "SFTP upload is unavailable for this connection.");
+}
+
+async function execRemoteCommand(
+  exec: RemoteExec,
+  command: string,
+  failure: RemoteCommandFailureOptions = { code: "REMOTE_COMPRESS_FAILED", message: "Remote gzip command failed." }
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    let stderr = "";
+    try {
+      exec(command, (error, stream) => {
+        if (error || !stream || typeof stream !== "object") {
+          reject(error ?? new RemoteServiceError(failure.code, "Remote command execution failed."));
+          return;
+        }
+        const readable = stream as {
+          on: (event: string, listener: (...args: unknown[]) => void) => unknown;
+          stderr?: { on: (event: string, listener: (...args: unknown[]) => void) => unknown };
+        };
+        let settled = false;
+        let exitCode: unknown;
+        const settle = (rawCode: unknown) => {
+          if (settled) return;
+          settled = true;
+          const code = typeof rawCode === "number" ? rawCode : 0;
+          if (code === 0) {
+            resolve();
+            return;
+          }
+          const detail = stderr.trim().slice(0, 400) || undefined;
+          if (detail?.includes(REMOTE_DELETE_NOT_FOUND_SENTINEL)) {
+            reject(new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", detail));
+            return;
+          }
+          reject(new RemoteServiceError(failure.code, failure.message, detail));
+        };
+        readable.on("data", () => {
+          // Drain stdout so long-running remote commands cannot block on a full channel buffer.
+        });
+        readable.stderr?.on("data", (chunk) => {
+          stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+        });
+        readable.on("exit", (code) => {
+          exitCode = code;
+          settle(code);
+        });
+        readable.on("close", (code) => {
+          settle(typeof code === "number" ? code : exitCode);
+        });
+        readable.on("error", (streamError) => {
+          if (settled) return;
+          settled = true;
+          reject(streamError instanceof Error ? streamError : new RemoteServiceError(failure.code, failure.message));
+        });
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<T>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new RemoteServiceError("REMOTE_DISCONNECTED", message, "SFTP operation timed out.")), timeoutMs);
+  });
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout) clearTimeout(timeout);
+  });
+}
+
 function resolveRemoteType(stat: RemoteStatItem): "file" | "directory" | "symlink" | "unknown" {
   if (stat.type === "d" || stat.type === "directory" || stat.type === 2) return "directory";
   if (stat.type === "-" || stat.type === "file" || stat.type === 1) return "file";
@@ -648,18 +1183,43 @@ function resolveRemoteType(stat: RemoteStatItem): "file" | "directory" | "symlin
   return "unknown";
 }
 
-function rightsToRwx(rights: { user: string; group: string; other: string }): string {
-  return `${normalizeRwx(rights.user)}${normalizeRwx(rights.group)}${normalizeRwx(rights.other)}`;
-}
-
-function normalizeRwx(part: string): string {
-  return `${part.includes("r") ? "r" : "-"}${part.includes("w") ? "w" : "-"}${part.includes("x") ? "x" : "-"}`;
-}
-
-function modeToRwx(mode: number): string {
-  const perm = mode & 0o777;
-  const chunks = [(perm >> 6) & 0b111, (perm >> 3) & 0b111, perm & 0b111];
-  return chunks
-    .map((chunk) => `${chunk & 0b100 ? "r" : "-"}${chunk & 0b010 ? "w" : "-"}${chunk & 0b001 ? "x" : "-"}`)
-    .join("");
+async function resolveRemoteUidName(client: unknown, uid: string): Promise<string> {
+  const sshClient = (client as { client?: { exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void } }).client;
+  if (!sshClient?.exec) return uid;
+  const exec = sshClient.exec.bind(sshClient);
+  return new Promise((resolve) => {
+    let stdout = "";
+    let settled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const finish = (value: string) => {
+      if (settled) return;
+      settled = true;
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
+      }
+      const name = value.trim().split(/\s+/)[0];
+      resolve(name || uid);
+    };
+    timer = setTimeout(() => finish(uid), 2500);
+    try {
+      exec(`id -nu ${uid} 2>/dev/null`, (error, stream) => {
+        if (error || !stream || typeof stream !== "object") {
+          finish(uid);
+          return;
+        }
+        const readable = stream as {
+          on: (event: string, listener: (...args: unknown[]) => void) => unknown;
+          stderr?: { on: (event: string, listener: (...args: unknown[]) => void) => unknown };
+        };
+        readable.on("data", (chunk) => {
+          stdout += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+        });
+        readable.on("close", () => finish(stdout));
+        readable.on("error", () => finish(uid));
+      });
+    } catch {
+      finish(uid);
+    }
+  });
 }

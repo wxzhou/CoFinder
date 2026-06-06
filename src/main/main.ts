@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, Menu, powerMonitor } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
@@ -34,6 +34,8 @@ function createMainWindow(): BrowserWindow {
     minHeight: 680,
     show: false,
     icon: appIconPath,
+    titleBarStyle: "hiddenInset",
+    trafficLightPosition: { x: 16, y: 15 },
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -72,6 +74,11 @@ app.whenReady().then(() => {
   registerProcessDiagnostics();
   registerIpcHandlers();
   installApplicationMenu();
+  powerMonitor.on("resume", () => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      window.webContents.send("system:resume");
+    }
+  });
   createMainWindow();
 
   app.on("activate", () => {

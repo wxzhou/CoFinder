@@ -11,6 +11,8 @@ const api: IpcApi = {
     delete: (request) => ipcRenderer.invoke("local:delete", request),
     mkdir: (request) => ipcRenderer.invoke("local:mkdir", request),
     createTextFile: (request) => ipcRenderer.invoke("local:createTextFile", request),
+    compressGzip: (request) => ipcRenderer.invoke("local:compressGzip", request),
+    touch: (request) => ipcRenderer.invoke("local:touch", request),
     getInfo: (request) => ipcRenderer.invoke("local:getInfo", request)
   },
   remote: {
@@ -23,6 +25,8 @@ const api: IpcApi = {
     getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request),
     mkdir: (request) => ipcRenderer.invoke("remote:mkdir", request),
     createTextFile: (request) => ipcRenderer.invoke("remote:createTextFile", request),
+    compressGzip: (request) => ipcRenderer.invoke("remote:compressGzip", request),
+    touch: (request) => ipcRenderer.invoke("remote:touch", request),
     chmod: (request) => ipcRenderer.invoke("remote:chmod", request),
     duplicate: (request) => ipcRenderer.invoke("remote:duplicate", request),
     directorySizeStart: (request) => ipcRenderer.invoke("remote:directorySizeStart", request),
@@ -56,6 +60,10 @@ const api: IpcApi = {
     checkDownloadConflicts: (request) => ipcRenderer.invoke("transfer:checkDownloadConflicts", request),
     enqueueUpload: (request) => ipcRenderer.invoke("transfer:enqueueUpload", request),
     enqueueDownload: (request) => ipcRenderer.invoke("transfer:enqueueDownload", request),
+    enqueueDelete: (request) => ipcRenderer.invoke("transfer:enqueueDelete", request),
+    enqueueGzip: (request) => ipcRenderer.invoke("transfer:enqueueGzip", request),
+    enqueueDecompress: (request) => ipcRenderer.invoke("transfer:enqueueDecompress", request),
+    enqueueMd5: (request) => ipcRenderer.invoke("transfer:enqueueMd5", request),
     cancel: (request) => ipcRenderer.invoke("transfer:cancel", request),
     stop: (request) => ipcRenderer.invoke("transfer:stop", request),
     retry: (request) => ipcRenderer.invoke("transfer:retry", request),
@@ -108,6 +116,11 @@ const api: IpcApi = {
       const wrapped = () => handler();
       ipcRenderer.on("system:openPreferences", wrapped);
       return () => ipcRenderer.off("system:openPreferences", wrapped);
+    },
+    onSystemResume: (handler) => {
+      const wrapped = () => handler();
+      ipcRenderer.on("system:resume", wrapped);
+      return () => ipcRenderer.off("system:resume", wrapped);
     }
   }
 };

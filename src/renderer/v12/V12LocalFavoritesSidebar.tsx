@@ -2,7 +2,7 @@ import type { ReactElement } from "react";
 import type { LocalFavoriteListItem } from "../../shared/localFavorites";
 import { pickActiveFavoriteId } from "../../shared/localFavorites";
 import type { RemoteFavorite } from "../../shared/types/models";
-import { V12Icon } from "./shared/V12Icons";
+import { V12Icon, V12TbIcon } from "./shared/V12Icons";
 
 export type V12LocalFavoritesSidebarProps = {
   favorites: LocalFavoriteListItem[];
@@ -22,6 +22,7 @@ export type V12LocalFavoritesSidebarProps = {
   onAddCurrentRemotePath: () => void;
   onRemoveRemoteFavorite: (id: string) => void;
   onReorderRemoteFavorite: (id: string, direction: "up" | "down") => void;
+  onOpenPreferences: () => void;
 };
 
 export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): ReactElement {
@@ -171,6 +172,17 @@ export function V12LocalFavoritesSidebar(props: V12LocalFavoritesSidebarProps): 
             );
           })
         )}
+      </div>
+      <div className="v12m-sidebar-footer">
+        <button
+          type="button"
+          className="v12m-sidebar-preferences"
+          title="Preferences"
+          aria-label="Preferences"
+          onClick={() => props.onOpenPreferences()}
+        >
+          <V12TbIcon name="gear-preferences" />
+        </button>
       </div>
     </aside>
   );

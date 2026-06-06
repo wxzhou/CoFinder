@@ -8,6 +8,8 @@ export const IPC_CHANNELS = {
     delete: "local:delete",
     mkdir: "local:mkdir",
     createTextFile: "local:createTextFile",
+    compressGzip: "local:compressGzip",
+    touch: "local:touch",
     getInfo: "local:getInfo"
   },
   remote: {
@@ -20,6 +22,8 @@ export const IPC_CHANNELS = {
     getInfo: "remote:getInfo",
     mkdir: "remote:mkdir",
     createTextFile: "remote:createTextFile",
+    compressGzip: "remote:compressGzip",
+    touch: "remote:touch",
     chmod: "remote:chmod",
     duplicate: "remote:duplicate",
     directorySizeStart: "remote:directorySizeStart",
@@ -44,6 +48,10 @@ export const IPC_CHANNELS = {
     checkDownloadConflicts: "transfer:checkDownloadConflicts",
     enqueueUpload: "transfer:enqueueUpload",
     enqueueDownload: "transfer:enqueueDownload",
+    enqueueDelete: "transfer:enqueueDelete",
+    enqueueGzip: "transfer:enqueueGzip",
+    enqueueDecompress: "transfer:enqueueDecompress",
+    enqueueMd5: "transfer:enqueueMd5",
     cancel: "transfer:cancel",
     stop: "transfer:stop",
     retry: "transfer:retry",
@@ -86,6 +94,7 @@ export const IPC_CHANNELS = {
     openLogFolder: "system:openLogFolder",
     openLogFile: "system:openLogFile",
     copyDiagnostics: "system:copyDiagnostics",
-    checkForUpdates: "system:checkForUpdates"
+    checkForUpdates: "system:checkForUpdates",
+    resume: "system:resume"
   }
 } as const;

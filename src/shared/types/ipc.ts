@@ -10,6 +10,8 @@ export type LocalErrorCode =
   | "OPEN_FAILED"
   | "RENAME_FAILED"
   | "DELETE_FAILED"
+  | "COMPRESS_FAILED"
+  | "TOUCH_FAILED"
   | "INFO_FAILED"
   | "UNKNOWN";
 
@@ -46,6 +48,8 @@ export type RemoteErrorCode =
   | "LOCAL_DELETE_FAILED"
   | "LOCAL_MKDIR_FAILED"
   | "LOCAL_CREATE_FILE_FAILED"
+  | "LOCAL_COMPRESS_FAILED"
+  | "LOCAL_TOUCH_FAILED"
   | "LOCAL_INFO_FAILED"
   | "LOCAL_UNKNOWN_ERROR"
   | "SYSTEM_INVALID_INPUT"
@@ -65,6 +69,8 @@ export type RemoteErrorCode =
   | "REMOTE_INFO_FAILED"
   | "REMOTE_MKDIR_FAILED"
   | "REMOTE_CREATE_FILE_FAILED"
+  | "REMOTE_COMPRESS_FAILED"
+  | "REMOTE_TOUCH_FAILED"
   | "REMOTE_CHMOD_FAILED"
   | "REMOTE_DUPLICATE_FAILED"
   | "REMOTE_DIRECTORY_SIZE_FAILED"
@@ -162,13 +168,44 @@ export type EnqueueDownloadRequest = {
   localTargetOverrides?: Record<string, string>;
 };
 
+export type EnqueueDeleteRequest = {
+  tabId: string;
+  pane: "local" | "remote";
+  paths: string[];
+  connectionId?: string;
+};
+
+export type EnqueueGzipRequest = {
+  tabId: string;
+  pane: "local" | "remote";
+  path: string;
+  connectionId?: string;
+  deleteSourceAfterSuccess?: boolean;
+};
+
+export type EnqueueDecompressRequest = {
+  tabId: string;
+  pane: "local" | "remote";
+  path: string;
+  connectionId?: string;
+};
+
+export type EnqueueMd5Request = {
+  tabId: string;
+  pane: "local" | "remote";
+  path: string;
+  connectionId?: string;
+};
+
 export type TransferConflictPolicy = "prompt" | "overwrite" | "skip" | "rename" | "cancel";
 
 export type AppSettings = {
   schemaVersion: 2;
   general: {
     defaultLocalPath: string;
-    restoreLastSession: boolean;
+    restoreLastLocalPathOnLaunch: boolean;
+    restoreLocalPathOnConnect: boolean;
+    restoreRemotePathOnConnect: boolean;
     confirmBeforeDelete: boolean;
     showHiddenFiles: boolean;
     firstRunOnboardingDismissed: boolean;
@@ -178,6 +215,12 @@ export type AppSettings = {
     defaultConflictPolicy: Exclude<TransferConflictPolicy, "cancel">;
     queueAutoHideDelayMs: number;
     preserveTimestamps: boolean;
+    deleteSourceAfterGzip: boolean;
+  };
+  remote: {
+    autoRefreshEnabled: boolean;
+    autoRefreshIntervalSeconds: number;
+    autoReconnectAfterSleep: boolean;
   };
   appearance: {
     rowDensity: "compact" | "comfortable";
@@ -264,6 +307,8 @@ export interface IpcApi {
     delete: (request: { paths: string[] }) => Promise<IpcResponse<{ deleted: number }>>;
     mkdir: (request: { parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
     createTextFile: (request: { parentPath: string; name?: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
+    compressGzip: (request: { path: string }) => Promise<IpcResponse<{ compressed: true; path: string }>>;
+    touch: (request: { path: string; timestamp?: string }) => Promise<IpcResponse<{ touched: true }>>;
     getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
   };
   remote: {
@@ -288,6 +333,8 @@ export interface IpcApi {
       parentPath: string;
       name?: string;
     }) => Promise<IpcResponse<{ created: true; path: string }>>;
+    compressGzip: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ compressed: true; path: string }>>;
+    touch: (request: { connectionId: string; path: string; timestamp?: string }) => Promise<IpcResponse<{ touched: true }>>;
     chmod: (request: { connectionId: string; path: string; mode: string }) => Promise<IpcResponse<{ changed: true }>>;
     duplicate: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ duplicated: true; newPath: string }>>;
     directorySizeStart: (request: { connectionId: string; path: string }) => Promise<IpcResponse<{ jobId: string }>>;
@@ -300,7 +347,15 @@ export interface IpcApi {
     }) => Promise<IpcResponse<{ opened: true; localPath: string; kind: "text" | "image" }>>;
     previewClearForTab: (request: { tabId: string }) => Promise<IpcResponse<{ cleared: number }>>;
     previewClearForConnection: (request: { connectionId: string }) => Promise<IpcResponse<{ cleared: number }>>;
-    editOpen: (request: { tabId: string; connectionId: string; path: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
+    editOpen: (request: {
+      tabId: string;
+      connectionId: string;
+      path: string;
+      opener?: "text" | "default";
+      allowBinaryText?: boolean;
+      allowLargeFile?: boolean;
+      allowExecutable?: boolean;
+    }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
     editList: () => Promise<IpcResponse<{ sessions: RemoteEditSession[] }>>;
     editSyncNow: (request: { sessionId: string }) => Promise<IpcResponse<{ session: RemoteEditSession }>>;
     editRevealLocal: (request: { sessionId: string }) => Promise<IpcResponse<{ revealed: true; localPath: string }>>;
@@ -316,6 +371,10 @@ export interface IpcApi {
     checkDownloadConflicts: (request: EnqueueDownloadRequest) => Promise<IpcResponse<TransferConflictCheckResponse>>;
     enqueueUpload: (request: EnqueueUploadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     enqueueDownload: (request: EnqueueDownloadRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueDelete: (request: EnqueueDeleteRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueGzip: (request: EnqueueGzipRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueDecompress: (request: EnqueueDecompressRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueMd5: (request: EnqueueMd5Request) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     cancel: (request: { taskId: string }) => Promise<IpcResponse<{ canceled: true }>>;
     stop: (request: { taskId: string }) => Promise<IpcResponse<{ stopped: true }>>;
     retry: (request: { taskId: string }) => Promise<IpcResponse<{ retried: true }>>;
@@ -364,5 +423,6 @@ export interface IpcApi {
     copyDiagnostics: () => Promise<IpcResponse<{ copied: true; diagnostics: DiagnosticsBundle }>>;
     checkForUpdates: () => Promise<IpcResponse<{ available: false; message: string }>>;
     onOpenPreferences: (handler: () => void) => () => void;
+    onSystemResume: (handler: () => void) => () => void;
   };
 }

@@ -874,8 +874,26 @@
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  position: relative;
   border-top: 1px solid var(--m-sep);
   background: #f3f3f4;
+}
+
+.v12m-drawer-resizer {
+  position: absolute;
+  z-index: 4;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 6px;
+  cursor: ns-resize;
+  -webkit-app-region: no-drag;
+}
+
+.v12m-drawer-resizer:hover,
+.v12m-drawer-resizer:focus-visible {
+  background: rgba(10, 132, 255, 0.18);
+  outline: none;
 }
 
 .v12m-drawer-bar {
@@ -950,6 +968,7 @@
 .v12m-drawer-panel {
   max-height: 112px;
   overflow: auto;
+  flex: 0 0 auto;
   padding: 4px 10px 6px;
   border-top: 1px solid var(--m-sep-hair);
   background: #fafafa;

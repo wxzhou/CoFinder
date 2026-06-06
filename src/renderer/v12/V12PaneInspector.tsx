@@ -11,6 +11,8 @@ export type V12PaneInspectorProps = {
   info: PathInfo | null;
   infoLoading: boolean;
   infoError: string;
+  detailsLoading?: boolean;
+  detailsError?: string;
   formatSize: (n: number) => string;
   formatTime: (iso: string) => string;
   /** Remote pane: host for Details row */
@@ -32,6 +34,9 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
 
   const iconName =
     single && props.info?.type === "directory" ? ("folder" as const) : single && props.info ? ("doc" as const) : ("doc" as const);
+  const slowDirectoryDetails = single && props.info?.type === "directory" && props.detailsLoading;
+  const detailValue = (value: string): ReactElement | string =>
+    slowDirectoryDetails ? <span className="v12m-insp-spin" aria-label="Loading">Loading...</span> : value;
 
   return (
     <aside className="v12m-inspector v12m-inspector--pane" aria-label={aria}>
@@ -54,9 +59,11 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
             </p>
           </div>
           <div className="v12m-insp-actions">
-            <button type="button" className="v12m-insp-linkbtn" disabled>
-              Quick Look
-            </button>
+            {props.scope === "local" ? (
+              <button type="button" className="v12m-insp-linkbtn" disabled>
+                Quick Look
+              </button>
+            ) : null}
             {props.scope === "local" ? (
               <button type="button" className="v12m-insp-linkbtn" disabled>
                 Reveal in Finder
@@ -89,14 +96,15 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
               <div className="v12m-insp-block">
                 <h2 className="v12m-insp-name">{props.info.name}</h2>
                 <p className="v12m-insp-line">
-                  {props.info.type === "directory" ? "—" : props.formatSize(props.info.size)} · Modified {props.formatTime(props.info.mtime)}
+                  {detailValue(props.formatSize(props.info.size))} · Modified {props.formatTime(props.info.mtime)}
                 </p>
+                {props.detailsError ? <p className="v12m-insp-line v12m-insp-line--sub">{props.detailsError}</p> : null}
               </div>
               <div className="v12m-insp-sect">
                 <h3>Metadata</h3>
                 <ul className="v12m-insp-kv">
                   <li>
-                    <span>Type</span>
+                    <span>Kind</span>
                     <span>{pathInfoKindLabel(props.info.type)}</span>
                   </li>
                   <li>
@@ -105,7 +113,7 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                   </li>
                   <li>
                     <span>Size</span>
-                    <span>{props.info.type === "directory" ? "—" : props.formatSize(props.info.size)}</span>
+                    <span>{detailValue(props.formatSize(props.info.size))}</span>
                   </li>
                   <li>
                     <span>Modified</span>
@@ -114,13 +122,13 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                   {props.info.type === "directory" && typeof props.info.fileCount === "number" ? (
                     <li>
                       <span>Files</span>
-                      <span>{props.info.fileCount}</span>
+                      <span>{detailValue(String(props.info.fileCount))}</span>
                     </li>
                   ) : null}
                   {props.info.type === "directory" && typeof props.info.folderCount === "number" ? (
                     <li>
                       <span>Folders</span>
-                      <span>{props.info.folderCount}</span>
+                      <span>{detailValue(String(props.info.folderCount))}</span>
                     </li>
                   ) : null}
                   {props.info.permissions ? (
@@ -129,12 +137,10 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                       <span className="v12m-mono">{props.info.permissions}</span>
                     </li>
                   ) : null}
-                  {props.info.owner ? (
-                    <li>
-                      <span>Owner</span>
-                      <span>{props.info.owner}</span>
-                    </li>
-                  ) : null}
+                  <li>
+                    <span>Owner</span>
+                    <span>{props.info.owner || "—"}</span>
+                  </li>
                   {props.info.group ? (
                     <li>
                       <span>Group</span>
@@ -150,14 +156,16 @@ export function V12PaneInspector(props: V12PaneInspectorProps): ReactElement {
                 </ul>
               </div>
               <div className="v12m-insp-actions">
-                <button
-                  type="button"
-                  className="v12m-insp-linkbtn"
-                  disabled={props.scope !== "local" || !props.onQuickLook}
-                  onClick={() => props.onQuickLook?.()}
-                >
-                  Quick Look
-                </button>
+                {props.scope === "local" ? (
+                  <button
+                    type="button"
+                    className="v12m-insp-linkbtn"
+                    disabled={!props.onQuickLook}
+                    onClick={() => props.onQuickLook?.()}
+                  >
+                    Quick Look
+                  </button>
+                ) : null}
                 {props.scope === "local" ? (
                   <button type="button" className="v12m-insp-linkbtn" disabled={!props.onRevealInFinder} onClick={() => props.onRevealInFinder?.()}>
                     Reveal in Finder

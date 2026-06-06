@@ -1,10 +1,13 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { gunzip } from "node:zlib";
+import { promisify } from "node:util";
 import { afterEach, describe, expect, it } from "vitest";
 import { LocalFileService } from "../src/main/services/LocalFileService";
 
 const tempDirs: string[] = [];
+const gunzipAsync = promisify(gunzip);
 
 afterEach(async () => {
   await Promise.all(tempDirs.map((dir) => fs.rm(dir, { recursive: true, force: true })));
@@ -100,6 +103,139 @@ describe("LocalFileService creation", () => {
 
     await expect(service.makeDirectory(dir, "bad/name")).rejects.toMatchObject({ code: "UNKNOWN" });
     await expect(service.createTextFile(dir, "../bad.txt")).rejects.toMatchObject({ code: "UNKNOWN" });
+  });
+});
+
+describe("LocalFileService compressFileGzip", () => {
+  it("compresses a single local file without overwriting existing gzip target", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "data.txt");
+    await fs.writeFile(source, "hello gzip\n");
+
+    const compressed = await service.compressFileGzip(source);
+    expect(compressed).toBe(`${source}.gz`);
+    await expect(gunzipAsync(await fs.readFile(compressed))).resolves.toEqual(Buffer.from("hello gzip\n"));
+    await expect(service.compressFileGzip(source)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
+  });
+
+  it("compresses local directories to tar.gz", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    await fs.writeFile(path.join(dir, "nested.txt"), "folder gzip\n");
+
+    const compressed = await service.compressFileGzip(dir);
+
+    expect(compressed).toBe(`${dir}.tar.gz`);
+    await expect(fs.stat(compressed)).resolves.toBeTruthy();
+  });
+
+  it("deletes the local source after gzip only when requested", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "delete-after.txt");
+    await fs.writeFile(source, "remove me after gzip\n");
+
+    const compressed = await service.compressFileGzip(source, { deleteSourceAfterSuccess: true });
+    await expect(gunzipAsync(await fs.readFile(compressed))).resolves.toEqual(Buffer.from("remove me after gzip\n"));
+    await expect(fs.stat(source)).rejects.toBeTruthy();
+  });
+});
+
+describe("LocalFileService decompressPath", () => {
+  it("decompresses gzip files without overwriting existing targets", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "data.txt");
+    await fs.writeFile(source, "hello decompress\n");
+    const compressed = await service.compressFileGzip(source);
+    await fs.rm(source);
+
+    const output = await service.decompressPath(compressed);
+
+    expect(output).toBe(source);
+    await expect(fs.readFile(output, "utf8")).resolves.toBe("hello decompress\n");
+    await expect(service.decompressPath(compressed)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
+  });
+
+  it("decompresses tar.gz folders without overwriting existing targets", async () => {
+    const service = new LocalFileService();
+    const parent = await makeTempDir();
+    const dir = path.join(parent, "folder");
+    await fs.mkdir(dir);
+    await fs.writeFile(path.join(dir, "nested.txt"), "hello tar\n");
+    const compressed = await service.compressFileGzip(dir);
+    await fs.rm(dir, { recursive: true, force: true });
+
+    const output = await service.decompressPath(compressed);
+
+    expect(output).toBe(dir);
+    await expect(fs.readFile(path.join(dir, "nested.txt"), "utf8")).resolves.toBe("hello tar\n");
+    await expect(service.decompressPath(compressed)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
+  });
+});
+
+describe("LocalFileService generateMd5File", () => {
+  it("generates an md5 sidecar without overwriting existing targets", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "data.txt");
+    await fs.writeFile(source, "hello md5\n");
+
+    const output = await service.generateMd5File(source);
+
+    expect(output).toBe(`${source}.md5`);
+    await expect(fs.readFile(output, "utf8")).resolves.toBe("94988405d319a361bd6424b82ab6740d  data.txt\n");
+    await expect(service.generateMd5File(source)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
+  });
+});
+
+describe("LocalFileService touchPath", () => {
+  it("updates an existing local file timestamp without creating missing paths", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "touch.txt");
+    await fs.writeFile(source, "touch me\n");
+    const oldDate = new Date("2020-01-01T00:00:00Z");
+    await fs.utimes(source, oldDate, oldDate);
+
+    await service.touchPath(source);
+
+    expect((await fs.stat(source)).mtimeMs).toBeGreaterThan(oldDate.getTime());
+    await expect(service.touchPath(path.join(dir, "missing.txt"))).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("sets an explicit local timestamp", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "stamp.txt");
+    await fs.writeFile(source, "stamp me\n");
+
+    await service.touchPath(source, { timestamp: "2024-05-06T11:22:33" });
+
+    const mtime = await fs.stat(source).then((stat) => stat.mtime);
+    expect(mtime.getFullYear()).toBe(2024);
+    expect(mtime.getMonth()).toBe(4);
+    expect(mtime.getDate()).toBe(6);
+    expect(mtime.getHours()).toBe(11);
+    expect(mtime.getMinutes()).toBe(22);
+    expect(mtime.getSeconds()).toBe(33);
+  });
+});
+
+describe("LocalFileService listDirectory metadata", () => {
+  it("returns rwx permissions and owner names for listed local entries", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const filePath = path.join(dir, "mode.txt");
+    await fs.writeFile(filePath, "hello");
+    await fs.chmod(filePath, 0o640);
+
+    const listed = await service.listDirectory(dir);
+    const entry = listed.entries.find((item) => item.name === "mode.txt");
+    expect(entry?.permissions).toBe("rw-r-----");
+    expect(entry?.owner).toBeTruthy();
+    expect(entry?.owner).not.toMatch(/^\d+$/);
   });
 });
 

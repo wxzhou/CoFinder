@@ -16,7 +16,7 @@
 ## Settings Storage
 
 - Preferences are stored in `settings.json` under Electron app userData.
-- Settings are non-secret UI/behavior fields only: default local path, confirmation/display toggles, transfer conflict defaults, queue auto-hide delay, timestamp preservation, row density, inspector visibility, pane ratio, sidebar visibility, and first-run onboarding dismissal.
+- Settings are non-secret UI/behavior fields only: default local path, navigation restore toggles, confirmation/display toggles, transfer conflict defaults, queue auto-hide delay, timestamp preservation, remote refresh/reconnect toggles, row density, inspector visibility, pane ratio, sidebar visibility, and first-run onboarding dismissal.
 - Settings must not store passwords, tokens, private keys, saved remote credentials, or free-form `rsync`/`ssh` arguments.
 
 ## Navigation History Storage

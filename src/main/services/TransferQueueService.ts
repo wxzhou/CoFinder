@@ -3,8 +3,8 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { posix as posixPath } from "node:path";
-import type { EnqueueDownloadRequest, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
-import type { TransferErrorCategory, TransferTask } from "../../shared/types/models";
+import type { EnqueueDecompressRequest, EnqueueDeleteRequest, EnqueueDownloadRequest, EnqueueGzipRequest, EnqueueMd5Request, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
+import type { TransferErrorCategory, TransferTask, TransferTaskItem } from "../../shared/types/models";
 import { redactSensitivePlaintext } from "../security/redactSensitive";
 import { buildProcessEnv } from "../utils/processEnv";
 import { assertSafeRemotePath, isSafeHostOrUsername } from "../utils/pathSafety";
@@ -26,6 +26,17 @@ type TransferQueueDeps = {
   spawnProcess: SpawnProcess;
   pathExists: (fullPath: string) => Promise<boolean>;
   localPathKind: (fullPath: string) => Promise<"file" | "directory" | "other">;
+  localDirectoryFiles: (fullPath: string) => Promise<TransferTaskItem[]>;
+  localDelete: (paths: string[]) => Promise<number>;
+  remoteDelete: (connectionId: string, paths: string[]) => Promise<number>;
+  localGzip: (path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
+  remoteGzip: (connectionId: string, path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
+  localDecompress: (path: string) => Promise<string>;
+  remoteDecompress: (connectionId: string, path: string) => Promise<string>;
+  localMd5: (path: string) => Promise<string>;
+  remoteMd5: (connectionId: string, path: string) => Promise<string>;
+  remoteUploadFallback: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
+  remoteDownloadFallback: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
 };
 
 export class TransferQueueService {
@@ -41,7 +52,18 @@ export class TransferQueueService {
       runCommand: deps?.runCommand ?? runSimpleCommand,
       spawnProcess: deps?.spawnProcess ?? defaultSpawnProcess,
       pathExists: deps?.pathExists ?? defaultPathExists,
-      localPathKind: deps?.localPathKind ?? defaultLocalPathKind
+      localPathKind: deps?.localPathKind ?? defaultLocalPathKind,
+      localDirectoryFiles: deps?.localDirectoryFiles ?? defaultLocalDirectoryFiles,
+      localDelete: deps?.localDelete ?? defaultUnavailableLocalDelete,
+      remoteDelete: deps?.remoteDelete ?? defaultUnavailableRemoteDelete,
+      localGzip: deps?.localGzip ?? defaultUnavailableLocalGzip,
+      remoteGzip: deps?.remoteGzip ?? defaultUnavailableRemoteGzip,
+      localDecompress: deps?.localDecompress ?? defaultUnavailableLocalDecompress,
+      remoteDecompress: deps?.remoteDecompress ?? defaultUnavailableRemoteDecompress,
+      localMd5: deps?.localMd5 ?? defaultUnavailableLocalMd5,
+      remoteMd5: deps?.remoteMd5 ?? defaultUnavailableRemoteMd5,
+      remoteUploadFallback: deps?.remoteUploadFallback ?? defaultUnavailableRemoteUploadFallback,
+      remoteDownloadFallback: deps?.remoteDownloadFallback ?? defaultUnavailableRemoteDownloadFallback
     };
   }
 
@@ -73,6 +95,7 @@ export class TransferQueueService {
           : destinationPath;
       const task = this.makeTask({
         tabId: request.tabId,
+        kind: "upload",
         direction: "upload",
         profileId: request.profileId,
         connectionId: request.connectionId,
@@ -87,6 +110,14 @@ export class TransferQueueService {
         remotePath: rsyncRemotePath,
         preserveTimestamps: request.preserveTimestamps ?? true
       });
+      if (sourceKind === "directory") {
+        const items = await this.deps.localDirectoryFiles(source).catch(() => []);
+        if (items.length > 0) {
+          task.itemEntries = items;
+          task.itemTotalCount = items.length;
+          task.itemDoneCount = 0;
+        }
+      }
       this.tasks.push(task);
       taskIds.push(task.id);
     }
@@ -111,6 +142,7 @@ export class TransferQueueService {
       validateLocalPath(localPath);
       const task = this.makeTask({
         tabId: request.tabId,
+        kind: "download",
         direction: "download",
         profileId: request.profileId,
         connectionId: request.connectionId,
@@ -131,6 +163,133 @@ export class TransferQueueService {
     this.emit();
     void this.pump();
     return { queued: true, taskIds };
+  }
+
+  async enqueueDelete(request: EnqueueDeleteRequest): Promise<{ queued: true; taskIds: string[] }> {
+    validateOperationRequest(request);
+    if (request.paths.length === 0) throw transferError("TRANSFER_INVALID_REQUEST", "Select at least one path to delete.");
+    if (request.pane === "remote" && !request.connectionId?.trim()) {
+      throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required for delete.");
+    }
+    const paths = unique(request.paths.map((item) => validateOperationPath(item)));
+    const lockKey = operationLockKey("delete", request.pane, request.connectionId, paths);
+    this.assertNoConflictingOperation(lockKey, "A delete job is already queued or running for this path.");
+    const label = paths.length === 1 ? paths[0] : `${paths.length} items`;
+    const task = this.makeTask({
+      tabId: request.tabId,
+      kind: "delete",
+      pane: request.pane,
+      source: label,
+      destination: "",
+      sourceDisplay: request.pane === "remote" ? `Remote delete: ${label}` : `Local delete: ${label}`,
+      destinationDisplay: "",
+      connectionId: request.connectionId,
+      host: "",
+      port: 0,
+      username: "",
+      remotePath: request.pane === "remote" ? label : "",
+      localPath: request.pane === "local" ? label : "",
+      operationPaths: paths,
+      operationLockKey: lockKey
+    });
+    this.tasks.push(task);
+    this.emit();
+    void this.pump();
+    return { queued: true, taskIds: [task.id] };
+  }
+
+  async enqueueGzip(request: EnqueueGzipRequest): Promise<{ queued: true; taskIds: string[] }> {
+    validateOperationRequest(request);
+    const sourcePath = validateOperationPath(request.path);
+    if (request.pane === "remote" && !request.connectionId?.trim()) {
+      throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required for gzip.");
+    }
+    const destinationPath = `${sourcePath}.gz`;
+    const lockKey = operationLockKey("gzip", request.pane, request.connectionId, [sourcePath]);
+    this.assertNoConflictingOperation(lockKey, "A gzip job is already queued or running for this path.");
+    const task = this.makeTask({
+      tabId: request.tabId,
+      kind: "gzip",
+      pane: request.pane,
+      source: sourcePath,
+      destination: destinationPath,
+      sourceDisplay: request.pane === "remote" ? `Remote gzip: ${sourcePath}` : `Local gzip: ${sourcePath}`,
+      destinationDisplay: destinationPath,
+      connectionId: request.connectionId,
+      host: "",
+      port: 0,
+      username: "",
+      remotePath: request.pane === "remote" ? sourcePath : "",
+      localPath: request.pane === "local" ? sourcePath : "",
+      deleteSourceAfterSuccess: !!request.deleteSourceAfterSuccess,
+      operationLockKey: lockKey
+    });
+    this.tasks.push(task);
+    this.emit();
+    void this.pump();
+    return { queued: true, taskIds: [task.id] };
+  }
+
+  async enqueueDecompress(request: EnqueueDecompressRequest): Promise<{ queued: true; taskIds: string[] }> {
+    validateOperationRequest(request);
+    const sourcePath = validateOperationPath(request.path);
+    if (request.pane === "remote" && !request.connectionId?.trim()) {
+      throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required for decompress.");
+    }
+    const destinationPath = decompressDestinationForDisplay(sourcePath);
+    const lockKey = operationLockKey("decompress", request.pane, request.connectionId, [sourcePath]);
+    this.assertNoConflictingOperation(lockKey, "A decompress job is already queued or running for this path.");
+    const task = this.makeTask({
+      tabId: request.tabId,
+      kind: "decompress",
+      pane: request.pane,
+      source: sourcePath,
+      destination: destinationPath,
+      sourceDisplay: request.pane === "remote" ? `Remote decompress: ${sourcePath}` : `Local decompress: ${sourcePath}`,
+      destinationDisplay: destinationPath,
+      connectionId: request.connectionId,
+      host: "",
+      port: 0,
+      username: "",
+      remotePath: request.pane === "remote" ? sourcePath : "",
+      localPath: request.pane === "local" ? sourcePath : "",
+      operationLockKey: lockKey
+    });
+    this.tasks.push(task);
+    this.emit();
+    void this.pump();
+    return { queued: true, taskIds: [task.id] };
+  }
+
+  async enqueueMd5(request: EnqueueMd5Request): Promise<{ queued: true; taskIds: string[] }> {
+    validateOperationRequest(request);
+    const sourcePath = validateOperationPath(request.path);
+    if (request.pane === "remote" && !request.connectionId?.trim()) {
+      throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required for MD5.");
+    }
+    const destinationPath = `${sourcePath}.md5`;
+    const lockKey = operationLockKey("md5", request.pane, request.connectionId, [sourcePath]);
+    this.assertNoConflictingOperation(lockKey, "An MD5 job is already queued or running for this path.");
+    const task = this.makeTask({
+      tabId: request.tabId,
+      kind: "md5",
+      pane: request.pane,
+      source: sourcePath,
+      destination: destinationPath,
+      sourceDisplay: request.pane === "remote" ? `Remote MD5: ${sourcePath}` : `Local MD5: ${sourcePath}`,
+      destinationDisplay: destinationPath,
+      connectionId: request.connectionId,
+      host: "",
+      port: 0,
+      username: "",
+      remotePath: request.pane === "remote" ? sourcePath : "",
+      localPath: request.pane === "local" ? sourcePath : "",
+      operationLockKey: lockKey
+    });
+    this.tasks.push(task);
+    this.emit();
+    void this.pump();
+    return { queued: true, taskIds: [task.id] };
   }
 
   async cancel(taskId: string): Promise<{ canceled: true }> {
@@ -168,6 +327,7 @@ export class TransferQueueService {
     task.eta = undefined;
     task.currentFile = undefined;
     task.progressText = undefined;
+    this.resetTaskItems(task);
     task.rawLog = [];
     this.emit();
     void this.pump();
@@ -188,6 +348,7 @@ export class TransferQueueService {
       task.eta = undefined;
       task.currentFile = undefined;
       task.progressText = undefined;
+      this.resetTaskItems(task);
       task.rawLog = [];
       retried += 1;
     }
@@ -249,6 +410,11 @@ export class TransferQueueService {
     task.error = undefined;
     this.emit();
 
+    if (task.kind === "delete" || task.kind === "gzip" || task.kind === "decompress" || task.kind === "md5") {
+      await this.runOperationTask(task);
+      return;
+    }
+
     const rsyncCheck = await this.deps.runCommand("rsync", ["--version"], "rsync is not installed or not found in PATH");
     if (!rsyncCheck.ok) {
       this.failTask(task, rsyncCheck.message, rsyncCheck.detail);
@@ -300,11 +466,24 @@ export class TransferQueueService {
         } else if (code === 0) {
           task.status = "success";
           task.errorCode = undefined;
+          this.completeTaskItems(task);
           this.appendLog(task, "Transfer completed successfully.");
         } else {
-          task.status = "failed";
           const recent = task.rawLog.slice(-20).join("\n");
-          task.errorCode = classifyTransferFailure(recent);
+          const category = classifyTransferFailure(recent);
+          if (task.kind === "upload" && task.connectionId && shouldFallbackToSftpTransfer(code ?? -1, category, recent)) {
+            this.running = null;
+            void this.runSftpUploadFallback(task, recent).then(resolve);
+            return;
+          }
+          if (task.kind === "download" && task.connectionId && shouldFallbackToSftpTransfer(code ?? -1, category, recent)) {
+            this.running = null;
+            void this.runSftpDownloadFallback(task, recent).then(resolve);
+            return;
+          }
+          task.status = "failed";
+          this.failRunningTaskItem(task);
+          task.errorCode = category;
           task.error = humanTransferError(task.errorCode, code ?? -1);
           this.appendLog(task, task.error);
         }
@@ -315,11 +494,118 @@ export class TransferQueueService {
     });
   }
 
+  private async runSftpUploadFallback(task: TransferTask, recentRsyncLog: string): Promise<void> {
+    task.progressText = "rsync SSH failed; uploading over SFTP...";
+    this.appendLog(task, "rsync SSH failed; falling back to SFTP upload.");
+    if (recentRsyncLog.trim()) this.appendLog(task, redactSensitivePlaintext(recentRsyncLog.trim().slice(0, 400)));
+    this.emit();
+    try {
+      await this.deps.remoteUploadFallback(requiredConnectionId(task), task.localPath, task.destination);
+      task.status = "success";
+      task.error = undefined;
+      task.errorCode = undefined;
+      task.finishedAt = this.deps.now();
+      task.percent = 100;
+      task.progressText = "Uploaded over SFTP.";
+      this.completeTaskItems(task);
+      this.appendLog(task, "SFTP upload completed successfully.");
+      this.emit();
+    } catch (error) {
+      task.status = "failed";
+      this.failRunningTaskItem(task);
+      task.finishedAt = this.deps.now();
+      task.error = error instanceof Error ? error.message : "SFTP upload fallback failed.";
+      task.errorCode = classifyTransferFailure(task.error);
+      this.appendLog(task, redactSensitivePlaintext(task.error));
+      this.emit();
+    }
+  }
+
+  private async runSftpDownloadFallback(task: TransferTask, recentRsyncLog: string): Promise<void> {
+    task.progressText = "rsync SSH failed; downloading over SFTP...";
+    this.appendLog(task, "rsync SSH failed; falling back to SFTP download.");
+    if (recentRsyncLog.trim()) this.appendLog(task, redactSensitivePlaintext(recentRsyncLog.trim().slice(0, 400)));
+    this.emit();
+    try {
+      await this.deps.remoteDownloadFallback(requiredConnectionId(task), task.remotePath, task.localPath);
+      task.status = "success";
+      task.error = undefined;
+      task.errorCode = undefined;
+      task.finishedAt = this.deps.now();
+      task.percent = 100;
+      task.progressText = "Downloaded over SFTP.";
+      this.completeTaskItems(task);
+      this.appendLog(task, "SFTP download completed successfully.");
+      this.emit();
+    } catch (error) {
+      task.status = "failed";
+      this.failRunningTaskItem(task);
+      task.finishedAt = this.deps.now();
+      task.error = error instanceof Error ? error.message : "SFTP download fallback failed.";
+      task.errorCode = classifyTransferFailure(task.error);
+      this.appendLog(task, redactSensitivePlaintext(task.error));
+      this.emit();
+    }
+  }
+
+  private async runOperationTask(task: TransferTask): Promise<void> {
+    try {
+      if (task.kind === "delete") {
+        const paths = task.operationPaths?.length ? task.operationPaths : [task.source];
+        task.currentFile = paths.length === 1 ? paths[0] : `${paths.length} items`;
+        task.progressText = "Deleting...";
+        this.emit();
+        const deleted = task.pane === "remote"
+          ? await this.deps.remoteDelete(requiredConnectionId(task), paths)
+          : await this.deps.localDelete(paths);
+        task.status = "success";
+        task.finishedAt = this.deps.now();
+        task.progressText = `Deleted ${deleted} ${deleted === 1 ? "item" : "items"}.`;
+        this.appendLog(task, task.progressText);
+        this.emit();
+        return;
+      }
+
+      const isDecompress = task.kind === "decompress";
+      const isMd5 = task.kind === "md5";
+      task.currentFile = task.source;
+      task.progressText = isMd5 ? "Generating MD5..." : isDecompress ? "Decompressing..." : "Compressing...";
+      this.emit();
+      const output = isMd5
+        ? task.pane === "remote"
+          ? await this.deps.remoteMd5(requiredConnectionId(task), task.source)
+          : await this.deps.localMd5(task.source)
+        : isDecompress
+        ? task.pane === "remote"
+          ? await this.deps.remoteDecompress(requiredConnectionId(task), task.source)
+          : await this.deps.localDecompress(task.source)
+        : task.pane === "remote"
+          ? await this.deps.remoteGzip(requiredConnectionId(task), task.source, { deleteSourceAfterSuccess: !!task.deleteSourceAfterSuccess })
+          : await this.deps.localGzip(task.source, { deleteSourceAfterSuccess: !!task.deleteSourceAfterSuccess });
+      task.status = "success";
+      task.destination = output;
+      task.destinationDisplay = output;
+      task.finishedAt = this.deps.now();
+      task.progressText = isMd5 ? "MD5 generated." : isDecompress ? "Decompressed." : task.deleteSourceAfterSuccess ? "Compressed and deleted source." : "Compressed; source kept.";
+      this.appendLog(task, `${isMd5 ? "MD5" : isDecompress ? "Decompress" : "Compress"} completed: ${output}`);
+      this.emit();
+    } catch (error) {
+      task.status = "failed";
+      task.finishedAt = this.deps.now();
+      task.error = error instanceof Error ? error.message : "Job failed.";
+      task.errorCode = classifyTransferFailure(task.error);
+      this.appendLog(task, redactSensitivePlaintext(task.error));
+      this.emit();
+    }
+  }
+
   private consumeProgressLine(task: TransferTask, line: string): void {
     const safeLine = line.slice(0, 400);
     this.appendLog(task, safeLine);
-    const fileHint = safeLine.match(/to-check=\d+\/\d+\)\s*(.+)$/);
+    const fileHint = safeLine.match(/to-ch(?:eck|k)=\d+\/\d+\)\s*(.+)$/);
     if (fileHint && fileHint[1]) task.currentFile = fileHint[1];
+    const itemPath = parseRsyncItemPath(safeLine);
+    if (itemPath) this.markCurrentTaskItem(task, itemPath);
 
     const progress = safeLine.match(/(\d+)%\s+([0-9.]+\w+\/s)\s+(\d+:\d+:\d+|\d+:\d+)/);
     if (progress) {
@@ -340,6 +626,43 @@ export class TransferQueueService {
     task.rawLog = [...task.rawLog.slice(-199), line];
   }
 
+  private resetTaskItems(task: TransferTask): void {
+    if (!task.itemEntries) return;
+    task.itemEntries = task.itemEntries.map((item) => ({ ...item, status: "pending" }));
+    task.itemDoneCount = 0;
+  }
+
+  private completeTaskItems(task: TransferTask): void {
+    if (!task.itemEntries) return;
+    task.itemEntries = task.itemEntries.map((item) => ({ ...item, status: "success" }));
+    task.itemDoneCount = task.itemEntries.length;
+  }
+
+  private failRunningTaskItem(task: TransferTask): void {
+    if (!task.itemEntries) return;
+    task.itemEntries = task.itemEntries.map((item) => (item.status === "running" ? { ...item, status: "failed" } : item));
+    task.itemDoneCount = task.itemEntries.filter((item) => item.status === "success").length;
+  }
+
+  private markCurrentTaskItem(task: TransferTask, itemPath: string): void {
+    if (!task.itemEntries) return;
+    const normalized = normalizeTransferItemPath(itemPath);
+    const sourceBase = normalizeTransferItemPath(path.basename(task.localPath));
+    const index = task.itemEntries.findIndex((item) => {
+      const withBase = sourceBase ? `${sourceBase}/${item.relativePath}` : item.relativePath;
+      return item.relativePath === normalized || item.displayPath === normalized || withBase === normalized;
+    });
+    if (index < 0) return;
+    task.itemEntries = task.itemEntries.map((item, i) => {
+      if (i === index) return { ...item, status: "running" };
+      if (item.status === "running") return { ...item, status: "success" };
+      return item;
+    });
+    task.itemDoneCount = task.itemEntries.filter((item) => item.status === "success").length;
+    task.currentFile = task.itemEntries[index].displayPath;
+    this.emit();
+  }
+
   private failTask(task: TransferTask, message: string, detail?: string): void {
     task.status = "failed";
     task.error = message;
@@ -358,8 +681,16 @@ export class TransferQueueService {
   private snapshot(): TransferTask[] {
     return this.tasks.map((task) => ({
       ...task,
+      itemEntries: task.itemEntries?.map((item) => ({ ...item })),
       rawLog: [...task.rawLog]
     }));
+  }
+
+  private assertNoConflictingOperation(lockKey: string, message: string): void {
+    const conflict = this.tasks.find((task) =>
+      task.operationLockKey === lockKey && (task.status === "pending" || task.status === "running")
+    );
+    if (conflict) throw transferError("TRANSFER_INVALID_REQUEST", message);
   }
 
 }
@@ -384,6 +715,25 @@ function humanTransferError(category: TransferErrorCategory, exitCode: number): 
   return `rsync exited with code ${exitCode}.`;
 }
 
+function shouldFallbackToSftpTransfer(exitCode: number, category: TransferErrorCategory, recentLog: string): boolean {
+  if (category === "path_not_found" || category === "no_space_left") return false;
+  if (exitCode === 255) return true;
+  if (category === "permission_denied") return /Permission denied \((publickey|password|keyboard-interactive|publickey,password)[^)]*\)|Permission denied, please try again/i.test(recentLog);
+  return category === "ssh_batchmode_failed" || /Permission denied \(publickey\)|BatchMode|Host key verification failed/i.test(recentLog);
+}
+
+function parseRsyncItemPath(line: string): string | null {
+  if (!line || line.endsWith("/") || line.startsWith("sending ") || line.startsWith("receiving ") || line.startsWith("sent ")) return null;
+  if (/^\s*\d[\d,.]*\s+\d+%/.test(line)) return null;
+  if (/^(total size is|created directory|deleting |\.\/?$)/i.test(line)) return null;
+  if (/\s+\d+%\s+/.test(line) || /xfr#\d+/.test(line) || /to-ch(?:eck|k)=/.test(line)) return null;
+  return normalizeTransferItemPath(line);
+}
+
+function normalizeTransferItemPath(input: string): string {
+  return input.replace(/^\.\//, "").replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
 async function ensureExistingPath(pathExists: (fullPath: string) => Promise<boolean>, fullPath: string): Promise<void> {
   const exists = await pathExists(fullPath);
   if (!exists) throw transferError("TRANSFER_INVALID_REQUEST", `Path not found: ${fullPath}`);
@@ -403,6 +753,39 @@ function validateCommonRequest(request: {
   if (!Number.isInteger(request.port) || request.port <= 0 || request.port > 65535) {
     throw transferError("TRANSFER_INVALID_REQUEST", "Port must be between 1 and 65535.");
   }
+}
+
+function validateOperationRequest(request: {
+  tabId: string;
+  pane: "local" | "remote";
+}): void {
+  if (!request.tabId.trim()) throw transferError("TRANSFER_INVALID_REQUEST", "Tab id is required.");
+  if (request.pane !== "local" && request.pane !== "remote") {
+    throw transferError("TRANSFER_INVALID_REQUEST", "Pane must be local or remote.");
+  }
+}
+
+function validateOperationPath(input: string): string {
+  const value = (input ?? "").trim();
+  if (!value) throw transferError("TRANSFER_INVALID_REQUEST", "Path is required.");
+  if (/\u0000|\n|\r/.test(value)) throw transferError("TRANSFER_INVALID_REQUEST", "Path contains unsupported characters.");
+  return value;
+}
+
+function operationLockKey(kind: "delete" | "gzip" | "decompress" | "md5", pane: "local" | "remote", connectionId: string | undefined, paths: string[]): string {
+  return `${kind}\u0000${pane}\u0000${connectionId ?? ""}\u0000${paths.slice().sort().join("\u0000")}`;
+}
+
+function decompressDestinationForDisplay(sourcePath: string): string {
+  if (sourcePath.endsWith(".tar.gz")) return sourcePath.slice(0, -7);
+  if (sourcePath.endsWith(".tgz")) return sourcePath.slice(0, -4);
+  if (sourcePath.endsWith(".gz")) return sourcePath.slice(0, -3);
+  throw transferError("TRANSFER_INVALID_REQUEST", "Selected item is not a supported compressed file.");
+}
+
+function requiredConnectionId(task: TransferTask): string {
+  if (!task.connectionId) throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required.");
+  return task.connectionId;
 }
 
 function validateLocalPath(fullPath: string): void {
@@ -517,4 +900,83 @@ async function defaultLocalPathKind(fullPath: string): Promise<"file" | "directo
   if (stat.isDirectory()) return "directory";
   if (stat.isFile()) return "file";
   return "other";
+}
+
+async function defaultLocalDirectoryFiles(rootPath: string): Promise<TransferTaskItem[]> {
+  const out: TransferTaskItem[] = [];
+  await walkLocalDirectory(rootPath, "", out);
+  out.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return out;
+}
+
+async function defaultUnavailableLocalDelete(): Promise<number> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Local delete job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteDelete(): Promise<number> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Remote delete job support is unavailable.");
+}
+
+async function defaultUnavailableLocalGzip(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Local gzip job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteGzip(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Remote gzip job support is unavailable.");
+}
+
+async function defaultUnavailableLocalDecompress(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Local decompress job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteDecompress(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Remote decompress job support is unavailable.");
+}
+
+async function defaultUnavailableLocalMd5(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Local MD5 job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteMd5(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Remote MD5 job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteUploadFallback(): Promise<void> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "SFTP upload fallback is unavailable.");
+}
+
+async function defaultUnavailableRemoteDownloadFallback(): Promise<void> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "SFTP download fallback is unavailable.");
+}
+
+function unique(items: string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of items) {
+    if (seen.has(item)) continue;
+    seen.add(item);
+    out.push(item);
+  }
+  return out;
+}
+
+async function walkLocalDirectory(rootPath: string, relativeDir: string, out: TransferTaskItem[]): Promise<void> {
+  const currentDir = relativeDir ? path.join(rootPath, relativeDir) : rootPath;
+  const entries = await fs.readdir(currentDir, { withFileTypes: true });
+  for (const entry of entries) {
+    const relativePath = relativeDir ? path.posix.join(relativeDir.replace(/\\/g, "/"), entry.name) : entry.name;
+    const fullPath = path.join(rootPath, relativePath);
+    if (entry.isDirectory()) {
+      await walkLocalDirectory(rootPath, relativePath, out);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const stat = await fs.stat(fullPath).catch(() => null);
+    out.push({
+      relativePath: normalizeTransferItemPath(relativePath),
+      displayPath: normalizeTransferItemPath(relativePath),
+      size: stat?.size,
+      status: "pending"
+    });
+  }
 }

@@ -2,6 +2,8 @@ export type EntryType = "file" | "directory" | "symlink" | "unknown";
 export type SortKey = "name" | "size" | "mtime";
 export type SortDirection = "asc" | "desc";
 export type TransferDirection = "upload" | "download";
+export type JobTaskKind = TransferDirection | "delete" | "gzip" | "decompress" | "md5";
+export type JobPaneKind = "local" | "remote";
 export type TransferStatus =
   | "checking"
   | "conflict"
@@ -20,6 +22,7 @@ export type TransferErrorCategory =
   | "no_space_left"
   | "remote_disconnected"
   | "unknown";
+export type TransferTaskItemStatus = "pending" | "running" | "success" | "failed" | "skipped";
 
 export interface FileEntry {
   name: string;
@@ -31,6 +34,7 @@ export interface FileEntry {
 
 export interface LocalFileEntry extends FileEntry {
   permissions?: string;
+  owner?: string;
   isHidden: boolean;
 }
 
@@ -124,7 +128,9 @@ export interface TabState {
 export interface TransferTask {
   id: string;
   tabId: string;
-  direction: TransferDirection;
+  kind: JobTaskKind;
+  direction?: TransferDirection;
+  pane?: JobPaneKind;
   source: string;
   destination: string;
   sourceDisplay: string;
@@ -137,16 +143,29 @@ export interface TransferTask {
   remotePath: string;
   localPath: string;
   preserveTimestamps?: boolean;
+  operationPaths?: string[];
+  operationLockKey?: string;
+  deleteSourceAfterSuccess?: boolean;
   status: TransferStatus;
   progressText?: string;
   percent?: number;
   speed?: string;
   eta?: string;
   currentFile?: string;
+  itemTotalCount?: number;
+  itemDoneCount?: number;
+  itemEntries?: TransferTaskItem[];
   rawLog: string[];
   createdAt: number;
   startedAt?: number;
   finishedAt?: number;
   error?: string;
   errorCode?: TransferErrorCategory;
+}
+
+export interface TransferTaskItem {
+  relativePath: string;
+  displayPath: string;
+  size?: number;
+  status: TransferTaskItemStatus;
 }
