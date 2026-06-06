@@ -12,6 +12,7 @@
 - Added path locks so unsafe parent/child or same-destination jobs remain pending instead of starting beside a conflicting running job.
 - Added a Jobs preference for compression job concurrency, defaulting to `2` and clamped to `1-4`.
 - Added focused unit coverage for transfer-vs-compression concurrency, serial transfer behavior, path locks, and compression-concurrency setting validation.
+- Polished V12 multi-selection rows so selected ranges use continuous row-width highlights with thin separators, and inactive-pane selections no longer show a darker left crescent.
 
 ## v1.9.1 planning
 
