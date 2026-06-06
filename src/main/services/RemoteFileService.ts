@@ -363,6 +363,34 @@ export class RemoteFileService {
     }
   }
 
+  async generateMd5File(connectionId: string, targetPath: string): Promise<string> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const destinationPath = this.normalizeRemotePath(`${normalizedPath}.md5`);
+    const client = connection.client as unknown as RemoteCompressClient;
+    try {
+      const sourceStat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      if (resolveRemoteType(sourceStat) !== "file") throw new RemoteServiceError("REMOTE_INVALID_INPUT", "Only files can have an MD5 sidecar generated.");
+      try {
+        await client.stat(destinationPath);
+        throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "MD5 target already exists.");
+      } catch (error) {
+        if (error instanceof RemoteServiceError) throw error;
+        const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : "";
+        if (!/No such file|ENOENT|no such path|does not exist/i.test(message)) throw error;
+      }
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_COMPRESS_FAILED", "Remote command execution is unavailable for MD5.");
+      const tempPath = `${destinationPath}.cofinder-${Date.now()}-${randomUUID().slice(0, 8)}.tmp`;
+      await execRemoteCommand(exec, buildRemoteMd5Command(normalizedPath, destinationPath, tempPath));
+      return destinationPath;
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapCompressError(error);
+    }
+  }
+
   async touchPath(connectionId: string, targetPath: string, options?: { timestamp?: string }): Promise<void> {
     const connection = this.connectionManager.getConnection(connectionId);
     if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
@@ -1010,6 +1038,20 @@ function buildRemoteTarDecompressCommand(sourcePath: string): string {
   return [
     `for p in $(tar -tzf ${src} | awk -F/ 'NF {print $1}' | sort -u); do if [ -e ${parent}/"$p" ] || [ -L ${parent}/"$p" ]; then printf '%s\\n' 'Decompress target already exists.' >&2; exit 73; fi; done`,
     `tar -xzf ${src} -C ${parent}`
+  ].join(" && ");
+}
+
+function buildRemoteMd5Command(sourcePath: string, destinationPath: string, tempPath: string): string {
+  const src = shellQuote(sourcePath);
+  const parent = shellQuote(posixPath.dirname(sourcePath) || "/");
+  const base = shellQuote(posixPath.basename(sourcePath));
+  const dst = shellQuote(destinationPath);
+  const tmp = shellQuote(tempPath);
+  return [
+    `if [ -e ${dst} ] || [ -L ${dst} ]; then printf '%s\\n' 'MD5 target already exists.' >&2; exit 73; fi`,
+    `rm -f -- ${tmp}`,
+    `cd ${parent} && md5sum -- ${base} > ${tmp}`,
+    `mv -- ${tmp} ${dst}`
   ].join(" && ");
 }
 

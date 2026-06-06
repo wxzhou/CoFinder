@@ -3,7 +3,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { posix as posixPath } from "node:path";
-import type { EnqueueDecompressRequest, EnqueueDeleteRequest, EnqueueDownloadRequest, EnqueueGzipRequest, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
+import type { EnqueueDecompressRequest, EnqueueDeleteRequest, EnqueueDownloadRequest, EnqueueGzipRequest, EnqueueMd5Request, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
 import type { TransferErrorCategory, TransferTask, TransferTaskItem } from "../../shared/types/models";
 import { redactSensitivePlaintext } from "../security/redactSensitive";
 import { buildProcessEnv } from "../utils/processEnv";
@@ -33,6 +33,8 @@ type TransferQueueDeps = {
   remoteGzip: (connectionId: string, path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
   localDecompress: (path: string) => Promise<string>;
   remoteDecompress: (connectionId: string, path: string) => Promise<string>;
+  localMd5: (path: string) => Promise<string>;
+  remoteMd5: (connectionId: string, path: string) => Promise<string>;
   remoteUploadFallback: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
   remoteDownloadFallback: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
 };
@@ -58,6 +60,8 @@ export class TransferQueueService {
       remoteGzip: deps?.remoteGzip ?? defaultUnavailableRemoteGzip,
       localDecompress: deps?.localDecompress ?? defaultUnavailableLocalDecompress,
       remoteDecompress: deps?.remoteDecompress ?? defaultUnavailableRemoteDecompress,
+      localMd5: deps?.localMd5 ?? defaultUnavailableLocalMd5,
+      remoteMd5: deps?.remoteMd5 ?? defaultUnavailableRemoteMd5,
       remoteUploadFallback: deps?.remoteUploadFallback ?? defaultUnavailableRemoteUploadFallback,
       remoteDownloadFallback: deps?.remoteDownloadFallback ?? defaultUnavailableRemoteDownloadFallback
     };
@@ -257,6 +261,37 @@ export class TransferQueueService {
     return { queued: true, taskIds: [task.id] };
   }
 
+  async enqueueMd5(request: EnqueueMd5Request): Promise<{ queued: true; taskIds: string[] }> {
+    validateOperationRequest(request);
+    const sourcePath = validateOperationPath(request.path);
+    if (request.pane === "remote" && !request.connectionId?.trim()) {
+      throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required for MD5.");
+    }
+    const destinationPath = `${sourcePath}.md5`;
+    const lockKey = operationLockKey("md5", request.pane, request.connectionId, [sourcePath]);
+    this.assertNoConflictingOperation(lockKey, "An MD5 job is already queued or running for this path.");
+    const task = this.makeTask({
+      tabId: request.tabId,
+      kind: "md5",
+      pane: request.pane,
+      source: sourcePath,
+      destination: destinationPath,
+      sourceDisplay: request.pane === "remote" ? `Remote MD5: ${sourcePath}` : `Local MD5: ${sourcePath}`,
+      destinationDisplay: destinationPath,
+      connectionId: request.connectionId,
+      host: "",
+      port: 0,
+      username: "",
+      remotePath: request.pane === "remote" ? sourcePath : "",
+      localPath: request.pane === "local" ? sourcePath : "",
+      operationLockKey: lockKey
+    });
+    this.tasks.push(task);
+    this.emit();
+    void this.pump();
+    return { queued: true, taskIds: [task.id] };
+  }
+
   async cancel(taskId: string): Promise<{ canceled: true }> {
     const task = this.tasks.find((item) => item.id === taskId);
     if (!task) throw transferError("TRANSFER_NOT_FOUND", "Transfer task not found.");
@@ -375,7 +410,7 @@ export class TransferQueueService {
     task.error = undefined;
     this.emit();
 
-    if (task.kind === "delete" || task.kind === "gzip" || task.kind === "decompress") {
+    if (task.kind === "delete" || task.kind === "gzip" || task.kind === "decompress" || task.kind === "md5") {
       await this.runOperationTask(task);
       return;
     }
@@ -532,10 +567,15 @@ export class TransferQueueService {
       }
 
       const isDecompress = task.kind === "decompress";
+      const isMd5 = task.kind === "md5";
       task.currentFile = task.source;
-      task.progressText = isDecompress ? "Decompressing..." : "Compressing...";
+      task.progressText = isMd5 ? "Generating MD5..." : isDecompress ? "Decompressing..." : "Compressing...";
       this.emit();
-      const output = isDecompress
+      const output = isMd5
+        ? task.pane === "remote"
+          ? await this.deps.remoteMd5(requiredConnectionId(task), task.source)
+          : await this.deps.localMd5(task.source)
+        : isDecompress
         ? task.pane === "remote"
           ? await this.deps.remoteDecompress(requiredConnectionId(task), task.source)
           : await this.deps.localDecompress(task.source)
@@ -546,8 +586,8 @@ export class TransferQueueService {
       task.destination = output;
       task.destinationDisplay = output;
       task.finishedAt = this.deps.now();
-      task.progressText = isDecompress ? "Decompressed." : task.deleteSourceAfterSuccess ? "Compressed and deleted source." : "Compressed; source kept.";
-      this.appendLog(task, `${isDecompress ? "Decompress" : "Compress"} completed: ${output}`);
+      task.progressText = isMd5 ? "MD5 generated." : isDecompress ? "Decompressed." : task.deleteSourceAfterSuccess ? "Compressed and deleted source." : "Compressed; source kept.";
+      this.appendLog(task, `${isMd5 ? "MD5" : isDecompress ? "Decompress" : "Compress"} completed: ${output}`);
       this.emit();
     } catch (error) {
       task.status = "failed";
@@ -732,7 +772,7 @@ function validateOperationPath(input: string): string {
   return value;
 }
 
-function operationLockKey(kind: "delete" | "gzip" | "decompress", pane: "local" | "remote", connectionId: string | undefined, paths: string[]): string {
+function operationLockKey(kind: "delete" | "gzip" | "decompress" | "md5", pane: "local" | "remote", connectionId: string | undefined, paths: string[]): string {
   return `${kind}\u0000${pane}\u0000${connectionId ?? ""}\u0000${paths.slice().sort().join("\u0000")}`;
 }
 
@@ -891,6 +931,14 @@ async function defaultUnavailableLocalDecompress(): Promise<string> {
 
 async function defaultUnavailableRemoteDecompress(): Promise<string> {
   throw transferError("TRANSFER_INVALID_REQUEST", "Remote decompress job support is unavailable.");
+}
+
+async function defaultUnavailableLocalMd5(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Local MD5 job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteMd5(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Remote MD5 job support is unavailable.");
 }
 
 async function defaultUnavailableRemoteUploadFallback(): Promise<void> {

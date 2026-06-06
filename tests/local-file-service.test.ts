@@ -175,6 +175,21 @@ describe("LocalFileService decompressPath", () => {
   });
 });
 
+describe("LocalFileService generateMd5File", () => {
+  it("generates an md5 sidecar without overwriting existing targets", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "data.txt");
+    await fs.writeFile(source, "hello md5\n");
+
+    const output = await service.generateMd5File(source);
+
+    expect(output).toBe(`${source}.md5`);
+    await expect(fs.readFile(output, "utf8")).resolves.toBe("94988405d319a361bd6424b82ab6740d  data.txt\n");
+    await expect(service.generateMd5File(source)).rejects.toMatchObject({ code: "COMPRESS_FAILED" });
+  });
+});
+
 describe("LocalFileService touchPath", () => {
   it("updates an existing local file timestamp without creating missing paths", async () => {
     const service = new LocalFileService();

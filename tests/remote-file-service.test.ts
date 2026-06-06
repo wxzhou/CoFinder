@@ -490,6 +490,35 @@ describe("RemoteFileService path/list behavior", () => {
     expect(exec.mock.calls[1][0]).toContain("tar -xzf '/a/folder.tar.gz' -C '/a'");
   });
 
+  it("generates remote md5 sidecars without overwriting targets", async () => {
+    const existing = new Set(["/a/file.txt"]);
+    const stat = vi.fn(async (target: string) => {
+      if (!existing.has(target)) throw new Error("No such file");
+      return { type: "-", size: 10, modifyTime: Date.now() };
+    });
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        expect(command).toContain("cd '/a' && md5sum -- 'file.txt' > ");
+        expect(command).toContain("mv -- ");
+        existing.add("/a/file.txt.md5");
+        stream.emit("close", 0);
+      });
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, client: { exec } }
+      })
+    } as any);
+
+    await expect(service.generateMd5File("c1", "/a/file.txt")).resolves.toBe("/a/file.txt.md5");
+    await expect(service.generateMd5File("c1", "/a/file.txt")).rejects.toMatchObject({ code: "REMOTE_COMPRESS_FAILED" });
+  });
+
   it("touches an existing remote path through a server-side command", async () => {
     const stat = vi.fn(async (target: string) => {
       if (target !== "/a/file's.txt") throw new Error("No such file");

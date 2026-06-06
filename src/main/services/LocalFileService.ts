@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import { createReadStream, createWriteStream } from "node:fs";
+import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -201,6 +202,21 @@ export class LocalFileService {
     }
   }
 
+  async generateMd5File(targetPath: string): Promise<string> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const destinationPath = normalizeLocalPath(`${normalizedPath}.md5`);
+    try {
+      const stats = await fs.lstat(normalizedPath);
+      if (!stats.isFile()) throw new LocalFileServiceError("COMPRESS_FAILED", "Only files can have an MD5 sidecar generated.");
+      const hash = await md5File(normalizedPath);
+      await fs.writeFile(destinationPath, `${hash}  ${path.basename(normalizedPath)}\n`, { encoding: "utf8", flag: "wx" });
+      return destinationPath;
+    } catch (error) {
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapMd5Error(error, normalizedPath);
+    }
+  }
+
   async touchPath(targetPath: string, options?: { timestamp?: string }): Promise<void> {
     const normalizedPath = normalizeLocalPath(targetPath);
     try {
@@ -307,6 +323,14 @@ export class LocalFileService {
     return new LocalFileServiceError("COMPRESS_FAILED", `Failed to decompress path: ${requestedPath}`);
   }
 
+  private mapMd5Error(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    if (code === "EEXIST") return new LocalFileServiceError("COMPRESS_FAILED", "MD5 target already exists.");
+    return new LocalFileServiceError("COMPRESS_FAILED", `Failed to generate MD5 for path: ${requestedPath}`);
+  }
+
   private mapTouchError(error: unknown, requestedPath: string): LocalFileServiceError {
     const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
     if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
@@ -370,6 +394,17 @@ async function ensureTarExtractionTargetsAbsent(archivePath: string): Promise<vo
       .filter(Boolean)
   );
   for (const name of topLevel) await ensureLocalTargetAbsent(path.join(parent, name));
+}
+
+async function md5File(filePath: string): Promise<string> {
+  const hash = createHash("md5");
+  await new Promise<void>((resolve, reject) => {
+    const stream = createReadStream(filePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", resolve);
+  });
+  return hash.digest("hex");
 }
 
 async function nextAvailableLocalTextFile(parentPath: string): Promise<string> {

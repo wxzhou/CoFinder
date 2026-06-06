@@ -281,6 +281,7 @@ function jobKindLabel(task: TransferTask): string {
   if (task.kind === "download") return "Download";
   if (task.kind === "gzip") return "Compress";
   if (task.kind === "decompress") return "Decompress";
+  if (task.kind === "md5") return "MD5";
   return "Delete";
 }
 
@@ -289,6 +290,7 @@ function JobKindIcon(props: { task: TransferTask }): ReactElement {
   if (props.task.kind === "download") return <V12TbIcon name="arrow-down-tray" />;
   if (props.task.kind === "delete") return <V12TbIcon name="trash" />;
   if (props.task.kind === "decompress") return <V12TbIcon name="arrow-down-tray" />;
+  if (props.task.kind === "md5") return <V12TbIcon name="info-circle" />;
   return (
     <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M5.4 5.1h7.7c.75 0 1.35.6 1.35 1.35v3.15H6.75c-.75 0-1.35-.6-1.35-1.35V5.1z" />

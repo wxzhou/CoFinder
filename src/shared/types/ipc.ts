@@ -190,6 +190,13 @@ export type EnqueueDecompressRequest = {
   connectionId?: string;
 };
 
+export type EnqueueMd5Request = {
+  tabId: string;
+  pane: "local" | "remote";
+  path: string;
+  connectionId?: string;
+};
+
 export type TransferConflictPolicy = "prompt" | "overwrite" | "skip" | "rename" | "cancel";
 
 export type AppSettings = {
@@ -367,6 +374,7 @@ export interface IpcApi {
     enqueueDelete: (request: EnqueueDeleteRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     enqueueGzip: (request: EnqueueGzipRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     enqueueDecompress: (request: EnqueueDecompressRequest) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
+    enqueueMd5: (request: EnqueueMd5Request) => Promise<IpcResponse<{ queued: true; taskIds: string[] }>>;
     cancel: (request: { taskId: string }) => Promise<IpcResponse<{ canceled: true }>>;
     stop: (request: { taskId: string }) => Promise<IpcResponse<{ stopped: true }>>;
     retry: (request: { taskId: string }) => Promise<IpcResponse<{ retried: true }>>;

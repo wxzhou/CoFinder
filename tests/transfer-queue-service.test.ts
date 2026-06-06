@@ -49,6 +49,8 @@ function createService(options?: {
   remoteGzip?: (connectionId: string, path: string, options: { deleteSourceAfterSuccess: boolean }) => Promise<string>;
   localDecompress?: (path: string) => Promise<string>;
   remoteDecompress?: (connectionId: string, path: string) => Promise<string>;
+  localMd5?: (path: string) => Promise<string>;
+  remoteMd5?: (connectionId: string, path: string) => Promise<string>;
   remoteUploadFallback?: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
   remoteDownloadFallback?: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
 }) {
@@ -75,6 +77,8 @@ function createService(options?: {
     remoteGzip: options?.remoteGzip,
     localDecompress: options?.localDecompress,
     remoteDecompress: options?.remoteDecompress,
+    localMd5: options?.localMd5,
+    remoteMd5: options?.remoteMd5,
     remoteUploadFallback: options?.remoteUploadFallback,
     remoteDownloadFallback: options?.remoteDownloadFallback
   });
@@ -412,6 +416,23 @@ describe("TransferQueueService state machine", () => {
       expect(task.progressText).toBe("Decompressed.");
     });
     expect(localDecompress).toHaveBeenCalledWith("/tmp/source.txt.gz");
+    expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("runs local md5 generation as a visible queued job", async () => {
+    const localMd5 = vi.fn(async () => "/tmp/source.txt.md5");
+    const { service, spawnProcess } = createService({ localMd5 });
+
+    await service.enqueueMd5({ tabId: "tab-a", pane: "local", path: "/tmp/source.txt" });
+
+    await vi.waitFor(() => {
+      const task = service.list()[0];
+      expect(task.kind).toBe("md5");
+      expect(task.status).toBe("success");
+      expect(task.destination).toBe("/tmp/source.txt.md5");
+      expect(task.progressText).toBe("MD5 generated.");
+    });
+    expect(localMd5).toHaveBeenCalledWith("/tmp/source.txt");
     expect(spawnProcess).not.toHaveBeenCalled();
   });
 

@@ -51,6 +51,7 @@ export const IPC_CHANNELS = {
     enqueueDelete: "transfer:enqueueDelete",
     enqueueGzip: "transfer:enqueueGzip",
     enqueueDecompress: "transfer:enqueueDecompress",
+    enqueueMd5: "transfer:enqueueMd5",
     cancel: "transfer:cancel",
     stop: "transfer:stop",
     retry: "transfer:retry",

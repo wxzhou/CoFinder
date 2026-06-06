@@ -41,6 +41,7 @@ import type {
   EnqueueDeleteRequest,
   EnqueueDownloadRequest,
   EnqueueGzipRequest,
+  EnqueueMd5Request,
   EnqueueUploadRequest,
   IpcResponse,
   ProfileUpsertPayload,
@@ -66,6 +67,8 @@ const transferQueueService = new TransferQueueService({
   remoteGzip: (connectionId, targetPath, options) => remoteFileService.compressFileGzip(connectionId, targetPath, options),
   localDecompress: (targetPath) => localFileService.decompressPath(targetPath),
   remoteDecompress: (connectionId, targetPath) => remoteFileService.decompressPath(connectionId, targetPath),
+  localMd5: (targetPath) => localFileService.generateMd5File(targetPath),
+  remoteMd5: (connectionId, targetPath) => remoteFileService.generateMd5File(connectionId, targetPath),
   remoteUploadFallback: (connectionId, localPath, remotePath) => remoteFileService.uploadPathToRemote(connectionId, localPath, remotePath),
   remoteDownloadFallback: (connectionId, remotePath, localPath) => remoteFileService.downloadPathToLocal(connectionId, remotePath, localPath)
 });
@@ -736,6 +739,20 @@ export function registerIpcHandlers(): void {
     }
   );
 
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueMd5,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueMd5 request.");
+        const req = parseMd5Request(body);
+        const data = await transferQueueService.enqueueMd5(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
+      }
+    }
+  );
+
   registerChannel(IPC_CHANNELS.transfer.cancel, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:cancel request.");
@@ -1311,6 +1328,18 @@ function parseGzipRequest(body: Record<string, unknown>, defaultDeleteSourceAfte
 }
 
 function parseDecompressRequest(body: Record<string, unknown>): EnqueueDecompressRequest {
+  const pane = body.pane === "remote" ? "remote" : "local";
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    pane,
+    connectionId: optionalString(body.connectionId),
+    path: pane === "remote"
+      ? normalizeRemotePathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
+      : validateLocalPathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
+  };
+}
+
+function parseMd5Request(body: Record<string, unknown>): EnqueueMd5Request {
   const pane = body.pane === "remote" ? "remote" : "local";
   return {
     tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),

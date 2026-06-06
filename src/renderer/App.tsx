@@ -3331,6 +3331,41 @@ export function App(props: AppProps = {}) {
     }
   }
 
+  async function generateLocalMd5Selection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.localPane.selectedFullPaths[0];
+    if (!tab || !targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
+    const entry = tab.localPane.entries.find((item) => item.fullPath === targetPath);
+    if (entry?.type !== "file") {
+      window.alert("Generate MD5 is available for files only.");
+      return;
+    }
+    const result = await window.cofinder.transfer.enqueueMd5({ tabId, pane: "local", path: targetPath });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, localPane: { ...item.localPane, error: result.error.message } } : item)));
+    }
+  }
+
+  async function generateRemoteMd5Selection(tabId: string): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = tab?.remotePane.selectedFullPaths[0];
+    if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
+    const entry = tab.remotePane.entries.find((item) => item.fullPath === targetPath);
+    if (entry?.type !== "file") {
+      window.alert("Generate MD5 is available for files only.");
+      return;
+    }
+    const result = await window.cofinder.transfer.enqueueMd5({
+      tabId,
+      pane: "remote",
+      connectionId: tab.remotePane.connectionId,
+      path: targetPath
+    });
+    if (!result.ok) {
+      setTabs((prev) => prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item)));
+    }
+  }
+
   async function touchLocalSelection(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     const targetPath = tab?.localPane.selectedFullPaths[0];
@@ -5941,6 +5976,12 @@ export function App(props: AppProps = {}) {
                         }}>
                           Decompress
                         </button>
+                        <button type="button" className="context-item" onClick={async () => {
+                          await generateLocalMd5Selection(contextMenu.tabId);
+                          setContextMenu(null);
+                        }}>
+                          Generate MD5
+                        </button>
                       </div>
                     </div>
                   ) : null}
@@ -6107,6 +6148,12 @@ export function App(props: AppProps = {}) {
                           setContextMenu(null);
                         }}>
                           Decompress
+                        </button>
+                        <button type="button" className="context-item" onClick={async () => {
+                          await generateRemoteMd5Selection(contextMenu.tabId);
+                          setContextMenu(null);
+                        }}>
+                          Generate MD5
                         </button>
                         <button type="button" className="context-item" onClick={() => {
                           openChmodDialog(contextMenu.tabId);
