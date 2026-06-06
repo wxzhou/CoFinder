@@ -29,22 +29,49 @@ export type V12TransferDrawerProps = {
 export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
   const expanded = props.state === "expanded" || props.state === "autoHidePending";
   const [filter, setFilter] = useState<"all" | "running" | "failed" | "done">("all");
+  const [laneFilter, setLaneFilter] = useState<"all" | "transfer" | "compression" | "delete">("all");
   const [collapsedTasks, setCollapsedTasks] = useState<Record<string, boolean>>({});
   const [paneHeight, setPaneHeight] = useState(() => readJobsPaneHeight());
-  const filteredTasks = props.tasks.filter((task) => {
+  const laneFilteredTasks = props.tasks.filter((task) => laneFilter === "all" || taskLane(task) === laneFilter);
+  const filteredTasks = laneFilteredTasks.filter((task) => {
     if (filter === "running") return task.status === "running" || task.status === "pending";
     if (filter === "failed") return task.status === "failed";
     if (filter === "done") return task.status === "success" || task.status === "canceled" || task.status === "stopped";
     return true;
   });
-  const counts = {
+  const laneCounts = {
     all: props.tasks.length,
-    running: props.tasks.filter((task) => task.status === "running" || task.status === "pending").length,
-    failed: props.tasks.filter((task) => task.status === "failed").length,
-    done: props.tasks.filter((task) => task.status === "success" || task.status === "canceled" || task.status === "stopped").length
+    transfer: props.tasks.filter((task) => taskLane(task) === "transfer").length,
+    compression: props.tasks.filter((task) => taskLane(task) === "compression").length,
+    delete: props.tasks.filter((task) => taskLane(task) === "delete").length
   };
+  const counts = {
+    all: laneFilteredTasks.length,
+    running: laneFilteredTasks.filter((task) => task.status === "running" || task.status === "pending").length,
+    failed: laneFilteredTasks.filter((task) => task.status === "failed").length,
+    done: laneFilteredTasks.filter((task) => task.status === "success" || task.status === "canceled" || task.status === "stopped").length
+  };
+  const laneFilterChips = (
+    <div className="v12m-tq-filters v12m-tq-lane-filters" role="tablist" aria-label="Job queue filters" onClick={(event) => event.stopPropagation()}>
+      {([
+        ["all", "All queues"],
+        ["transfer", "Transfer"],
+        ["compression", "Compression"],
+        ["delete", "Delete"]
+      ] as const).map(([item, label]) => (
+        <button
+          key={item}
+          type="button"
+          className={`v12m-tq-chip${laneFilter === item ? " is-on" : ""}`}
+          onClick={() => setLaneFilter(item)}
+        >
+          {label} {laneCounts[item]}
+        </button>
+      ))}
+    </div>
+  );
   const filterChips = (
-    <div className="v12m-tq-filters" role="tablist" aria-label="Job filters" onClick={(event) => event.stopPropagation()}>
+    <div className="v12m-tq-filters v12m-tq-status-filters" role="tablist" aria-label="Job status filters" onClick={(event) => event.stopPropagation()}>
       {(["all", "running", "failed", "done"] as const).map((item) => (
         <button
           key={item}
@@ -152,6 +179,7 @@ export function V12TransferDrawer(props: V12TransferDrawerProps): ReactElement {
       >
         <span className="v12m-drawer-title">Jobs</span>
         <span className="v12m-drawer-sum">{props.summary}</span>
+        {expanded ? laneFilterChips : null}
         {expanded ? filterChips : null}
         {actionButtons}
         <button
@@ -283,6 +311,12 @@ function jobKindLabel(task: TransferTask): string {
   if (task.kind === "decompress") return "Decompress";
   if (task.kind === "md5") return "MD5";
   return "Delete";
+}
+
+function taskLane(task: TransferTask): "transfer" | "compression" | "delete" {
+  if (task.kind === "upload" || task.kind === "download") return "transfer";
+  if (task.kind === "gzip" || task.kind === "decompress" || task.kind === "md5") return "compression";
+  return "delete";
 }
 
 function JobKindIcon(props: { task: TransferTask }): ReactElement {

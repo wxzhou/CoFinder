@@ -2,7 +2,7 @@
 
 ## Purpose
 
-CoFinder is a macOS-only Electron desktop app for dual-pane local/remote file browsing, with a WinSCP-like workflow and a global rsync transfer queue.
+CoFinder is a macOS-only Electron desktop app for dual-pane local/remote file browsing, with a WinSCP-like workflow and a unified lane-aware Jobs queue.
 
 This document is the short-onboarding baseline for future post-V2.0 development. It is intentionally concrete and tied to the current codebase.
 
@@ -24,7 +24,7 @@ This document is the short-onboarding baseline for future post-V2.0 development.
 - Preferences MVP in `settings.json` under userData (`schemaVersion: 2`; non-secret general, transfer, appearance, and onboarding-dismissed preferences; `settings:get` / `settings:set` IPC).
 - V1.7 navigation efficiency stores transient local and per-profile remote recents in renderer localStorage (`cofinder.recent.*`); these are non-secret paths and do not add IPC or main-process files.
 - Multi-tab isolation for local/remote pane state.
-- Unified Jobs pane with a currently serial main-process queue for upload/download plus delete/gzip work. Future multi-lane queue design is documented in `docs/dev/V2.0.x_PARALLEL_JOBS_PLAN.md`.
+- Unified Jobs pane with lane-aware main-process scheduling: upload/download stay serial, delete stays serial, and compression-style jobs use configurable bounded concurrency.
 - V1.8 remote operations: mkdir, basic chmod, file duplicate up to 50 MB, SSH Terminal here without password injection, and cancelable capped directory-size jobs.
 - V1.9 reliability work: Diagnostics actions in Preferences, first-run onboarding, release checklist hardening, and manual GitHub Releases update policy.
 - Multi-select (`Cmd`/`Shift` click + `Cmd/Ctrl+A`), marquee selection, drag-and-drop transfer, and context menus.
@@ -58,9 +58,9 @@ This document is the short-onboarding baseline for future post-V2.0 development.
 ## Operational Invariants (Do Not Break)
 
 - Tab isolation: closing/disconnecting one tab must not break others.
-- Queue scope: queue is global; tasks carry `tabId`.
-- Queue execution is serial, including retry/retry-all paths.
-- Future queue parallelism must use lane-specific concurrency and path locks; do not switch to unrestricted global parallel execution.
+- Queue scope: Jobs are global; tasks carry `tabId`.
+- Queue execution is lane-specific, including retry/retry-all paths. Transfer and delete lanes remain serial; compression-style jobs use bounded concurrency.
+- Queue parallelism must use lane-specific concurrency and path locks; do not switch to unrestricted global parallel execution.
 - Drag-and-drop transfer must route through the same enqueue/conflict pipeline as toolbar/context menu transfers.
 - IPC input validation stays in main process (renderer is untrusted input).
 - App quit must clean up: transfer queue shutdown and connection disconnect-all.

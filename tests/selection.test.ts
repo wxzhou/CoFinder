@@ -111,6 +111,12 @@ describe("selection helpers", () => {
     expect(stringifySelection(["/a", "/c"], rows, "path")).toBe("/a\n/c");
   });
 
+  it("stringifies copy selections in visible row order", () => {
+    const visibleRows = [rows[3]!, rows[1]!, rows[2]!, rows[0]!];
+    expect(stringifySelection(["/a", "/d", "/b"], visibleRows, "name")).toBe("d\nb\na");
+    expect(stringifySelection(["/a", "/d", "/b"], visibleRows, "path")).toBe("/d\n/b\n/a");
+  });
+
   it("selectAllRows selects all and sets anchor", () => {
     const state = selectAllRows(rows, "first");
     expect(state.selectedFullPaths).toEqual(["/a", "/b", "/c", "/d"]);

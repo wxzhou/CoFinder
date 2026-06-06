@@ -201,9 +201,14 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
         onDragLeave={props.onDragLeave}
       >
         {props.entries.length === 0 ? <div className="v12m-list-empty">{props.emptyMessage ?? "This folder is empty."}</div> : null}
-        {props.entries.map((entry) => {
+        {props.entries.map((entry, index) => {
           const selected = props.selectedFullPaths.includes(entry.fullPath);
           const sel = rowSelClass(selected, props.isPaneActive);
+          const previousSelected = index > 0 ? props.selectedFullPaths.includes(props.entries[index - 1].fullPath) : false;
+          const nextSelected = index < props.entries.length - 1 ? props.selectedFullPaths.includes(props.entries[index + 1].fullPath) : false;
+          const selectedRunClass = selected
+            ? `${previousSelected ? "" : " sel-run-start"}${nextSelected ? "" : " sel-run-end"}`
+            : "";
           return (
             <div
               key={entry.fullPath}
@@ -212,7 +217,7 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
               data-pane-row="true"
               data-marquee-pane={props.pane}
               data-full-path={entry.fullPath}
-              className={`v12m-lrow ${sel} ${props.getRowClassName?.(entry) ?? ""}`.trim()}
+              className={`v12m-lrow ${sel}${selectedRunClass} ${props.getRowClassName?.(entry) ?? ""}`.trim()}
               style={gridStyle}
               onDragStart={(e) => props.onRowDragStart?.(entry, e)}
               onDragOver={(e) => props.onRowDragOver?.(entry, e)}

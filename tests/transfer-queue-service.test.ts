@@ -53,6 +53,7 @@ function createService(options?: {
   remoteMd5?: (connectionId: string, path: string) => Promise<string>;
   remoteUploadFallback?: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
   remoteDownloadFallback?: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
+  compressionConcurrency?: number;
 }) {
   const procs = options?.procs ?? [new FakeProc()];
   const spawnProcess = vi.fn(() => procs.shift() as unknown as ChildProcess);
@@ -80,7 +81,8 @@ function createService(options?: {
     localMd5: options?.localMd5,
     remoteMd5: options?.remoteMd5,
     remoteUploadFallback: options?.remoteUploadFallback,
-    remoteDownloadFallback: options?.remoteDownloadFallback
+    remoteDownloadFallback: options?.remoteDownloadFallback,
+    compressionConcurrency: options?.compressionConcurrency
   });
 
   return { service, spawnProcess, runCommand };
@@ -434,6 +436,121 @@ describe("TransferQueueService state machine", () => {
     });
     expect(localMd5).toHaveBeenCalledWith("/tmp/source.txt");
     expect(spawnProcess).not.toHaveBeenCalled();
+  });
+
+  it("runs compression lane jobs in parallel up to the configured concurrency", async () => {
+    let finishA!: (value: string) => void;
+    let finishB!: (value: string) => void;
+    const localGzip = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise<string>((resolve) => { finishA = resolve; }))
+      .mockImplementationOnce(() => new Promise<string>((resolve) => { finishB = resolve; }));
+    const { service } = createService({ localGzip, compressionConcurrency: 2 });
+
+    await service.enqueueGzip({ tabId: "tab-a", pane: "local", path: "/tmp/a.txt" });
+    await service.enqueueGzip({ tabId: "tab-a", pane: "local", path: "/tmp/b.txt" });
+
+    await vi.waitFor(() => {
+      expect(localGzip).toHaveBeenCalledTimes(2);
+      expect(service.list().map((task) => task.status)).toEqual(["running", "running"]);
+    });
+
+    finishA("/tmp/a.txt.gz");
+    finishB("/tmp/b.txt.gz");
+    await vi.waitFor(() => expect(service.list().every((task) => task.status === "success")).toBe(true));
+  });
+
+  it("keeps transfer jobs serial while compression runs beside a transfer", async () => {
+    const p1 = new FakeProc();
+    const p2 = new FakeProc();
+    let finishGzip!: (value: string) => void;
+    const localGzip = vi.fn(() => new Promise<string>((resolve) => { finishGzip = resolve; }));
+    const { service, spawnProcess } = createService({ procs: [p1, p2], localGzip, compressionConcurrency: 2 });
+
+    await service.enqueueUpload({ ...baseUpload, localSources: ["/tmp/a.txt", "/tmp/b.txt"] });
+    await service.enqueueGzip({ tabId: "tab-a", pane: "local", path: "/tmp/c.txt" });
+
+    await vi.waitFor(() => {
+      expect(spawnProcess).toHaveBeenCalledTimes(1);
+      expect(localGzip).toHaveBeenCalledTimes(1);
+      expect(service.list().map((task) => task.status)).toEqual(["running", "pending", "running"]);
+    });
+
+    finishGzip("/tmp/c.txt.gz");
+    p1.emit("close", 0, null);
+    await vi.waitFor(() => expect(spawnProcess).toHaveBeenCalledTimes(2));
+  });
+
+  it("holds child path jobs pending while a parent delete lock is running", async () => {
+    let finishDelete!: (value: number) => void;
+    const localDelete = vi.fn(() => new Promise<number>((resolve) => { finishDelete = resolve; }));
+    const localGzip = vi.fn(async () => "/tmp/folder/child.txt.gz");
+    const { service } = createService({ localDelete, localGzip, compressionConcurrency: 2 });
+
+    await service.enqueueDelete({ tabId: "tab-a", pane: "local", paths: ["/tmp/folder"] });
+    await service.enqueueGzip({ tabId: "tab-a", pane: "local", path: "/tmp/folder/child.txt" });
+
+    await vi.waitFor(() => {
+      expect(localDelete).toHaveBeenCalledTimes(1);
+      expect(localGzip).not.toHaveBeenCalled();
+      expect(service.list().map((task) => task.status)).toEqual(["running", "pending"]);
+    });
+
+    finishDelete(1);
+    await vi.waitFor(() => expect(localGzip).toHaveBeenCalledTimes(1));
+  });
+
+  it("retries failed compression jobs while honoring lane concurrency", async () => {
+    const retryResolvers: Array<(value: string) => void> = [];
+    const localGzip = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("temporary failure"))
+      .mockRejectedValueOnce(new Error("temporary failure"))
+      .mockRejectedValueOnce(new Error("temporary failure"))
+      .mockImplementation(() => new Promise<string>((resolve) => retryResolvers.push(resolve)));
+    const { service } = createService({ localGzip, compressionConcurrency: 2 });
+
+    await service.enqueueGzip({ tabId: "tab-a", pane: "local", path: "/tmp/a.txt" });
+    await service.enqueueGzip({ tabId: "tab-a", pane: "local", path: "/tmp/b.txt" });
+    await service.enqueueGzip({ tabId: "tab-a", pane: "local", path: "/tmp/c.txt" });
+    await vi.waitFor(() => expect(service.list().every((task) => task.status === "failed")).toBe(true));
+
+    const res = await service.retryFailed();
+
+    expect(res.retried).toBe(3);
+    await vi.waitFor(() => {
+      expect(localGzip).toHaveBeenCalledTimes(5);
+      expect(service.list().map((task) => task.status)).toEqual(["running", "running", "pending"]);
+    });
+
+    retryResolvers[0]("/tmp/a.txt.gz");
+    await vi.waitFor(() => {
+      expect(localGzip).toHaveBeenCalledTimes(6);
+      expect(service.list().filter((task) => task.status === "running")).toHaveLength(2);
+    });
+  });
+
+  it("shutdown stops running jobs across lanes", async () => {
+    const p1 = new FakeProc();
+    let finishGzip!: (value: string) => void;
+    const localGzip = vi.fn(() => new Promise<string>((resolve) => { finishGzip = resolve; }));
+    const { service, spawnProcess } = createService({ procs: [p1], localGzip, compressionConcurrency: 2 });
+
+    await service.enqueueUpload(baseUpload);
+    await service.enqueueGzip({ tabId: "tab-a", pane: "local", path: "/tmp/c.txt" });
+    await vi.waitFor(() => {
+      expect(spawnProcess).toHaveBeenCalledTimes(1);
+      expect(localGzip).toHaveBeenCalledTimes(1);
+      expect(service.list().map((task) => task.status)).toEqual(["running", "running"]);
+    });
+
+    await service.shutdown();
+
+    expect(p1.killedSignals).toContain("SIGTERM");
+    expect(service.list().map((task) => task.status)).toEqual(["stopped", "stopped"]);
+    finishGzip("/tmp/c.txt.gz");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(service.list().map((task) => task.status)).toEqual(["stopped", "stopped"]);
   });
 
   it("falls back to SFTP download when rsync exits with SSH code 255", async () => {

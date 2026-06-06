@@ -38,7 +38,15 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.8.7 | v1.8.7 | Complete on dev |
 | V2.8.8 | v1.8.8 | Complete on dev |
 | V2.8.9 | v1.8.9 | Complete on dev |
-| V2.9 release rollup | v1.9.0 | Release candidate |
+| V2.9 release rollup | v1.9.0 | Shipped |
+| V2.10 planning | v1.9.1 | Planning branch |
+| V2.10 M1 | v1.9.2 | Complete on feature branch |
+| V2.10 M2 | v1.9.3 | Planned |
+| V2.10 M3 | v1.9.4 | Planned |
+| V2.10 M4 | v1.9.5 | Planned |
+| V2.10 M5 | v1.9.6 | Planned |
+| V2.10 M6 | v1.9.7 | Planned |
+| V2.10 M7 | v1.9.8 | Planned |
 
 ## Shipped phases (summary)
 
@@ -85,7 +93,15 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.8.7 | v1.8.7 | Creation Flow, Remote Refresh, and Transfer Detail Fixes — complete on dev |
 | V2.8.8 | v1.8.8 | Unified Jobs Pane and Destructive Task Queue — complete on dev |
 | V2.8.9 | v1.8.9 | Toolbar Icon and Transfer Reliability Polish — complete on dev |
-| V2.9 release rollup | v1.9.0 | Stability rollup after v1.8.0 — release candidate |
+| V2.9 release rollup | v1.9.0 | Stability rollup after v1.8.0 — shipped |
+| V2.10 planning | v1.9.1 | Hard-feature design and version sequencing — planning branch |
+| V2.10 M1 | v1.9.2 | Multi-lane Jobs scheduler and path locks — complete on feature branch |
+| V2.10 M2 | v1.9.3 | Remote Copy To / Move To jobs — planned |
+| V2.10 M3 | v1.9.4 | Grep/Search Contents and read-only text viewer — planned |
+| V2.10 M4 | v1.9.5 | Expandable list rows / outline mode — planned |
+| V2.10 M5 | v1.9.6 | View-mode foundation and icon view — planned |
+| V2.10 M6 | v1.9.7 | Column view — planned |
+| V2.10 M7 | v1.9.8 | Gallery view — planned |
 
 ## Latest Completed Phase
 
@@ -244,6 +260,23 @@ V2.9 is a release packaging target rather than a new feature milestone. It publi
 
 See **`docs/dev/V2.9_RELEASE_PLAN.md`**.
 
+### V2.10 planning / v1.9.x — Hard-Feature Track
+
+V2.10 is the development track after the stable `v1.9.0` release. Development builds use `v1.9.x` versions and should record user-visible changes carefully so the next public release can be cut as either `v1.10.0` or `v2.0.0` after hands-on stability testing.
+
+Recommended order:
+
+1. **v1.9.1:** planning branch only. Bump development version, document the sequence, and avoid runtime code changes.
+2. **v1.9.2:** multi-lane Jobs scheduler. This is the dependency for safer long-running remote copy/move and content search work.
+3. **v1.9.3:** remote `Copy To...` and `Move To...`. These are core file-management actions and should live in the remote selected-item top-level context menu near Rename/Delete, not inside `File Operation`.
+4. **v1.9.4:** `Search Contents...` and `View Text...` for grep/less-style workflows. These are expert/inspection tools and should live under `File Operation`.
+5. **v1.9.5:** expandable list rows with a Preferences toggle. This extends the current list view before adding separate view modes.
+6. **v1.9.6:** view-mode foundation plus icon view. Local and remote panes can choose view modes independently.
+7. **v1.9.7:** column view, after the shared view-mode state and pane-independent rendering are proven.
+8. **v1.9.8:** gallery view, after preview caching and large-file guardrails are reused safely.
+
+See **`docs/dev/V2.10_HARD_FEATURES_PLAN.md`** and the current **`CHANGELOG.md`** unreleased section.
+
 ### V2.8.9 / v1.8.9 — Toolbar Icon and Transfer Reliability Polish
 
 V2.8.9 keeps the V12 layout stable and tightens a few hands-on rough edges:
@@ -310,9 +343,9 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 - **Unrestricted binary/document remote edit auto-sync**. Remote **Open** can use default macOS apps through app-managed local-copy sessions, but broad binary/document workflows still require cautious manual verification because app save behavior varies.
 - **Separate full Remote Quick Look**. The previous read-only remote preview / Quick Look path is superseded on dev by writable remote Open/Edit local-copy sessions. A true non-editing Quick Look would need a new explicit future design.
-- **Unrestricted parallel jobs**. Future parallelism should use the V2.0.x multi-lane design: serial transfer lane, configurable gzip lane, serial delete lane, and path locks.
+- **Unrestricted parallel jobs**. v1.9.2 implements bounded multi-lane Jobs for transfer/delete/compression work; future lanes must keep the same lane-specific concurrency and path-lock model, not unrestricted global parallel execution.
 - **Remote gzip percentage progress**. Do not implement approximate percentage progress from sampling or `.gz` output growth; see `docs/dev/remote-gzip-progress-decision.md`.
-- **Remote/content `grep` and `less` tools**. These are planned as future explicit content-inspection tools, not part of v1.9.0; see `docs/dev/V2.0.x_REMOTE_CONTENT_TOOLS_PLAN.md`.
+- **Remote/content `grep` and `less` tools**. These are planned in the V2.10 hard-feature track; see `docs/dev/V2.10_HARD_FEATURES_PLAN.md`.
 - **Real Column View**. V2.7 defers it deliberately; see `docs/dev/column-view-decision.md`.
 - **Indexed/full-text search** (V1.7 only filters current listings and suggests already-known paths)
 - **Full ACL editor / remote shell file-manager mode** (V1.8 ships curated remote operations only)
@@ -323,4 +356,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.9 / v1.9.0 is the current release target on `dev`; publish status still depends on tagging, pushing, and creating the GitHub Release. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.10 / v1.9.x is the current development track. `v1.9.x` builds are development checkpoints; the next public release should be cut as `v1.10.0` if the track is mostly evolutionary, or `v2.0.0` if multi-lane Jobs, remote copy/move, content tools, and multiple view modes all ship and survive hands-on use.

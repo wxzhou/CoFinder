@@ -259,7 +259,8 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     defaultConflictPolicy: "prompt",
     queueAutoHideDelayMs: AUTO_HIDE_DELAY_MS,
     preserveTimestamps: true,
-    deleteSourceAfterGzip: false
+    deleteSourceAfterGzip: false,
+    compressionConcurrency: 2
   },
   remote: {
     autoRefreshEnabled: false,
@@ -2773,10 +2774,12 @@ export function App(props: AppProps = {}) {
   async function copySelection(tabId: string, pane: "local" | "remote", mode: "name" | "path"): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
+    const localEntriesForCopy = tab.id === activeTab.id ? sortedEntries : tab.localPane.entries;
+    const remoteEntriesForCopy = tab.id === activeTab.id ? sortedRemoteEntries : tab.remotePane.entries;
     const text =
       pane === "local"
-        ? stringifySelection(tab.localPane.selectedFullPaths, tab.localPane.entries, mode)
-        : stringifySelection(tab.remotePane.selectedFullPaths, tab.remotePane.entries, mode);
+        ? stringifySelection(tab.localPane.selectedFullPaths, localEntriesForCopy, mode)
+        : stringifySelection(tab.remotePane.selectedFullPaths, remoteEntriesForCopy, mode);
     if (!text) return;
     const result = await window.cofinder.system.copyText({ text });
     if (!result.ok) setQueueError(result.error.message);
@@ -5699,6 +5702,27 @@ export function App(props: AppProps = {}) {
                             draft: {
                               ...p.draft,
                               transfer: { ...p.draft.transfer, queueAutoHideDelayMs: Math.max(0, Math.min(60, Number(e.target.value))) * 1000 }
+                            }
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Compression jobs at once
+                      <input
+                        type="number"
+                        min={1}
+                        max={4}
+                        value={preferences.draft.transfer.compressionConcurrency}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: {
+                              ...p.draft,
+                              transfer: {
+                                ...p.draft.transfer,
+                                compressionConcurrency: Math.max(1, Math.min(4, Math.round(Number(e.target.value) || 1)))
+                              }
                             }
                           }))
                         }
