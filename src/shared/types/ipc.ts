@@ -216,6 +216,7 @@ export type AppSettings = {
     queueAutoHideDelayMs: number;
     preserveTimestamps: boolean;
     deleteSourceAfterGzip: boolean;
+    compressionConcurrency: number;
   };
   remote: {
     autoRefreshEnabled: boolean;

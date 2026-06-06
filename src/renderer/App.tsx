@@ -259,7 +259,8 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     defaultConflictPolicy: "prompt",
     queueAutoHideDelayMs: AUTO_HIDE_DELAY_MS,
     preserveTimestamps: true,
-    deleteSourceAfterGzip: false
+    deleteSourceAfterGzip: false,
+    compressionConcurrency: 2
   },
   remote: {
     autoRefreshEnabled: false,
@@ -5699,6 +5700,27 @@ export function App(props: AppProps = {}) {
                             draft: {
                               ...p.draft,
                               transfer: { ...p.draft.transfer, queueAutoHideDelayMs: Math.max(0, Math.min(60, Number(e.target.value))) * 1000 }
+                            }
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Compression jobs at once
+                      <input
+                        type="number"
+                        min={1}
+                        max={4}
+                        value={preferences.draft.transfer.compressionConcurrency}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: {
+                              ...p.draft,
+                              transfer: {
+                                ...p.draft.transfer,
+                                compressionConcurrency: Math.max(1, Math.min(4, Math.round(Number(e.target.value) || 1)))
+                              }
                             }
                           }))
                         }

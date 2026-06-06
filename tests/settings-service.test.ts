@@ -24,7 +24,7 @@ describe("SettingsService", () => {
         restoreLocalPathOnConnect: true,
         restoreRemotePathOnConnect: true
       },
-      transfer: { defaultConflictPolicy: "rename", queueAutoHideDelayMs: 2500 },
+      transfer: { defaultConflictPolicy: "rename", queueAutoHideDelayMs: 2500, compressionConcurrency: 3 },
       remote: { autoRefreshEnabled: true, autoRefreshIntervalSeconds: 30, autoReconnectAfterSleep: false },
       appearance: { rowDensity: "compact", defaultPaneRatio: 0.7, sidebarWidth: 320 }
     });
@@ -36,6 +36,7 @@ describe("SettingsService", () => {
     expect(saved.general.restoreRemotePathOnConnect).toBe(true);
     expect(saved.transfer.defaultConflictPolicy).toBe("rename");
     expect(saved.transfer.queueAutoHideDelayMs).toBe(2500);
+    expect(saved.transfer.compressionConcurrency).toBe(3);
     expect(saved.remote.autoRefreshEnabled).toBe(true);
     expect(saved.remote.autoRefreshIntervalSeconds).toBe(30);
     expect(saved.remote.autoReconnectAfterSleep).toBe(false);
@@ -54,7 +55,7 @@ describe("SettingsService", () => {
         restoreLocalPathOnConnect: "yes",
         restoreRemotePathOnConnect: "yes"
       },
-      transfer: { defaultConflictPolicy: "cancel", queueAutoHideDelayMs: -1 },
+      transfer: { defaultConflictPolicy: "cancel", queueAutoHideDelayMs: -1, compressionConcurrency: 99 },
       remote: { autoRefreshEnabled: "yes", autoRefreshIntervalSeconds: 1, autoReconnectAfterSleep: "no" },
       appearance: { rowDensity: "huge", defaultPaneRatio: 1, sidebarWidth: 999 }
     });
@@ -68,6 +69,7 @@ describe("SettingsService", () => {
     expect(settings.general.restoreRemotePathOnConnect).toBe(false);
     expect(settings.transfer.defaultConflictPolicy).toBe("prompt");
     expect(settings.transfer.queueAutoHideDelayMs).toBe(0);
+    expect(settings.transfer.compressionConcurrency).toBe(4);
     expect(settings.remote.autoRefreshEnabled).toBe(false);
     expect(settings.remote.autoRefreshIntervalSeconds).toBe(5);
     expect(settings.remote.autoReconnectAfterSleep).toBe(true);

@@ -40,7 +40,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.8.9 | v1.8.9 | Complete on dev |
 | V2.9 release rollup | v1.9.0 | Shipped |
 | V2.10 planning | v1.9.1 | Planning branch |
-| V2.10 M1 | v1.9.2 | Planned |
+| V2.10 M1 | v1.9.2 | Complete on feature branch |
 | V2.10 M2 | v1.9.3 | Planned |
 | V2.10 M3 | v1.9.4 | Planned |
 | V2.10 M4 | v1.9.5 | Planned |
@@ -95,7 +95,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.8.9 | v1.8.9 | Toolbar Icon and Transfer Reliability Polish — complete on dev |
 | V2.9 release rollup | v1.9.0 | Stability rollup after v1.8.0 — shipped |
 | V2.10 planning | v1.9.1 | Hard-feature design and version sequencing — planning branch |
-| V2.10 M1 | v1.9.2 | Multi-lane Jobs scheduler and path locks — planned |
+| V2.10 M1 | v1.9.2 | Multi-lane Jobs scheduler and path locks — complete on feature branch |
 | V2.10 M2 | v1.9.3 | Remote Copy To / Move To jobs — planned |
 | V2.10 M3 | v1.9.4 | Grep/Search Contents and read-only text viewer — planned |
 | V2.10 M4 | v1.9.5 | Expandable list rows / outline mode — planned |
@@ -343,7 +343,7 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 - **Unrestricted binary/document remote edit auto-sync**. Remote **Open** can use default macOS apps through app-managed local-copy sessions, but broad binary/document workflows still require cautious manual verification because app save behavior varies.
 - **Separate full Remote Quick Look**. The previous read-only remote preview / Quick Look path is superseded on dev by writable remote Open/Edit local-copy sessions. A true non-editing Quick Look would need a new explicit future design.
-- **Unrestricted parallel jobs**. Future parallelism should use the V2.10 multi-lane design: serial transfer lane, configurable compression/content lanes, serial delete/mutation lanes, and path locks.
+- **Unrestricted parallel jobs**. v1.9.2 implements bounded multi-lane Jobs for transfer/delete/compression work; future lanes must keep the same lane-specific concurrency and path-lock model, not unrestricted global parallel execution.
 - **Remote gzip percentage progress**. Do not implement approximate percentage progress from sampling or `.gz` output growth; see `docs/dev/remote-gzip-progress-decision.md`.
 - **Remote/content `grep` and `less` tools**. These are planned in the V2.10 hard-feature track; see `docs/dev/V2.10_HARD_FEATURES_PLAN.md`.
 - **Real Column View**. V2.7 defers it deliberately; see `docs/dev/column-view-decision.md`.

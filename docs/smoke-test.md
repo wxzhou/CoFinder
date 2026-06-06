@@ -88,6 +88,14 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Check for updates:** click Check for Updates and confirm it reports the manual GitHub Releases policy rather than attempting a silent install.
 - **Packaged smoke:** after `npm run dist`, launch the packaged app and repeat Copy Diagnostics plus one local browse check.
 
+## V2.10 M1 / v1.9.2 multi-lane Jobs
+
+- **Transfer serial lane:** enqueue two large uploads or downloads. Confirm only one transfer runs at a time and the second waits pending until the first finishes or stops.
+- **Compression lane concurrency:** set Preferences -> Jobs -> Compression jobs at once to `2`, enqueue two independent Compress/Decompress/Generate MD5 jobs, and confirm both can run together in Jobs.
+- **Cross-lane concurrency:** start one long upload/download and one independent compression-style job. Confirm the compression job can run while the transfer lane remains busy.
+- **Path lock:** start deleting a disposable folder, then enqueue compression or MD5 on a child path before delete finishes. Confirm the child job does not start until the delete job releases the path lock.
+- **Retry failed:** create one failed transfer and one failed compression job, use Retry failed, and confirm each returns to its own lane while honoring current concurrency.
+
 ## V2.0 stable personal release
 
 - **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.

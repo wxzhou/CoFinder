@@ -119,6 +119,11 @@ export function registerIpcHandlers(): void {
       win.webContents.send(IPC_CHANNELS.transfer.onUpdate, payload);
     }
   });
+  void settingsService.get().then((settings) => {
+    transferQueueService.configure({ compressionConcurrency: settings.transfer.compressionConcurrency });
+  }).catch((error) => {
+    console.error("[SettingsService] Failed to apply transfer queue settings.", error);
+  });
 
   registerChannel(IPC_CHANNELS.local.listDirectory, async (_event, request: unknown) => {
     try {
@@ -811,7 +816,9 @@ export function registerIpcHandlers(): void {
   });
   registerChannel(IPC_CHANNELS.settings.set, async (_event, request: unknown) => {
     try {
-      return ok(await settingsService.set(request));
+      const settings = await settingsService.set(request);
+      transferQueueService.configure({ compressionConcurrency: settings.transfer.compressionConcurrency });
+      return ok(settings);
     } catch (error) {
       return toIpcError(error, "SETTINGS_SAVE_FAILED", "Failed to save settings.");
     }

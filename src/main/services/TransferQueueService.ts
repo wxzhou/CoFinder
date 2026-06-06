@@ -14,10 +14,20 @@ type TransferServiceError = Error & { code: TransferServiceErrorCode; detail?: s
 type CommandCheckResult = { ok: true } | { ok: false; message: string; detail?: string };
 type RunCommand = (command: string, args: string[], notFoundMessage: string) => Promise<CommandCheckResult>;
 type SpawnProcess = (command: string, args: string[]) => ChildProcess;
+type JobLane = "transfer" | "compression" | "delete" | "remoteMutation" | "content";
+type PathLockMode = "read" | "write" | "delete";
+type PathLock = {
+  pane: "local" | "remote";
+  connectionId?: string;
+  path: string;
+  mode: PathLockMode;
+};
 
 type RunningContext = {
   taskId: string;
-  child: ChildProcess;
+  lane: JobLane;
+  locks: PathLock[];
+  child?: ChildProcess;
 };
 
 type TransferQueueDeps = {
@@ -37,14 +47,16 @@ type TransferQueueDeps = {
   remoteMd5: (connectionId: string, path: string) => Promise<string>;
   remoteUploadFallback: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
   remoteDownloadFallback: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
+  compressionConcurrency: number;
 };
 
 export class TransferQueueService {
   private tasks: TransferTask[] = [];
-  private running: RunningContext | null = null;
+  private running = new Map<string, RunningContext>();
   private pumpInFlight = false;
   private listeners = new Set<(payload: TransferUpdatePayload) => void>();
   private readonly deps: TransferQueueDeps;
+  private compressionConcurrency: number;
 
   constructor(deps?: Partial<TransferQueueDeps>) {
     this.deps = {
@@ -63,8 +75,17 @@ export class TransferQueueService {
       localMd5: deps?.localMd5 ?? defaultUnavailableLocalMd5,
       remoteMd5: deps?.remoteMd5 ?? defaultUnavailableRemoteMd5,
       remoteUploadFallback: deps?.remoteUploadFallback ?? defaultUnavailableRemoteUploadFallback,
-      remoteDownloadFallback: deps?.remoteDownloadFallback ?? defaultUnavailableRemoteDownloadFallback
+      remoteDownloadFallback: deps?.remoteDownloadFallback ?? defaultUnavailableRemoteDownloadFallback,
+      compressionConcurrency: clampCompressionConcurrency(deps?.compressionConcurrency)
     };
+    this.compressionConcurrency = this.deps.compressionConcurrency;
+  }
+
+  configure(options: { compressionConcurrency?: number }): void {
+    const nextCompressionConcurrency = clampCompressionConcurrency(options.compressionConcurrency ?? this.compressionConcurrency);
+    if (nextCompressionConcurrency === this.compressionConcurrency) return;
+    this.compressionConcurrency = nextCompressionConcurrency;
+    void this.pump();
   }
 
   onUpdate(listener: (payload: TransferUpdatePayload) => void): () => void {
@@ -306,10 +327,14 @@ export class TransferQueueService {
   async stop(taskId: string): Promise<{ stopped: true }> {
     const task = this.tasks.find((item) => item.id === taskId);
     if (!task) throw transferError("TRANSFER_NOT_FOUND", "Transfer task not found.");
-    if (!this.running || this.running.taskId !== taskId || task.status !== "running") {
+    const context = this.running.get(taskId);
+    if (!context || task.status !== "running") {
       throw transferError("TRANSFER_NOT_RUNNING", "Task is not running.");
     }
-    this.running.child.kill("SIGTERM");
+    if (!context.child) {
+      throw transferError("TRANSFER_INVALID_REQUEST", "This running job cannot be stopped.");
+    }
+    context.child.kill("SIGTERM");
     return { stopped: true };
   }
 
@@ -368,16 +393,18 @@ export class TransferQueueService {
   }
 
   async shutdown(): Promise<void> {
-    if (!this.running) return;
-    const runningTask = this.tasks.find((task) => task.id === this.running?.taskId);
-    if (runningTask && runningTask.status === "running") {
-      runningTask.status = "stopped";
-      runningTask.finishedAt = this.deps.now();
-      runningTask.error = "Transfer stopped because application is quitting.";
-      this.appendLog(runningTask, "Stopping transfer due to application shutdown.");
+    if (this.running.size === 0) return;
+    for (const context of this.running.values()) {
+      const runningTask = this.tasks.find((task) => task.id === context.taskId);
+      if (runningTask && runningTask.status === "running") {
+        runningTask.status = "stopped";
+        runningTask.finishedAt = this.deps.now();
+        runningTask.error = "Job stopped because application is quitting.";
+        this.appendLog(runningTask, "Stopping job due to application shutdown.");
+      }
+      context.child?.kill("SIGTERM");
     }
-    this.running.child.kill("SIGTERM");
-    this.running = null;
+    this.running.clear();
     this.emit();
   }
 
@@ -392,19 +419,34 @@ export class TransferQueueService {
   }
 
   private async pump(): Promise<void> {
-    if (this.running || this.pumpInFlight) return;
-    const next = this.tasks.find((task) => task.status === "pending");
-    if (!next) return;
+    if (this.pumpInFlight) return;
     this.pumpInFlight = true;
     try {
-      await this.runTask(next);
+      let started = false;
+      do {
+        started = false;
+        for (const task of this.tasks) {
+          if (task.status !== "pending") continue;
+          const lane = laneForTask(task);
+          if (this.runningCountForLane(lane) >= this.concurrencyForLane(lane)) continue;
+          const locks = locksForTask(task);
+          if (this.hasRunningPathConflict(locks)) continue;
+          const context: RunningContext = { taskId: task.id, lane, locks };
+          this.running.set(task.id, context);
+          void this.runTask(task, context).finally(() => {
+            this.running.delete(task.id);
+            this.emit();
+            void this.pump();
+          });
+          started = true;
+        }
+      } while (started);
     } finally {
       this.pumpInFlight = false;
     }
-    void this.pump();
   }
 
-  private async runTask(task: TransferTask): Promise<void> {
+  private async runTask(task: TransferTask, context: RunningContext): Promise<void> {
     task.status = "running";
     task.startedAt = this.deps.now();
     task.error = undefined;
@@ -427,7 +469,7 @@ export class TransferQueueService {
 
     // Directory transfer rule: source path does not get trailing slash, so rsync keeps the directory itself.
     const child = this.deps.spawnProcess("rsync", args);
-    this.running = { taskId: task.id, child };
+    context.child = child;
 
     await new Promise<void>((resolve) => {
       child.stdout?.on("data", (chunk: Buffer) => {
@@ -450,7 +492,6 @@ export class TransferQueueService {
           : "Failed to start rsync process.";
         task.errorCode = classifyTransferFailure(task.error);
         this.appendLog(task, task.error);
-        this.running = null;
         this.emit();
         resolve();
       });
@@ -472,12 +513,10 @@ export class TransferQueueService {
           const recent = task.rawLog.slice(-20).join("\n");
           const category = classifyTransferFailure(recent);
           if (task.kind === "upload" && task.connectionId && shouldFallbackToSftpTransfer(code ?? -1, category, recent)) {
-            this.running = null;
             void this.runSftpUploadFallback(task, recent).then(resolve);
             return;
           }
           if (task.kind === "download" && task.connectionId && shouldFallbackToSftpTransfer(code ?? -1, category, recent)) {
-            this.running = null;
             void this.runSftpDownloadFallback(task, recent).then(resolve);
             return;
           }
@@ -487,7 +526,6 @@ export class TransferQueueService {
           task.error = humanTransferError(task.errorCode, code ?? -1);
           this.appendLog(task, task.error);
         }
-        this.running = null;
         this.emit();
         resolve();
       });
@@ -501,6 +539,7 @@ export class TransferQueueService {
     this.emit();
     try {
       await this.deps.remoteUploadFallback(requiredConnectionId(task), task.localPath, task.destination);
+      if (task.status !== "running") return;
       task.status = "success";
       task.error = undefined;
       task.errorCode = undefined;
@@ -511,6 +550,7 @@ export class TransferQueueService {
       this.appendLog(task, "SFTP upload completed successfully.");
       this.emit();
     } catch (error) {
+      if (task.status !== "running") return;
       task.status = "failed";
       this.failRunningTaskItem(task);
       task.finishedAt = this.deps.now();
@@ -528,6 +568,7 @@ export class TransferQueueService {
     this.emit();
     try {
       await this.deps.remoteDownloadFallback(requiredConnectionId(task), task.remotePath, task.localPath);
+      if (task.status !== "running") return;
       task.status = "success";
       task.error = undefined;
       task.errorCode = undefined;
@@ -538,6 +579,7 @@ export class TransferQueueService {
       this.appendLog(task, "SFTP download completed successfully.");
       this.emit();
     } catch (error) {
+      if (task.status !== "running") return;
       task.status = "failed";
       this.failRunningTaskItem(task);
       task.finishedAt = this.deps.now();
@@ -558,6 +600,7 @@ export class TransferQueueService {
         const deleted = task.pane === "remote"
           ? await this.deps.remoteDelete(requiredConnectionId(task), paths)
           : await this.deps.localDelete(paths);
+        if (task.status !== "running") return;
         task.status = "success";
         task.finishedAt = this.deps.now();
         task.progressText = `Deleted ${deleted} ${deleted === 1 ? "item" : "items"}.`;
@@ -582,6 +625,7 @@ export class TransferQueueService {
         : task.pane === "remote"
           ? await this.deps.remoteGzip(requiredConnectionId(task), task.source, { deleteSourceAfterSuccess: !!task.deleteSourceAfterSuccess })
           : await this.deps.localGzip(task.source, { deleteSourceAfterSuccess: !!task.deleteSourceAfterSuccess });
+      if (task.status !== "running") return;
       task.status = "success";
       task.destination = output;
       task.destinationDisplay = output;
@@ -590,6 +634,7 @@ export class TransferQueueService {
       this.appendLog(task, `${isMd5 ? "MD5" : isDecompress ? "Decompress" : "Compress"} completed: ${output}`);
       this.emit();
     } catch (error) {
+      if (task.status !== "running") return;
       task.status = "failed";
       task.finishedAt = this.deps.now();
       task.error = error instanceof Error ? error.message : "Job failed.";
@@ -597,6 +642,31 @@ export class TransferQueueService {
       this.appendLog(task, redactSensitivePlaintext(task.error));
       this.emit();
     }
+  }
+
+  private runningCountForLane(lane: JobLane): number {
+    let count = 0;
+    for (const context of this.running.values()) {
+      if (context.lane === lane) count += 1;
+    }
+    return count;
+  }
+
+  private concurrencyForLane(lane: JobLane): number {
+    if (lane === "compression") return this.compressionConcurrency;
+    return 1;
+  }
+
+  private hasRunningPathConflict(candidateLocks: PathLock[]): boolean {
+    if (candidateLocks.length === 0) return false;
+    for (const context of this.running.values()) {
+      for (const existing of context.locks) {
+        for (const candidate of candidateLocks) {
+          if (locksConflict(existing, candidate)) return true;
+        }
+      }
+    }
+    return false;
   }
 
   private consumeProgressLine(task: TransferTask, line: string): void {
@@ -693,6 +763,82 @@ export class TransferQueueService {
     if (conflict) throw transferError("TRANSFER_INVALID_REQUEST", message);
   }
 
+}
+
+function laneForTask(task: TransferTask): JobLane {
+  if (task.kind === "upload" || task.kind === "download") return "transfer";
+  if (task.kind === "delete") return "delete";
+  if (task.kind === "gzip" || task.kind === "decompress" || task.kind === "md5") return "compression";
+  return "remoteMutation";
+}
+
+function locksForTask(task: TransferTask): PathLock[] {
+  if (task.kind === "upload") {
+    return [
+      makePathLock("local", undefined, task.localPath, "read"),
+      makePathLock("remote", task.connectionId, task.destination, "write")
+    ].filter(isPathLock);
+  }
+  if (task.kind === "download") {
+    return [
+      makePathLock("remote", task.connectionId, task.remotePath, "read"),
+      makePathLock("local", undefined, task.localPath, "write")
+    ].filter(isPathLock);
+  }
+  if (task.kind === "delete") {
+    return (task.operationPaths?.length ? task.operationPaths : [task.source])
+      .map((item) => makePathLock(task.pane ?? "local", task.connectionId, item, "delete"))
+      .filter(isPathLock);
+  }
+  if (task.kind === "gzip") {
+    return [
+      makePathLock(task.pane ?? "local", task.connectionId, task.source, "write"),
+      makePathLock(task.pane ?? "local", task.connectionId, task.destination || `${task.source}.gz`, "write")
+    ].filter(isPathLock);
+  }
+  if (task.kind === "decompress" || task.kind === "md5") {
+    return [
+      makePathLock(task.pane ?? "local", task.connectionId, task.source, "read"),
+      makePathLock(task.pane ?? "local", task.connectionId, task.destination, "write")
+    ].filter(isPathLock);
+  }
+  return [];
+}
+
+function makePathLock(pane: "local" | "remote", connectionId: string | undefined, rawPath: string, mode: PathLockMode): PathLock | null {
+  const normalized = normalizeLockPath(pane, rawPath);
+  if (!normalized) return null;
+  return { pane, connectionId: pane === "remote" ? connectionId : undefined, path: normalized, mode };
+}
+
+function isPathLock(value: PathLock | null): value is PathLock {
+  return value !== null;
+}
+
+function locksConflict(a: PathLock, b: PathLock): boolean {
+  if (a.pane !== b.pane) return false;
+  if (a.pane === "remote" && (a.connectionId ?? "") !== (b.connectionId ?? "")) return false;
+  if (!pathsOverlap(a.path, b.path)) return false;
+  if (a.mode === "read" && b.mode === "read") return false;
+  if (a.path === b.path) return true;
+  return a.mode === "delete" || b.mode === "delete" || a.mode === "write" || b.mode === "write";
+}
+
+function pathsOverlap(a: string, b: string): boolean {
+  return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`);
+}
+
+function normalizeLockPath(pane: "local" | "remote", value: string): string {
+  const trimmed = (value ?? "").trim();
+  if (!trimmed) return "";
+  const normalized = pane === "remote" ? posixPath.normalize(trimmed) : path.resolve(trimmed);
+  return normalized.replace(/\/+$/, "") || "/";
+}
+
+function clampCompressionConcurrency(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 2;
+  return Math.max(1, Math.min(4, Math.round(n)));
 }
 
 function classifyTransferFailure(text: string): TransferErrorCategory {
