@@ -268,7 +268,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Preferences tabs:** open Preferences and confirm General, Navigation, Jobs, Remote, Appearance, Shortcuts, and Diagnostics tabs switch without losing unsaved draft changes. Confirm Shortcuts is read-only reference text and Diagnostics actions still work.
 - **Auto reconnect:** enable Remote -> Auto-reconnect after sleep or network resume, connect to a disposable remote root, sleep/wake or temporarily drop network, then trigger Refresh. Confirm CoFinder attempts one reconnect before showing a reconnect failure.
 - **Paired path restore:** enable Navigation -> Restore local path on connect and Restore remote path on connect. Connect a saved profile, navigate both panes, switch away/back or relaunch, reconnect the same profile, and confirm the remembered profile-specific local/remote pair is restored. Repeat with a local selection or active job and confirm local restore is skipped rather than clearing context.
-- **Transfer reliability carry-forward:** repeat the V2.8.8 SFTP fallback and large remote delete checks before packaging a v1.8.9 build.
+- **Transfer reliability carry-forward:** repeat the V2.8.8 SFTP fallback and large remote delete checks before packaging a v1.9.0 build.
 
 ## Tabs Smoke (M3)
 

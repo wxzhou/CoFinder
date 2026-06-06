@@ -2,7 +2,7 @@
 
 CoFinder is a macOS-only Electron file manager inspired by WinSCP. It provides a Finder-like dual-pane interface for local and SFTP remote browsing, rsync-based transfers, remote text editing, and personal daily file-management workflows.
 
-Current development version: **v1.8.9** (`package.json` version `1.8.9`).
+Current release version: **v1.9.0** (`package.json` version `1.9.0`).
 
 ## Current Capabilities
 
@@ -25,7 +25,7 @@ Remote editing uses app-managed local copies. Text-editor edits are optimized fo
 The project uses two names:
 
 - **Product milestones** (`V2.8`, `V2.8.1`, etc.) describe planning and development scope.
-- **Release versions** (`v1.8.9`, etc.) are semver versions used by `package.json`, tags, GitHub Releases, and build artifacts.
+- **Release versions** (`v1.9.0`, etc.) are semver versions used by `package.json`, tags, GitHub Releases, and build artifacts.
 
 The full history lives in [CHANGELOG.md](CHANGELOG.md). The high-level roadmap lives in [docs/roadmap.md](docs/roadmap.md).
 
@@ -69,7 +69,7 @@ npm run package   # unpacked macOS app bundle
 npm run dist      # dmg + zip
 ```
 
-Build artifacts are generated under `release/`. For v1.8.9, expected artifact names are `CoFinder-1.8.9-arm64.dmg` and `CoFinder-1.8.9-arm64.zip`.
+Build artifacts are generated under `release/`. For v1.9.0, expected artifact names are `CoFinder-1.9.0-arm64.dmg` and `CoFinder-1.9.0-arm64.zip`.
 
 Local builds may be unsigned. Public distribution should state signing/notarization status honestly.
 

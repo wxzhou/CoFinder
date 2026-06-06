@@ -4,9 +4,15 @@
 
 - This file is organized by **semver release version** once a version is **tagged/shipped**.
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
-- **Latest completed development release: v1.8.9.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
+- **Latest release: v1.9.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
 ## Unreleased
+
+- None.
+
+## v1.9.0 — Stability rollup after v1.8.0
+
+This release publishes the stabilization and polish work completed after `v1.8.0`, including the V2.8.1-V2.8.9 patch line and the final file-operation fixes.
 
 - Remote `Open` now uses the same writable local-copy session model as remote `Edit`, opening files with the default macOS app and uploading saved changes back after conflict checks.
 - Remote `Edit` continues to use the configured text editor, but can now force-open binary-looking files after explicit confirmation.
@@ -18,6 +24,8 @@
 - Added local and remote `Generate MD5`, creating a non-overwriting `<filename>.md5` sidecar as a visible Jobs pane task.
 - Removed the redundant remote context-menu `Quick Look` entry; remote double-click, Space, and context-menu `Open` now all use editable remote local-copy semantics.
 - Added a fixed V12 titlebar sidebar toggle beside the traffic lights plus a `Cmd+Option+B` shortcut.
+- Fixed Change Timestamp dialog layout so its Year/Month/Day/Hour/Minute/Second fields stay inside the modal.
+- Includes the v1.8.1-v1.8.9 development patch line documented below.
 
 ## v1.8.9 — Product milestone V2.8.9
 

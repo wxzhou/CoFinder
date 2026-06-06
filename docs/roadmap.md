@@ -38,6 +38,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.8.7 | v1.8.7 | Complete on dev |
 | V2.8.8 | v1.8.8 | Complete on dev |
 | V2.8.9 | v1.8.9 | Complete on dev |
+| V2.9 release rollup | v1.9.0 | Release candidate |
 
 ## Shipped phases (summary)
 
@@ -84,6 +85,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.8.7 | v1.8.7 | Creation Flow, Remote Refresh, and Transfer Detail Fixes — complete on dev |
 | V2.8.8 | v1.8.8 | Unified Jobs Pane and Destructive Task Queue — complete on dev |
 | V2.8.9 | v1.8.9 | Toolbar Icon and Transfer Reliability Polish — complete on dev |
+| V2.9 release rollup | v1.9.0 | Stability rollup after v1.8.0 — release candidate |
 
 ## Latest Completed Phase
 
@@ -229,6 +231,19 @@ V2.8.8 turns long-running work into explicit jobs:
 
 See **`docs/dev/V2.8.8_PLAN.md`**.
 
+### V2.9 release rollup / v1.9.0 — Stability Rollup
+
+V2.9 is a release packaging target rather than a new feature milestone. It publishes the stable state reached after hands-on use and the V2.8.1-V2.8.9 patch line:
+
+- Pane-scoped toolbar cleanup, tab/file-list polish, sticky headers, and Change Timestamp dialog layout fix.
+- Remote Open/Edit unified writable local-copy sessions and removal of the misleading separate remote Quick Look command.
+- Jobs pane reliability for upload/download/delete/compress/decompress/MD5 operations.
+- SFTP fallback for password-authenticated upload/download when rsync cannot authenticate non-interactively.
+- Server-side remote delete for large/deep folders.
+- Expanded File Operation submenu: Touch, Change Timestamp, Compress/Decompress, Generate MD5, and remote Change Permissions.
+
+See **`docs/dev/V2.9_RELEASE_PLAN.md`**.
+
 ### V2.8.9 / v1.8.9 — Toolbar Icon and Transfer Reliability Polish
 
 V2.8.9 keeps the V12 layout stable and tightens a few hands-on rough edges:
@@ -297,7 +312,7 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 - **Separate full Remote Quick Look**. The previous read-only remote preview / Quick Look path is superseded on dev by writable remote Open/Edit local-copy sessions. A true non-editing Quick Look would need a new explicit future design.
 - **Unrestricted parallel jobs**. Future parallelism should use the V2.0.x multi-lane design: serial transfer lane, configurable gzip lane, serial delete lane, and path locks.
 - **Remote gzip percentage progress**. Do not implement approximate percentage progress from sampling or `.gz` output growth; see `docs/dev/remote-gzip-progress-decision.md`.
-- **Remote/content `grep` and `less` tools**. These are planned as future explicit content-inspection tools, not part of v1.8.9; see `docs/dev/V2.0.x_REMOTE_CONTENT_TOOLS_PLAN.md`.
+- **Remote/content `grep` and `less` tools**. These are planned as future explicit content-inspection tools, not part of v1.9.0; see `docs/dev/V2.0.x_REMOTE_CONTENT_TOOLS_PLAN.md`.
 - **Real Column View**. V2.7 defers it deliberately; see `docs/dev/column-view-decision.md`.
 - **Indexed/full-text search** (V1.7 only filters current listings and suggests already-known paths)
 - **Full ACL editor / remote shell file-manager mode** (V1.8 ships curated remote operations only)
@@ -308,4 +323,4 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
-V2.8.9 / v1.8.9 is the current completed development target on `dev`; publish status still depends on tagging and release artifacts. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
+V2.9 / v1.9.0 is the current release target on `dev`; publish status still depends on tagging, pushing, and creating the GitHub Release. Public distribution notes should still record unsigned/signing status honestly for the provided dmg/zip artifacts.
