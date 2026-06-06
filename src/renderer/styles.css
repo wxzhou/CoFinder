@@ -1813,7 +1813,7 @@ body,
   z-index: 1200;
   min-width: 196px;
   max-height: calc(100vh - 16px);
-  overflow: auto;
+  overflow: visible;
   background: #fff;
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
@@ -1852,6 +1852,35 @@ body,
 
 .context-item:disabled {
   opacity: 0.45;
+}
+
+.context-submenu {
+  position: relative;
+}
+
+.context-submenu-trigger {
+  width: 100%;
+}
+
+.context-submenu-panel {
+  position: absolute;
+  left: calc(100% - 2px);
+  top: -4px;
+  z-index: 1201;
+  min-width: 190px;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 18%, transparent);
+}
+
+.context-submenu:hover > .context-submenu-panel,
+.context-submenu:focus-within > .context-submenu-panel {
+  display: flex;
 }
 
 .name-inline-input {

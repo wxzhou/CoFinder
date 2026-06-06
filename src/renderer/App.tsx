@@ -5761,12 +5761,20 @@ export function App(props: AppProps = {}) {
                     <span className="context-shortcut">Del</span>
                   </button>
                   {contextSingleFile ? (
-                    <button type="button" className="context-item" onClick={async () => {
-                      await compressLocalSelection(contextMenu.tabId);
-                      setContextMenu(null);
-                    }}>
-                      Compress as gzip
-                    </button>
+                    <div className="context-submenu">
+                      <button type="button" className="context-item context-submenu-trigger">
+                        File Operation
+                        <span className="context-shortcut">›</span>
+                      </button>
+                      <div className="context-submenu-panel">
+                        <button type="button" className="context-item" onClick={async () => {
+                          await compressLocalSelection(contextMenu.tabId);
+                          setContextMenu(null);
+                        }}>
+                          Compress as gzip
+                        </button>
+                      </div>
+                    </div>
                   ) : null}
                   <button
                     type="button"
@@ -5894,14 +5902,6 @@ export function App(props: AppProps = {}) {
                     Delete
                     <span className="context-shortcut">Del</span>
                   </button>
-                  {contextSingleFile ? (
-                    <button type="button" className="context-item" onClick={async () => {
-                      await compressRemoteSelection(contextMenu.tabId);
-                      setContextMenu(null);
-                    }}>
-                      Compress as gzip
-                    </button>
-                  ) : null}
                   <button type="button" className="context-item" disabled={!contextTab?.localPane.currentPath} onClick={async () => {
                     await enqueueDownload(contextMenu.tabId);
                     setContextMenu(null);
@@ -5910,12 +5910,28 @@ export function App(props: AppProps = {}) {
                     <span className="context-shortcut">⌘D</span>
                   </button>
                   {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={() => {
-                      openChmodDialog(contextMenu.tabId);
-                      setContextMenu(null);
-                    }}>
-                      Change Permissions
-                    </button>
+                    <div className="context-submenu">
+                      <button type="button" className="context-item context-submenu-trigger">
+                        File Operation
+                        <span className="context-shortcut">›</span>
+                      </button>
+                      <div className="context-submenu-panel">
+                        {contextSingleFile ? (
+                          <button type="button" className="context-item" onClick={async () => {
+                            await compressRemoteSelection(contextMenu.tabId);
+                            setContextMenu(null);
+                          }}>
+                            Compress as gzip
+                          </button>
+                        ) : null}
+                        <button type="button" className="context-item" onClick={() => {
+                          openChmodDialog(contextMenu.tabId);
+                          setContextMenu(null);
+                        }}>
+                          Change Permissions
+                        </button>
+                      </div>
+                    </div>
                   ) : null}
                   {contextSingleFile ? (
                     <button type="button" className="context-item" onClick={async () => {
