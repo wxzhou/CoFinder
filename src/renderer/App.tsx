@@ -6622,8 +6622,8 @@ export function App(props: AppProps = {}) {
           <div className="preferences-dialog" role="dialog" aria-modal="true" aria-label="Preferences">
             <div className="preferences-head">
               <strong>Preferences</strong>
-              <button type="button" className="toolbar-button" onClick={() => setPreferences((p) => ({ ...p, open: false }))}>
-                Close
+              <button type="button" className="site-manager-close nav-btn" aria-label="Close" onClick={() => setPreferences((p) => ({ ...p, open: false }))}>
+                ×
               </button>
             </div>
             {preferences.error ? <div className="error-banner">{preferences.error}</div> : null}
@@ -7005,8 +7005,8 @@ export function App(props: AppProps = {}) {
           <div className="onboarding-dialog" role="dialog" aria-modal="true" aria-labelledby="onboarding-title">
             <div className="preferences-head">
               <strong id="onboarding-title">Before Your First Connection</strong>
-              <button type="button" className="toolbar-button" onClick={() => void dismissOnboarding()}>
-                Close
+              <button type="button" className="site-manager-close nav-btn" aria-label="Close" onClick={() => void dismissOnboarding()}>
+                ×
               </button>
             </div>
             <div className="onboarding-body">
@@ -7576,8 +7576,14 @@ export function App(props: AppProps = {}) {
                 <h3 id="text-search-title">Search Contents</h3>
                 <p>{textSearchDialog.title}</p>
               </div>
-              <button type="button" className="toolbar-button" disabled={textSearchDialog.status === "loading"} onClick={() => setTextSearchDialog(null)}>
-                Close
+              <button
+                type="button"
+                className="site-manager-close nav-btn"
+                aria-label="Close"
+                disabled={textSearchDialog.status === "loading"}
+                onClick={() => setTextSearchDialog(null)}
+              >
+                ×
               </button>
             </div>
             <div className="text-search-form">
@@ -7644,8 +7650,8 @@ export function App(props: AppProps = {}) {
                 <h3 id="text-viewer-title">View Text</h3>
                 <p>{textViewerDialog.title}</p>
               </div>
-              <button type="button" className="toolbar-button" onClick={() => setTextViewerDialog(null)}>
-                Close
+              <button type="button" className="site-manager-close nav-btn" aria-label="Close" onClick={() => setTextViewerDialog(null)}>
+                ×
               </button>
             </div>
             {textViewerDialog.error ? <div className="error-banner">{textViewerDialog.error}</div> : null}

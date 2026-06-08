@@ -14,6 +14,7 @@
 - Kept per-pane view-mode buttons, Filter, Recent, History, and Clear Recent on one toolbar row.
 - Added menu-bar `View -> Local View` and `View -> Remote View` controls for List/Icon/Column/Gallery.
 - Removed the list-disclosure preference; list view now always shows compact folder disclosure controls and preserves child-row indentation when selecting expanded contents.
+- Replaced text `Close` buttons in app dialogs with the same compact close glyph used by Site Manager.
 
 ## v1.9.8 development
 
