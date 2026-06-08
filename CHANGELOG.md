@@ -13,6 +13,7 @@
 - Gallery view keeps a selectable item strip plus a preview pane with large file/folder identity, metadata, and bounded inline text previews.
 - Local and remote Gallery previews read only a small text chunk through existing sniffing/guardrail services; binary-looking or unsupported files show a clear preview-unavailable state instead of forcing a download/open.
 - Gallery view preserves selected-item context menus, inline rename, double-click open/navigate, drag/drop transfer hooks, and pane-independent mode switching.
+- Stabilized Gallery preview state updates after dev smoke caught a React maximum-update-depth loop.
 
 ## v1.9.7 development
 

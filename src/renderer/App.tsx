@@ -225,6 +225,26 @@ type GalleryPreviewPaneState = V12GalleryPreview & {
   path?: string;
 };
 
+function galleryPreviewPaneStateEqual(a: GalleryPreviewPaneState, b: GalleryPreviewPaneState): boolean {
+  return (
+    a.status === b.status &&
+    a.tabId === b.tabId &&
+    a.path === b.path &&
+    a.content === b.content &&
+    a.error === b.error &&
+    a.truncated === b.truncated
+  );
+}
+
+function withGalleryPreviewPaneState(
+  prev: Record<ActivePane, GalleryPreviewPaneState>,
+  pane: ActivePane,
+  next: GalleryPreviewPaneState
+): Record<ActivePane, GalleryPreviewPaneState> {
+  if (galleryPreviewPaneStateEqual(prev[pane], next)) return prev;
+  return { ...prev, [pane]: next };
+}
+
 type ActivePane = "local" | "remote";
 
 type TransferDragPayload = {
@@ -459,7 +479,7 @@ export function App(props: AppProps = {}) {
     local: { status: "idle" },
     remote: { status: "idle" }
   });
-  const v12GalleryPreviewTokenRef = useRef(0);
+  const v12GalleryPreviewTokenRef = useRef<Record<ActivePane, number>>({ local: 0, remote: 0 });
   const v12LocalInspTokenRef = useRef(0);
   const v12RemoteInspTokenRef = useRef(0);
   const v12LocalInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1516,74 +1536,108 @@ export function App(props: AppProps = {}) {
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
   const remoteTotalSize = remoteCurrentViewEntries.reduce((acc, item) => acc + item.size, 0);
 
+  const localGallerySelectedPath =
+    localPane.viewMode === "gallery" && localPane.selectedFullPaths.length === 1 ? localPane.selectedFullPaths[0] : "";
+  const remoteGallerySelectedPath =
+    remotePane.viewMode === "gallery" && remotePane.selectedFullPaths.length === 1 ? remotePane.selectedFullPaths[0] : "";
+  const localGallerySelectedEntry = useMemo(
+    () => (localGallerySelectedPath ? localCurrentViewEntries.find((entry) => entry.fullPath === localGallerySelectedPath) : undefined),
+    [localCurrentViewEntries, localGallerySelectedPath]
+  );
+  const remoteGallerySelectedEntry = useMemo(
+    () => (remoteGallerySelectedPath ? remoteCurrentViewEntries.find((entry) => entry.fullPath === remoteGallerySelectedPath) : undefined),
+    [remoteCurrentViewEntries, remoteGallerySelectedPath]
+  );
+
   useEffect(() => {
-    const localEntry =
-      localPane.viewMode === "gallery" && localPane.selectedFullPaths.length === 1
-        ? localCurrentViewEntries.find((entry) => entry.fullPath === localPane.selectedFullPaths[0])
-        : undefined;
+    const localEntry = localGallerySelectedEntry;
     if (!localEntry) {
-      setV12GalleryPreview((prev) => ({ ...prev, local: { status: "idle" } }));
+      setV12GalleryPreview((prev) => withGalleryPreviewPaneState(prev, "local", { status: "idle" }));
       return;
     }
     if (localEntry.type !== "file") {
-      setV12GalleryPreview((prev) => ({ ...prev, local: { status: "idle", tabId: activeTab.id, path: localEntry.fullPath } }));
+      setV12GalleryPreview((prev) =>
+        withGalleryPreviewPaneState(prev, "local", { status: "idle", tabId: activeTab.id, path: localEntry.fullPath })
+      );
       return;
     }
-    const token = ++v12GalleryPreviewTokenRef.current;
-    setV12GalleryPreview((prev) => ({ ...prev, local: { status: "loading", tabId: activeTab.id, path: localEntry.fullPath } }));
+    const token = ++v12GalleryPreviewTokenRef.current.local;
+    setV12GalleryPreview((prev) =>
+      withGalleryPreviewPaneState(prev, "local", { status: "loading", tabId: activeTab.id, path: localEntry.fullPath })
+    );
     void window.cofinder.local
       .readText({ path: localEntry.fullPath, maxBytes: 16 * 1024 })
       .then((result) => {
-        if (v12GalleryPreviewTokenRef.current !== token) return;
-        setV12GalleryPreview((prev) => ({
-          ...prev,
-          local: result.ok
-            ? {
-                status: "ready",
-                tabId: activeTab.id,
-                path: localEntry.fullPath,
-                content: result.data.content,
-                truncated: result.data.truncated
-              }
-            : { status: "error", tabId: activeTab.id, path: localEntry.fullPath, error: result.error.message }
-        }));
+        if (v12GalleryPreviewTokenRef.current.local !== token) return;
+        setV12GalleryPreview((prev) =>
+          withGalleryPreviewPaneState(
+            prev,
+            "local",
+            result.ok
+              ? {
+                  status: "ready",
+                  tabId: activeTab.id,
+                  path: localEntry.fullPath,
+                  content: result.data.content,
+                  truncated: result.data.truncated
+                }
+              : { status: "error", tabId: activeTab.id, path: localEntry.fullPath, error: result.error.message }
+          )
+        );
       });
-  }, [activeTab.id, localCurrentViewEntries, localPane.selectedFullPaths, localPane.viewMode]);
+  }, [
+    activeTab.id,
+    localGallerySelectedEntry?.fullPath,
+    localGallerySelectedEntry?.mtime,
+    localGallerySelectedEntry?.size,
+    localGallerySelectedEntry?.type
+  ]);
 
   useEffect(() => {
-    const remoteEntry =
-      remotePane.viewMode === "gallery" && remotePane.selectedFullPaths.length === 1
-        ? remoteCurrentViewEntries.find((entry) => entry.fullPath === remotePane.selectedFullPaths[0])
-        : undefined;
+    const remoteEntry = remoteGallerySelectedEntry;
     if (!remoteEntry || !remotePane.connectionId) {
-      setV12GalleryPreview((prev) => ({ ...prev, remote: { status: "idle" } }));
+      setV12GalleryPreview((prev) => withGalleryPreviewPaneState(prev, "remote", { status: "idle" }));
       return;
     }
     if (remoteEntry.type !== "file") {
-      setV12GalleryPreview((prev) => ({ ...prev, remote: { status: "idle", tabId: activeTab.id, path: remoteEntry.fullPath } }));
+      setV12GalleryPreview((prev) =>
+        withGalleryPreviewPaneState(prev, "remote", { status: "idle", tabId: activeTab.id, path: remoteEntry.fullPath })
+      );
       return;
     }
-    const token = ++v12GalleryPreviewTokenRef.current;
+    const token = ++v12GalleryPreviewTokenRef.current.remote;
     const connectionId = remotePane.connectionId;
-    setV12GalleryPreview((prev) => ({ ...prev, remote: { status: "loading", tabId: activeTab.id, path: remoteEntry.fullPath } }));
+    setV12GalleryPreview((prev) =>
+      withGalleryPreviewPaneState(prev, "remote", { status: "loading", tabId: activeTab.id, path: remoteEntry.fullPath })
+    );
     void window.cofinder.remote
       .readText({ connectionId, path: remoteEntry.fullPath, maxBytes: 16 * 1024 })
       .then((result) => {
-        if (v12GalleryPreviewTokenRef.current !== token) return;
-        setV12GalleryPreview((prev) => ({
-          ...prev,
-          remote: result.ok
-            ? {
-                status: "ready",
-                tabId: activeTab.id,
-                path: remoteEntry.fullPath,
-                content: result.data.content,
-                truncated: result.data.truncated
-              }
-            : { status: "error", tabId: activeTab.id, path: remoteEntry.fullPath, error: result.error.message }
-        }));
+        if (v12GalleryPreviewTokenRef.current.remote !== token) return;
+        setV12GalleryPreview((prev) =>
+          withGalleryPreviewPaneState(
+            prev,
+            "remote",
+            result.ok
+              ? {
+                  status: "ready",
+                  tabId: activeTab.id,
+                  path: remoteEntry.fullPath,
+                  content: result.data.content,
+                  truncated: result.data.truncated
+                }
+              : { status: "error", tabId: activeTab.id, path: remoteEntry.fullPath, error: result.error.message }
+          )
+        );
       });
-  }, [activeTab.id, remoteCurrentViewEntries, remotePane.connectionId, remotePane.selectedFullPaths, remotePane.viewMode]);
+  }, [
+    activeTab.id,
+    remoteGallerySelectedEntry?.fullPath,
+    remoteGallerySelectedEntry?.mtime,
+    remoteGallerySelectedEntry?.size,
+    remoteGallerySelectedEntry?.type,
+    remotePane.connectionId
+  ]);
 
   useEffect(() => {
     if (uiShell !== "v12") {
