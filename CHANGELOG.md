@@ -10,6 +10,9 @@
 
 - Starting the post-view-mode optimization and debug checkpoint.
 - Planned fixes include context submenu hover intent, compact toolbar layout, menu-bar view-mode controls, always-on list disclosure controls, modal close-button consistency, list indentation stability, View Text latency review, and Finder-like Gallery layout corrections.
+- Improved `File Operation` submenu hover intent so users can move diagonally toward lower submenu items without losing the submenu.
+- Kept per-pane view-mode buttons, Filter, Recent, History, and Clear Recent on one toolbar row.
+- Added menu-bar `View -> Local View` and `View -> Remote View` controls for List/Icon/Column/Gallery.
 
 ## v1.9.8 development
 

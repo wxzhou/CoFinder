@@ -89,6 +89,15 @@ app.whenReady().then(() => {
 });
 
 function installApplicationMenu(): void {
+  const sendPaneViewMode = (pane: "local" | "remote", viewMode: "list" | "icon" | "column" | "gallery") => {
+    BrowserWindow.getFocusedWindow()?.webContents.send("system:setPaneViewMode", { pane, viewMode });
+  };
+  const viewModeMenu = (pane: "local" | "remote"): Electron.MenuItemConstructorOptions[] => [
+    { label: "List", click: () => sendPaneViewMode(pane, "list") },
+    { label: "Icon", click: () => sendPaneViewMode(pane, "icon") },
+    { label: "Column", click: () => sendPaneViewMode(pane, "column") },
+    { label: "Gallery", click: () => sendPaneViewMode(pane, "gallery") }
+  ];
   const template: Electron.MenuItemConstructorOptions[] = [
     {
       label: app.name,
@@ -110,7 +119,29 @@ function installApplicationMenu(): void {
     },
     { role: "fileMenu" },
     { role: "editMenu" },
-    { role: "viewMenu" },
+    {
+      label: "View",
+      submenu: [
+        {
+          label: "Local View",
+          submenu: viewModeMenu("local")
+        },
+        {
+          label: "Remote View",
+          submenu: viewModeMenu("remote")
+        },
+        { type: "separator" },
+        { role: "reload" },
+        { role: "forceReload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" }
+      ]
+    },
     { role: "windowMenu" }
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));

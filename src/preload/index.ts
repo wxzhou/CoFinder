@@ -123,6 +123,11 @@ const api: IpcApi = {
       ipcRenderer.on("system:openPreferences", wrapped);
       return () => ipcRenderer.off("system:openPreferences", wrapped);
     },
+    onSetPaneViewMode: (handler) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => handler(payload as Parameters<typeof handler>[0]);
+      ipcRenderer.on("system:setPaneViewMode", wrapped);
+      return () => ipcRenderer.off("system:setPaneViewMode", wrapped);
+    },
     onSystemResume: (handler) => {
       const wrapped = () => handler();
       ipcRenderer.on("system:resume", wrapped);

@@ -743,6 +743,16 @@ export function App(props: AppProps = {}) {
 
   useEffect(() => window.cofinder.system.onOpenPreferences(openPreferences), [appSettings]);
 
+  useEffect(
+    () =>
+      window.cofinder.system.onSetPaneViewMode((payload) => {
+        if (payload.pane !== "local" && payload.pane !== "remote") return;
+        if (!["list", "icon", "column", "gallery"].includes(payload.viewMode)) return;
+        void setPaneViewMode(activeTab.id, payload.pane, payload.viewMode);
+      }),
+    [activeTab.id]
+  );
+
   useEffect(() => {
     writeJsonLocalStorage(COFINDER_V12_COLUMNS_KEY, v12FileColumnSettings);
   }, [v12FileColumnSettings]);

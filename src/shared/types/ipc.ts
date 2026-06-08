@@ -473,6 +473,7 @@ export interface IpcApi {
     copyDiagnostics: () => Promise<IpcResponse<{ copied: true; diagnostics: DiagnosticsBundle }>>;
     checkForUpdates: () => Promise<IpcResponse<{ available: false; message: string }>>;
     onOpenPreferences: (handler: () => void) => () => void;
+    onSetPaneViewMode: (handler: (payload: { pane: "local" | "remote"; viewMode: PaneViewMode }) => void) => () => void;
     onSystemResume: (handler: () => void) => () => void;
   };
 }

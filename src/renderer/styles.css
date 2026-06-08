@@ -587,12 +587,22 @@ body,
 }
 
 .cfv12-root .v12m-pane-toolbar-controls {
-  display: grid;
-  grid-template-columns: minmax(112px, 1fr) auto;
+  display: flex;
   gap: 6px;
   align-items: center;
+  flex-wrap: nowrap;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.cfv12-root .v12m-pane-toolbar-controls > .v12m-view-mode-toggle,
+.cfv12-root .v12m-pane-toolbar-controls > .v12m-pane-toolbar-history-group {
+  flex: 0 0 auto;
+}
+
+.cfv12-root .v12m-pane-toolbar-controls > .pane-filter-input {
+  flex: 1 1 150px;
+  min-width: 120px;
 }
 
 .cfv12-root .v12m-icon-select-wrap {
@@ -750,7 +760,7 @@ body,
   }
 
   .cfv12-root .v12m-pane-toolbar-controls {
-    grid-template-columns: minmax(112px, 1fr) 30px 30px 30px;
+    gap: 4px;
   }
 }
 
@@ -2258,6 +2268,16 @@ body,
 
 .context-submenu {
   position: relative;
+}
+
+.context-submenu::after {
+  content: "";
+  position: absolute;
+  left: 100%;
+  top: -14px;
+  width: 42px;
+  height: calc(100% + 112px);
+  pointer-events: auto;
 }
 
 .context-submenu-trigger {
