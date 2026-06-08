@@ -811,6 +811,14 @@
   overflow: hidden;
 }
 
+.cfv12-root .v12m-list .v12m-lrow:nth-child(even):not(.sel-active):not(.sel-inactive) {
+  background: color-mix(in srgb, var(--m-fg, #1f2937) 3.5%, transparent);
+}
+
+.cfv12-root .v12m-list .v12m-lrow:hover:not(.sel-active):not(.sel-inactive) {
+  background: var(--m-row-hover);
+}
+
 .cfv12-root .v12m-lrow.sel-run-start {
   border-top-left-radius: 7px;
   border-top-right-radius: 7px;
@@ -837,7 +845,6 @@
 .cfv12-root .v12m-lrow.sel-active .v12m-lname,
 .cfv12-root .v12m-lrow.sel-inactive .v12m-lname {
   margin-left: 0;
-  padding: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -871,15 +878,15 @@
 }
 
 .cfv12-root .v12m-lname {
-  padding-left: calc((var(--outline-depth, 0) * 18px));
+  padding-left: calc((var(--outline-depth, 0) * 14px));
 }
 
 .cfv12-root .v12m-disclosure,
 .cfv12-root .v12m-disclosure-spacer {
-  width: 16px;
+  width: 10px;
   height: 20px;
-  margin: 0 1px 0 -1px;
-  flex: 0 0 16px;
+  margin: 0 -1px 0 -3px;
+  flex: 0 0 10px;
 }
 
 .cfv12-root .v12m-disclosure {
@@ -898,8 +905,8 @@
 }
 
 .cfv12-root .v12m-disclosure svg {
-  width: 13px;
-  height: 13px;
+  width: 11px;
+  height: 11px;
 }
 
 .cfv12-root .v12m-disclosure.is-loading svg {

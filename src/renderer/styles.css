@@ -1689,6 +1689,14 @@ body,
   box-shadow: none;
 }
 
+.cfv12-root .v12m-list .v12m-lrow:nth-child(even):not(.sel-active):not(.sel-inactive) {
+  background: color-mix(in srgb, var(--m-fg, #1f2937) 3.5%, transparent);
+}
+
+.cfv12-root .v12m-list .v12m-lrow:hover:not(.sel-active):not(.sel-inactive) {
+  background: var(--m-hover);
+}
+
 .cfv12-root .v12m-lrow.sel-active {
   background: var(--m-sel-active-bg);
   color: var(--m-sel-active-fg);
@@ -1738,15 +1746,15 @@ body,
 }
 
 .cfv12-root .v12m-lname {
-  padding-left: calc((var(--outline-depth, 0) * 18px));
+  padding-left: calc((var(--outline-depth, 0) * 14px));
 }
 
 .cfv12-root .v12m-disclosure,
 .cfv12-root .v12m-disclosure-spacer {
-  width: 12px;
+  width: 10px;
   height: 20px;
-  margin: 0 -1px 0 -2px;
-  flex: 0 0 12px;
+  margin: 0 -1px 0 -3px;
+  flex: 0 0 10px;
 }
 
 .cfv12-root .v12m-disclosure {
@@ -1765,8 +1773,8 @@ body,
 }
 
 .cfv12-root .v12m-disclosure svg {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
 }
 
 .cfv12-root .v12m-disclosure.is-loading svg {
