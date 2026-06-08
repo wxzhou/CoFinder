@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent
 } from "react";
 import { TabBar } from "./components/TabBar";
@@ -21,6 +22,7 @@ import {
   V12ProdDevHint,
   V12TbIcon,
   V12VisualFileList,
+  V12VisualIconGrid,
   V12VisualLocationStrip,
   type V12FileColumn,
   type V12FileColumnKey
@@ -54,6 +56,7 @@ import type {
   EnqueueDownloadRequest,
   EnqueueUploadRequest,
   AppSettings,
+  PaneViewMode,
   PathInfo,
   ProfileUpsertPayload,
   RemoteConnectRequest,
@@ -85,6 +88,7 @@ type LocalPaneState = {
   sortKey: SortKey;
   sortDirection: SortDirection;
   history: HistoryState;
+  viewMode: PaneViewMode;
 };
 type RemotePaneState = {
   connectionStatus: RemoteConnectionStatus;
@@ -107,6 +111,7 @@ type RemotePaneState = {
   history: HistoryState;
   error: string;
   isListing: boolean;
+  viewMode: PaneViewMode;
 };
 
 type ContextMenuState = {
@@ -318,7 +323,9 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     defaultPaneRatio: 0.5,
     sidebarVisible: true,
     sidebarWidth: 260,
-    showListDisclosureControls: false
+    showListDisclosureControls: false,
+    defaultLocalViewMode: "list",
+    defaultRemoteViewMode: "list"
   }
 };
 
@@ -484,6 +491,13 @@ export function App(props: AppProps = {}) {
       setPreferences((prev) => ({ ...prev, draft: settings }));
       setOnboardingOpen(!settings.general.firstRunOnboardingDismissed);
       setV12PaneRatio(settings.appearance.defaultPaneRatio);
+      setTabs((prev) =>
+        prev.map((tab) => ({
+          ...tab,
+          localPane: { ...tab.localPane, viewMode: settings.appearance.defaultLocalViewMode },
+          remotePane: { ...tab.remotePane, viewMode: settings.appearance.defaultRemoteViewMode }
+        }))
+      );
       setV12LocalInspectorReveal(false);
       setV12RemoteInspectorReveal(false);
       const restoredLocalPath = settings.general.restoreLastLocalPathOnLaunch ? readLastLocalPath() : "";
@@ -1025,6 +1039,27 @@ export function App(props: AppProps = {}) {
     setV12PaneRatio(res.data.appearance.defaultPaneRatio);
   }
 
+  async function setPaneViewMode(tabId: string, pane: ActivePane, viewMode: PaneViewMode): Promise<void> {
+    setActivePane(pane);
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        return pane === "local"
+          ? { ...tab, localPane: { ...tab.localPane, viewMode } }
+          : { ...tab, remotePane: { ...tab.remotePane, viewMode } };
+      })
+    );
+    const appearancePatch =
+      pane === "local" ? { defaultLocalViewMode: viewMode } : { defaultRemoteViewMode: viewMode };
+    const res = await window.cofinder.settings.set({ appearance: appearancePatch });
+    if (res.ok) {
+      setAppSettings(res.data);
+      setPreferences((prev) => ({ ...prev, draft: res.data }));
+      return;
+    }
+    setQueueError(res.error.message);
+  }
+
   function beginSidebarResize(event: ReactMouseEvent<HTMLDivElement>): void {
     event.preventDefault();
     const startX = event.clientX;
@@ -1370,16 +1405,22 @@ export function App(props: AppProps = {}) {
     ]
   );
   useEffect(() => {
-    localVisibleEntriesRef.current = localVisibleEntries;
-    remoteVisibleEntriesRef.current = remoteVisibleEntries;
-  }, [localVisibleEntries, remoteVisibleEntries]);
+    localVisibleEntriesRef.current = localPane.viewMode === "list" ? localVisibleEntries : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+    remoteVisibleEntriesRef.current =
+      remotePane.viewMode === "list" ? remoteVisibleEntries : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+  }, [localPane.viewMode, localVisibleEntries, remotePane.viewMode, remoteVisibleEntries, sortedEntries, sortedRemoteEntries]);
 
-  const selectedEntries = localVisibleEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
+  const localCurrentViewEntries =
+    localPane.viewMode === "list" ? localVisibleEntries : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+  const remoteCurrentViewEntries =
+    remotePane.viewMode === "list" ? remoteVisibleEntries : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+
+  const selectedEntries = localCurrentViewEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const totalSize = localVisibleEntries.reduce((acc, item) => acc + item.size, 0);
-  const remoteSelectedEntries = remoteVisibleEntries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
+  const totalSize = localCurrentViewEntries.reduce((acc, item) => acc + item.size, 0);
+  const remoteSelectedEntries = remoteCurrentViewEntries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const remoteTotalSize = remoteVisibleEntries.reduce((acc, item) => acc + item.size, 0);
+  const remoteTotalSize = remoteCurrentViewEntries.reduce((acc, item) => acc + item.size, 0);
 
   useEffect(() => {
     if (uiShell !== "v12") {
@@ -2665,7 +2706,7 @@ export function App(props: AppProps = {}) {
           localPane: {
             ...tab.localPane,
             ...applyRowSelection(
-              localVisibleEntries,
+              localCurrentViewEntries,
               {
                 selectedFullPaths: tab.localPane.selectedFullPaths,
                 selectionAnchorFullPath: tab.localPane.selectionAnchorFullPath
@@ -2702,7 +2743,7 @@ export function App(props: AppProps = {}) {
           remotePane: {
             ...tab.remotePane,
             ...applyRowSelection(
-              remoteVisibleEntries,
+              remoteCurrentViewEntries,
               {
                 selectedFullPaths: tab.remotePane.selectedFullPaths,
                 selectionAnchorFullPath: tab.remotePane.selectionAnchorFullPath
@@ -2736,7 +2777,7 @@ export function App(props: AppProps = {}) {
             localPane: {
               ...tab.localPane,
               ...applyKeyboardRowSelection(
-                localVisibleEntries,
+                localCurrentViewEntries,
                 {
                   selectedFullPaths: tab.localPane.selectedFullPaths,
                   selectionAnchorFullPath: tab.localPane.selectionAnchorFullPath
@@ -2752,7 +2793,7 @@ export function App(props: AppProps = {}) {
           remotePane: {
             ...tab.remotePane,
             ...applyKeyboardRowSelection(
-              remoteVisibleEntries,
+              remoteCurrentViewEntries,
               {
                 selectedFullPaths: tab.remotePane.selectedFullPaths,
                 selectionAnchorFullPath: tab.remotePane.selectionAnchorFullPath
@@ -3005,8 +3046,8 @@ export function App(props: AppProps = {}) {
   async function copySelection(tabId: string, pane: "local" | "remote", mode: "name" | "path"): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const localEntriesForCopy = tab.id === activeTab.id ? localVisibleEntries : tab.localPane.entries;
-    const remoteEntriesForCopy = tab.id === activeTab.id ? remoteVisibleEntries : tab.remotePane.entries;
+    const localEntriesForCopy = tab.id === activeTab.id ? localCurrentViewEntries : tab.localPane.entries;
+    const remoteEntriesForCopy = tab.id === activeTab.id ? remoteCurrentViewEntries : tab.remotePane.entries;
     const text =
       pane === "local"
         ? stringifySelection(tab.localPane.selectedFullPaths, localEntriesForCopy, mode)
@@ -3938,7 +3979,7 @@ export function App(props: AppProps = {}) {
         return {
           ...item,
           title: `Tab ${getTabNumber(item.id, prev)}`,
-          remotePane: createRemotePaneState()
+          remotePane: { ...createRemotePaneState(), viewMode: appSettings.appearance.defaultRemoteViewMode }
         };
       })
     );
@@ -3946,7 +3987,17 @@ export function App(props: AppProps = {}) {
 
   function createTab(): void {
     const id = createId();
-    setTabs((prev) => [...prev, createTabState(id, prev.length + 1)]);
+    setTabs((prev) => {
+      const tab = createTabState(id, prev.length + 1);
+      return [
+        ...prev,
+        {
+          ...tab,
+          localPane: { ...tab.localPane, viewMode: appSettings.appearance.defaultLocalViewMode },
+          remotePane: { ...tab.remotePane, viewMode: appSettings.appearance.defaultRemoteViewMode }
+        }
+      ];
+    });
     setActiveTabId(id);
     if (localHomePath) void navigateLocal(id, localHomePath, "replace");
     else void initializeLocalHome(id);
@@ -3969,7 +4020,14 @@ export function App(props: AppProps = {}) {
         if (localHomePath) void navigateLocal(newId, localHomePath, "replace");
         else void initializeLocalHome(newId);
         setActiveTabId(newId);
-        return [createTabState(newId, 1)];
+        const tab = createTabState(newId, 1);
+        return [
+          {
+            ...tab,
+            localPane: { ...tab.localPane, viewMode: appSettings.appearance.defaultLocalViewMode },
+            remotePane: { ...tab.remotePane, viewMode: appSettings.appearance.defaultRemoteViewMode }
+          }
+        ];
       }
       if (activeTabId === tabId) {
         const fallback = next[Math.max(0, closingIndex - 1)];
@@ -4628,6 +4686,28 @@ export function App(props: AppProps = {}) {
     </div>
   );
 
+  const renderViewModeToggle = (pane: ActivePane, current: PaneViewMode, disabled = false) => (
+    <div className="v12m-view-mode-toggle" aria-label={`${pane} view mode`}>
+      {[
+        { mode: "list" as const, icon: "list-bullet", label: "List view" },
+        { mode: "icon" as const, icon: "grid-2x2", label: "Icon view" }
+      ].map((item) => (
+        <button
+          key={item.mode}
+          type="button"
+          className={`v12m-view-mode-button${current === item.mode ? " is-active" : ""}`}
+          title={item.label}
+          aria-label={item.label}
+          aria-pressed={current === item.mode}
+          disabled={disabled}
+          onClick={() => void setPaneViewMode(activeTab.id, pane, item.mode)}
+        >
+          <V12TbIcon name={item.icon} />
+        </button>
+      ))}
+    </div>
+  );
+
   const localPaneToolbar =
     uiShell === "v12" ? (
       <V12PaneToolbar
@@ -4733,6 +4813,7 @@ export function App(props: AppProps = {}) {
           }
         ]}
       >
+        {renderViewModeToggle("local", localPane.viewMode)}
         <input
           className="pane-filter-input"
           value={localPane.filterText}
@@ -4909,6 +4990,7 @@ export function App(props: AppProps = {}) {
           }
         ]}
       >
+        {renderViewModeToggle("remote", remotePane.viewMode, !remotePane.connectionId)}
         <input
           className="pane-filter-input"
           value={remotePane.filterText}
@@ -5001,6 +5083,98 @@ export function App(props: AppProps = {}) {
     }));
   }
 
+  const localInlineRenameProps =
+    inlineRename && inlineRename.pane === "local" && inlineRename.tabId === activeTab.id
+      ? {
+          sourcePath: inlineRename.sourcePath,
+          draftName: inlineRename.draftName,
+          onChange: (value: string) => setInlineRename((prev) => (prev ? { ...prev, draftName: value } : prev)),
+          onBlur: () => void submitInlineRename(),
+          onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void submitInlineRename();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              setInlineRename(null);
+            }
+          }
+        }
+      : null;
+
+  const remoteInlineRenameProps =
+    inlineRename && inlineRename.pane === "remote" && inlineRename.tabId === activeTab.id
+      ? {
+          sourcePath: inlineRename.sourcePath,
+          draftName: inlineRename.draftName,
+          onChange: (value: string) => setInlineRename((prev) => (prev ? { ...prev, draftName: value } : prev)),
+          onBlur: () => void submitInlineRename(),
+          onKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void submitInlineRename();
+            } else if (event.key === "Escape") {
+              event.preventDefault();
+              setInlineRename(null);
+            }
+          }
+        }
+      : null;
+
+  const handleLocalPrimaryEntryClick = (
+    entry: LocalFileEntry,
+    event: { metaKey: boolean; shiftKey: boolean; detail?: number }
+  ): void => {
+    if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+    if (
+      shouldStartInlineRenameFromClick("local", activeTab.id, entry.fullPath, localPane.selectedFullPaths, {
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey
+      })
+    ) {
+      openInlineRename(activeTab.id, "local");
+      lastPlainClickRef.current = null;
+      return;
+    }
+    handleLocalRowClick(activeTab.id, entry, {
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      clickDetail: event.detail
+    });
+    if (!event.metaKey && !event.shiftKey) {
+      lastPlainClickRef.current = { pane: "local", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+    } else {
+      lastPlainClickRef.current = null;
+    }
+  };
+
+  const handleRemotePrimaryEntryClick = (
+    entry: RemoteFileEntry,
+    event: { metaKey: boolean; shiftKey: boolean; detail?: number }
+  ): void => {
+    if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+    if (
+      shouldStartInlineRenameFromClick("remote", activeTab.id, entry.fullPath, remotePane.selectedFullPaths, {
+        metaKey: event.metaKey,
+        shiftKey: event.shiftKey
+      })
+    ) {
+      openInlineRename(activeTab.id, "remote");
+      lastPlainClickRef.current = null;
+      return;
+    }
+    handleRemoteRowClick(activeTab.id, entry, {
+      metaKey: event.metaKey,
+      shiftKey: event.shiftKey,
+      clickDetail: event.detail
+    });
+    if (!event.metaKey && !event.shiftKey) {
+      lastPlainClickRef.current = { pane: "remote", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
+    } else {
+      lastPlainClickRef.current = null;
+    }
+  };
+
   const localPaneEl = (
     <section
       className={localPaneSectionClass}
@@ -5035,112 +5209,106 @@ export function App(props: AppProps = {}) {
             <div className="v12m-pane-split">
               <div className="v12m-pane-main v12m-pane-main--stack">
                 {localPane.error ? <div className="cfv12p-error">{localPane.error}</div> : null}
-                <V12VisualFileList
-                  pane="local"
-                  isPaneActive={activePane === "local"}
-                  entries={localVisibleEntries}
-                  emptyMessage={localPane.error ? "Local folder could not be loaded." : "This local folder is empty."}
-                  sortKey={localPane.sortKey}
-                  sortDirection={localPane.sortDirection}
-                  selectedFullPaths={localPane.selectedFullPaths}
-                  columns={v12LocalFileColumns}
-                  outline={{
-                    enabled: appSettings.appearance.showListDisclosureControls,
-                    getDepth: (entry) => entry.outlineDepth ?? 0,
-                    canExpand: (entry) => entry.type === "directory",
-                    isExpanded: (entry) => Boolean(activeLocalOutline[entry.fullPath]?.expanded),
-                    isLoading: (entry) => activeLocalOutline[entry.fullPath]?.status === "loading",
-                    getError: (entry) => activeLocalOutline[entry.fullPath]?.error ?? "",
-                    onToggle: (entry, event) => {
+                {localPane.viewMode === "icon" ? (
+                  <V12VisualIconGrid
+                    pane="local"
+                    isPaneActive={activePane === "local"}
+                    entries={localCurrentViewEntries}
+                    selectedFullPaths={localPane.selectedFullPaths}
+                    emptyMessage={localPane.error ? "Local folder could not be loaded." : "This local folder is empty."}
+                    onItemClick={(entry, event) => handleLocalPrimaryEntryClick(entry, event)}
+                    onItemContextMenu={(entry, event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      void toggleLocalOutline(activeTab.id, entry);
-                    }
-                  }}
-                  onColumnWidthChange={(key, width) => updateV12ColumnWidth("local", key, width)}
-                  onColumnVisibilityChange={(key, visible) => updateV12ColumnVisibility("local", key, visible)}
-                  onSort={(key) => handleSort(activeTab.id, key)}
-                  onRowClick={(entry, event) => {
-                    if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
-                    if (
-                      shouldStartInlineRenameFromClick("local", activeTab.id, entry.fullPath, localPane.selectedFullPaths, {
-                        metaKey: event.metaKey,
-                        shiftKey: event.shiftKey
-                      })
-                    ) {
-                      openInlineRename(activeTab.id, "local");
+                      openContextMenu(activeTab.id, "local", entry, event);
+                    }}
+                    onItemDoubleClick={(entry) => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      void handleRowDoubleClick(activeTab.id, entry);
+                    }}
+                    onBackgroundMouseDown={(event) => beginMarqueeSelection("local", event)}
+                    onBackgroundContextMenu={(event) => {
+                      event.preventDefault();
+                      openBackgroundContextMenu(activeTab.id, "local", event);
+                    }}
+                    onBackgroundDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
+                    onBackgroundDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
+                    onDragLeave={handleTransferDragLeave}
+                    onItemDragStart={(entry, event) => beginTransferDrag("local", entry, event)}
+                    onItemDragOver={(entry, event) => handleDirectoryRowDragOver("local", entry, event)}
+                    onItemDrop={(entry, event) => void handleDirectoryRowDrop("local", entry, event)}
+                    onItemDragEnd={() => setDropTarget(null)}
+                    getItemClassName={(entry) => rowDropClass("local", entry.fullPath)}
+                    inlineRename={localInlineRenameProps}
+                  />
+                ) : (
+                  <V12VisualFileList
+                    pane="local"
+                    isPaneActive={activePane === "local"}
+                    entries={localVisibleEntries}
+                    emptyMessage={localPane.error ? "Local folder could not be loaded." : "This local folder is empty."}
+                    sortKey={localPane.sortKey}
+                    sortDirection={localPane.sortDirection}
+                    selectedFullPaths={localPane.selectedFullPaths}
+                    columns={v12LocalFileColumns}
+                    outline={{
+                      enabled: appSettings.appearance.showListDisclosureControls,
+                      getDepth: (entry) => entry.outlineDepth ?? 0,
+                      canExpand: (entry) => entry.type === "directory",
+                      isExpanded: (entry) => Boolean(activeLocalOutline[entry.fullPath]?.expanded),
+                      isLoading: (entry) => activeLocalOutline[entry.fullPath]?.status === "loading",
+                      getError: (entry) => activeLocalOutline[entry.fullPath]?.error ?? "",
+                      onToggle: (entry, event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void toggleLocalOutline(activeTab.id, entry);
+                      }
+                    }}
+                    onColumnWidthChange={(key, width) => updateV12ColumnWidth("local", key, width)}
+                    onColumnVisibilityChange={(key, visible) => updateV12ColumnVisibility("local", key, visible)}
+                    onSort={(key) => handleSort(activeTab.id, key)}
+                    onRowClick={(entry, event) => handleLocalPrimaryEntryClick(entry, event)}
+                    onRowDetailClick={(_, event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setActivePane("local");
                       lastPlainClickRef.current = null;
-                      return;
-                    }
-                    handleLocalRowClick(activeTab.id, entry, {
-                      metaKey: event.metaKey,
-                      shiftKey: event.shiftKey,
-                      clickDetail: event.detail
-                    });
-                    if (!event.metaKey && !event.shiftKey) {
-                      lastPlainClickRef.current = { pane: "local", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
-                    } else {
-                      lastPlainClickRef.current = null;
-                    }
-                  }}
-                  onRowDetailClick={(_, event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    setActivePane("local");
-                    lastPlainClickRef.current = null;
-                    cancelV12LocalInspRevealTimer();
-                    clearLocalSelection(activeTab.id);
-                  }}
-                  onRowContextMenu={(entry, event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    openContextMenu(activeTab.id, "local", entry, event);
-                  }}
-                  onRowDoubleClick={(entry) => {
-                    if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
-                    void handleRowDoubleClick(activeTab.id, entry);
-                  }}
-                  onBackgroundMouseDown={(event) => {
-                    beginMarqueeSelection("local", event);
-                  }}
-                  onBackgroundContextMenu={(event) => {
-                    event.preventDefault();
-                    openBackgroundContextMenu(activeTab.id, "local", event);
-                  }}
-                  onBackgroundDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
-                  onBackgroundDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
-                  onDragLeave={handleTransferDragLeave}
-                  onRowDragStart={(entry, event) => beginTransferDrag("local", entry, event)}
-                  onRowDragOver={(entry, event) => handleDirectoryRowDragOver("local", entry, event)}
-                  onRowDrop={(entry, event) => void handleDirectoryRowDrop("local", entry, event)}
-                  onRowDragEnd={() => setDropTarget(null)}
-                  getRowClassName={(entry) => rowDropClass("local", entry.fullPath)}
-                  inlineRename={
-                    inlineRename && inlineRename.pane === "local" && inlineRename.tabId === activeTab.id
-                      ? {
-                          sourcePath: inlineRename.sourcePath,
-                          draftName: inlineRename.draftName,
-                          onChange: (value) => setInlineRename((prev) => (prev ? { ...prev, draftName: value } : prev)),
-                          onBlur: () => void submitInlineRename(),
-                          onKeyDown: (event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              void submitInlineRename();
-                            } else if (event.key === "Escape") {
-                              event.preventDefault();
-                              setInlineRename(null);
-                            }
-                          }
-                        }
-                      : null
-                  }
-                  formatSize={formatSize}
-                  formatTime={formatTime}
-                  formatKind={formatKindV12}
-                />
+                      cancelV12LocalInspRevealTimer();
+                      clearLocalSelection(activeTab.id);
+                    }}
+                    onRowContextMenu={(entry, event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openContextMenu(activeTab.id, "local", entry, event);
+                    }}
+                    onRowDoubleClick={(entry) => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      void handleRowDoubleClick(activeTab.id, entry);
+                    }}
+                    onBackgroundMouseDown={(event) => {
+                      beginMarqueeSelection("local", event);
+                    }}
+                    onBackgroundContextMenu={(event) => {
+                      event.preventDefault();
+                      openBackgroundContextMenu(activeTab.id, "local", event);
+                    }}
+                    onBackgroundDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
+                    onBackgroundDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
+                    onDragLeave={handleTransferDragLeave}
+                    onRowDragStart={(entry, event) => beginTransferDrag("local", entry, event)}
+                    onRowDragOver={(entry, event) => handleDirectoryRowDragOver("local", entry, event)}
+                    onRowDrop={(entry, event) => void handleDirectoryRowDrop("local", entry, event)}
+                    onRowDragEnd={() => setDropTarget(null)}
+                    getRowClassName={(entry) => rowDropClass("local", entry.fullPath)}
+                    inlineRename={localInlineRenameProps}
+                    formatSize={formatSize}
+                    formatTime={formatTime}
+                    formatKind={formatKindV12}
+                  />
+                )}
                 <V12PaneFootStatus
                   selectedCount={selectedEntries.length}
-                  totalCount={localVisibleEntries.length}
+                  totalCount={localCurrentViewEntries.length}
                   selectedSizeLabel={formatSize(selectedSize)}
                   totalSizeLabel={formatSize(totalSize)}
                 />
@@ -5150,7 +5318,7 @@ export function App(props: AppProps = {}) {
                   scope="local"
                   selectionCount={localPane.selectedFullPaths.length}
                   selectedPaths={localPane.selectedFullPaths}
-                  entries={localVisibleEntries}
+                  entries={localCurrentViewEntries}
                   info={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.info : null}
                   infoLoading={localPane.selectedFullPaths.length === 1 && v12LocalInsp.status === "loading"}
                   infoError={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.error : ""}
@@ -5482,114 +5650,118 @@ export function App(props: AppProps = {}) {
               <div className="v12m-pane-split">
                 <div className="v12m-pane-main v12m-pane-main--stack">
                   {remotePane.error ? <div className="cfv12p-error">{remotePane.error}</div> : null}
-                  <V12VisualFileList
-                    pane="remote"
-                    isPaneActive={activePane === "remote"}
-                    entries={remoteVisibleEntries}
-                    emptyMessage={
-                      remotePane.isListing ? "Loading remote folder..." : remotePane.error ? "Remote folder could not be loaded." : "This remote folder is empty."
-                    }
-                    sortKey={remotePane.sortKey}
-                    sortDirection={remotePane.sortDirection}
-                    selectedFullPaths={remotePane.selectedFullPaths}
-                    columns={v12RemoteFileColumns}
-                    outline={{
-                      enabled: appSettings.appearance.showListDisclosureControls,
-                      getDepth: (entry) => entry.outlineDepth ?? 0,
-                      canExpand: (entry) => entry.type === "directory",
-                      isExpanded: (entry) => Boolean(activeRemoteOutline[entry.fullPath]?.expanded),
-                      isLoading: (entry) => activeRemoteOutline[entry.fullPath]?.status === "loading",
-                      getError: (entry) => activeRemoteOutline[entry.fullPath]?.error ?? "",
-                      onToggle: (entry, event) => {
+                  {remotePane.viewMode === "icon" ? (
+                    <V12VisualIconGrid
+                      pane="remote"
+                      isPaneActive={activePane === "remote"}
+                      entries={remoteCurrentViewEntries}
+                      selectedFullPaths={remotePane.selectedFullPaths}
+                      emptyMessage={
+                        remotePane.isListing
+                          ? "Loading remote folder..."
+                          : remotePane.error
+                            ? "Remote folder could not be loaded."
+                            : "This remote folder is empty."
+                      }
+                      onItemClick={(entry, event) => handleRemotePrimaryEntryClick(entry, event)}
+                      onItemContextMenu={(entry, event) => {
                         event.preventDefault();
                         event.stopPropagation();
-                        void toggleRemoteOutline(activeTab.id, entry);
+                        openContextMenu(activeTab.id, "remote", entry, event);
+                      }}
+                      onItemDoubleClick={(entry) => {
+                        if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                        void handleRemoteDoubleClick(activeTab.id, entry);
+                      }}
+                      onBackgroundMouseDown={(event) => beginMarqueeSelection("remote", event)}
+                      onBackgroundContextMenu={(event) => {
+                        event.preventDefault();
+                        openBackgroundContextMenu(activeTab.id, "remote", event);
+                      }}
+                      onBackgroundDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
+                      onBackgroundDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
+                      onDragLeave={handleTransferDragLeave}
+                      onItemDragStart={(entry, event) => beginTransferDrag("remote", entry, event)}
+                      onItemDragOver={(entry, event) => handleDirectoryRowDragOver("remote", entry, event)}
+                      onItemDrop={(entry, event) => void handleDirectoryRowDrop("remote", entry, event)}
+                      onItemDragEnd={() => setDropTarget(null)}
+                      getItemClassName={(entry) => rowDropClass("remote", entry.fullPath)}
+                      inlineRename={remoteInlineRenameProps}
+                    />
+                  ) : (
+                    <V12VisualFileList
+                      pane="remote"
+                      isPaneActive={activePane === "remote"}
+                      entries={remoteVisibleEntries}
+                      emptyMessage={
+                        remotePane.isListing
+                          ? "Loading remote folder..."
+                          : remotePane.error
+                            ? "Remote folder could not be loaded."
+                            : "This remote folder is empty."
                       }
-                    }}
-                    onColumnWidthChange={(key, width) => updateV12ColumnWidth("remote", key, width)}
-                    onColumnVisibilityChange={(key, visible) => updateV12ColumnVisibility("remote", key, visible)}
-                    onSort={(key) => handleRemoteSort(activeTab.id, key)}
-                    onRowClick={(entry, event) => {
-                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
-                      if (
-                        shouldStartInlineRenameFromClick("remote", activeTab.id, entry.fullPath, remotePane.selectedFullPaths, {
-                          metaKey: event.metaKey,
-                          shiftKey: event.shiftKey
-                        })
-                      ) {
-                        openInlineRename(activeTab.id, "remote");
+                      sortKey={remotePane.sortKey}
+                      sortDirection={remotePane.sortDirection}
+                      selectedFullPaths={remotePane.selectedFullPaths}
+                      columns={v12RemoteFileColumns}
+                      outline={{
+                        enabled: appSettings.appearance.showListDisclosureControls,
+                        getDepth: (entry) => entry.outlineDepth ?? 0,
+                        canExpand: (entry) => entry.type === "directory",
+                        isExpanded: (entry) => Boolean(activeRemoteOutline[entry.fullPath]?.expanded),
+                        isLoading: (entry) => activeRemoteOutline[entry.fullPath]?.status === "loading",
+                        getError: (entry) => activeRemoteOutline[entry.fullPath]?.error ?? "",
+                        onToggle: (entry, event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void toggleRemoteOutline(activeTab.id, entry);
+                        }
+                      }}
+                      onColumnWidthChange={(key, width) => updateV12ColumnWidth("remote", key, width)}
+                      onColumnVisibilityChange={(key, visible) => updateV12ColumnVisibility("remote", key, visible)}
+                      onSort={(key) => handleRemoteSort(activeTab.id, key)}
+                      onRowClick={(entry, event) => handleRemotePrimaryEntryClick(entry, event)}
+                      onRowDetailClick={(_, event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setActivePane("remote");
                         lastPlainClickRef.current = null;
-                        return;
-                      }
-                      handleRemoteRowClick(activeTab.id, entry, {
-                        metaKey: event.metaKey,
-                        shiftKey: event.shiftKey,
-                        clickDetail: event.detail
-                      });
-                      if (!event.metaKey && !event.shiftKey) {
-                        lastPlainClickRef.current = { pane: "remote", tabId: activeTab.id, path: entry.fullPath, at: Date.now() };
-                      } else {
-                        lastPlainClickRef.current = null;
-                      }
-                    }}
-                    onRowDetailClick={(_, event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      setActivePane("remote");
-                      lastPlainClickRef.current = null;
-                      cancelV12RemoteInspRevealTimer();
-                      clearRemoteSelection(activeTab.id);
-                    }}
-                    onRowContextMenu={(entry, event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      openContextMenu(activeTab.id, "remote", entry, event);
-                    }}
-                    onRowDoubleClick={(entry) => {
-                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
-                      void handleRemoteDoubleClick(activeTab.id, entry);
-                    }}
-                    onBackgroundMouseDown={(event) => {
-                      beginMarqueeSelection("remote", event);
-                    }}
-                    onBackgroundContextMenu={(event) => {
-                      event.preventDefault();
-                      openBackgroundContextMenu(activeTab.id, "remote", event);
-                    }}
-                    onBackgroundDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
-                    onBackgroundDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
-                    onDragLeave={handleTransferDragLeave}
-                    onRowDragStart={(entry, event) => beginTransferDrag("remote", entry, event)}
-                    onRowDragOver={(entry, event) => handleDirectoryRowDragOver("remote", entry, event)}
-                    onRowDrop={(entry, event) => void handleDirectoryRowDrop("remote", entry, event)}
-                    onRowDragEnd={() => setDropTarget(null)}
-                    getRowClassName={(entry) => rowDropClass("remote", entry.fullPath)}
-                    inlineRename={
-                      inlineRename && inlineRename.pane === "remote" && inlineRename.tabId === activeTab.id
-                        ? {
-                            sourcePath: inlineRename.sourcePath,
-                            draftName: inlineRename.draftName,
-                            onChange: (value) => setInlineRename((prev) => (prev ? { ...prev, draftName: value } : prev)),
-                            onBlur: () => void submitInlineRename(),
-                            onKeyDown: (event) => {
-                              if (event.key === "Enter") {
-                                event.preventDefault();
-                                void submitInlineRename();
-                              } else if (event.key === "Escape") {
-                                event.preventDefault();
-                                setInlineRename(null);
-                              }
-                            }
-                          }
-                        : null
-                    }
-                    formatSize={formatSize}
-                    formatTime={formatTime}
-                    formatKind={formatKindV12}
-                  />
+                        cancelV12RemoteInspRevealTimer();
+                        clearRemoteSelection(activeTab.id);
+                      }}
+                      onRowContextMenu={(entry, event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openContextMenu(activeTab.id, "remote", entry, event);
+                      }}
+                      onRowDoubleClick={(entry) => {
+                        if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                        void handleRemoteDoubleClick(activeTab.id, entry);
+                      }}
+                      onBackgroundMouseDown={(event) => {
+                        beginMarqueeSelection("remote", event);
+                      }}
+                      onBackgroundContextMenu={(event) => {
+                        event.preventDefault();
+                        openBackgroundContextMenu(activeTab.id, "remote", event);
+                      }}
+                      onBackgroundDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
+                      onBackgroundDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
+                      onDragLeave={handleTransferDragLeave}
+                      onRowDragStart={(entry, event) => beginTransferDrag("remote", entry, event)}
+                      onRowDragOver={(entry, event) => handleDirectoryRowDragOver("remote", entry, event)}
+                      onRowDrop={(entry, event) => void handleDirectoryRowDrop("remote", entry, event)}
+                      onRowDragEnd={() => setDropTarget(null)}
+                      getRowClassName={(entry) => rowDropClass("remote", entry.fullPath)}
+                      inlineRename={remoteInlineRenameProps}
+                      formatSize={formatSize}
+                      formatTime={formatTime}
+                      formatKind={formatKindV12}
+                    />
+                  )}
                   <V12PaneFootStatus
                     selectedCount={remoteSelectedEntries.length}
-                    totalCount={remoteVisibleEntries.length}
+                    totalCount={remoteCurrentViewEntries.length}
                     selectedSizeLabel={formatSize(remoteSelectedSize)}
                     totalSizeLabel={formatSize(remoteTotalSize)}
                   />
@@ -5599,7 +5771,7 @@ export function App(props: AppProps = {}) {
                     scope="remote"
                     selectionCount={remotePane.selectedFullPaths.length}
                     selectedPaths={remotePane.selectedFullPaths}
-                    entries={remoteVisibleEntries}
+                    entries={remoteCurrentViewEntries}
                     info={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.info : null}
                     infoLoading={remotePane.selectedFullPaths.length === 1 && v12RemoteInsp.status === "loading"}
                     infoError={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.error : ""}
@@ -6290,6 +6462,42 @@ export function App(props: AppProps = {}) {
                           }))
                         }
                       />
+                    </label>
+                    <label>
+                      Default local view
+                      <select
+                        value={preferences.draft.appearance.defaultLocalViewMode}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: {
+                              ...p.draft,
+                              appearance: { ...p.draft.appearance, defaultLocalViewMode: e.target.value as PaneViewMode }
+                            }
+                          }))
+                        }
+                      >
+                        <option value="list">List</option>
+                        <option value="icon">Icon</option>
+                      </select>
+                    </label>
+                    <label>
+                      Default remote view
+                      <select
+                        value={preferences.draft.appearance.defaultRemoteViewMode}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: {
+                              ...p.draft,
+                              appearance: { ...p.draft.appearance, defaultRemoteViewMode: e.target.value as PaneViewMode }
+                            }
+                          }))
+                        }
+                      >
+                        <option value="list">List</option>
+                        <option value="icon">Icon</option>
+                      </select>
                     </label>
                     <label className="preferences-check">
                       <input
@@ -7255,7 +7463,8 @@ function createLocalPaneState(): LocalPaneState {
     error: "",
     sortKey: "name",
     sortDirection: "asc",
-    history: { backStack: [], forwardStack: [] }
+    history: { backStack: [], forwardStack: [] },
+    viewMode: "list"
   };
 }
 
@@ -7279,7 +7488,8 @@ function createRemotePaneState(): RemotePaneState {
     sortDirection: "asc",
     history: { backStack: [], forwardStack: [] },
     error: "",
-    isListing: false
+    isListing: false,
+    viewMode: "list"
   };
 }
 

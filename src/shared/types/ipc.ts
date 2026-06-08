@@ -3,6 +3,8 @@ import type { RemoteEditSession } from "../remoteEdit";
 import type { ConnectionConfig, EntryType, RemoteFileEntry, ServerProfile, TransferTask } from "./models";
 import type { LocalFileEntry } from "./models";
 
+export type PaneViewMode = "list" | "icon" | "column" | "gallery";
+
 export type LocalErrorCode =
   | "NOT_FOUND"
   | "PERMISSION_DENIED"
@@ -268,6 +270,8 @@ export type AppSettings = {
     sidebarVisible: boolean;
     sidebarWidth: number;
     showListDisclosureControls: boolean;
+    defaultLocalViewMode: PaneViewMode;
+    defaultRemoteViewMode: PaneViewMode;
   };
 };
 

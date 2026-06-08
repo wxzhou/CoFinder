@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { AppSettings } from "../../shared/types/ipc";
+import type { AppSettings, PaneViewMode } from "../../shared/types/ipc";
 import { writePrivateUtf8File } from "../security/privateAtomicWrite";
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -33,7 +33,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     defaultPaneRatio: 0.5,
     sidebarVisible: true,
     sidebarWidth: 260,
-    showListDisclosureControls: false
+    showListDisclosureControls: false,
+    defaultLocalViewMode: "list",
+    defaultRemoteViewMode: "list"
   }
 };
 
@@ -57,6 +59,10 @@ function numberInRange(value: unknown, fallback: number, min: number, max: numbe
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(min, Math.min(max, n));
+}
+
+function viewMode(value: unknown, fallback: PaneViewMode): PaneViewMode {
+  return value === "list" || value === "icon" || value === "column" || value === "gallery" ? value : fallback;
 }
 
 export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT_APP_SETTINGS): AppSettings {
@@ -112,7 +118,9 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
       defaultPaneRatio: numberInRange(appearance.defaultPaneRatio, base.appearance.defaultPaneRatio, 0.25, 0.75),
       sidebarVisible: bool(appearance.sidebarVisible, base.appearance.sidebarVisible),
       sidebarWidth: numberInRange(appearance.sidebarWidth, base.appearance.sidebarWidth, 180, 420),
-      showListDisclosureControls: bool(appearance.showListDisclosureControls, base.appearance.showListDisclosureControls)
+      showListDisclosureControls: bool(appearance.showListDisclosureControls, base.appearance.showListDisclosureControls),
+      defaultLocalViewMode: viewMode(appearance.defaultLocalViewMode, base.appearance.defaultLocalViewMode),
+      defaultRemoteViewMode: viewMode(appearance.defaultRemoteViewMode, base.appearance.defaultRemoteViewMode)
     }
   };
 }

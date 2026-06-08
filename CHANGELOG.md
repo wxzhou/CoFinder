@@ -9,6 +9,9 @@
 ## Unreleased / v1.9.6 development
 
 - Starting the view-mode foundation and icon view checkpoint.
+- Added pane-independent V12 List/Icon view mode state, with local and remote panes able to switch modes separately.
+- Added a V12 icon grid view for local and remote panes with selection, inline rename, context menus, double-click open/navigate, and drag/drop transfer hooks.
+- Added Appearance defaults for local and remote view modes, plus validation tests for persisted view-mode settings.
 
 ## v1.9.5 development
 

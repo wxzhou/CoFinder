@@ -127,6 +127,16 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Refresh invalidation:** expand a folder, refresh the pane, and confirm expansion state clears so stale child listings are not shown.
 - **Copy ordering:** select visible root and child rows in a mixed order, use Copy Name / Copy Full Path, and confirm pasted lines follow the current visible file-list order.
 
+## V2.10 M5 / v1.9.6 icon view
+
+- **Pane independence:** switch the local pane to Icon view and leave the remote pane in List view, then reverse them; confirm each pane keeps its own mode.
+- **Persistence:** set Preferences -> Appearance default local and remote views to Icon, save, create a new tab or relaunch, and confirm panes use the saved defaults. Reset to List if desired.
+- **Icon selection:** in Icon view, single-select, Cmd-select, Shift-select, Arrow Up/Down, Shift+Arrow Up/Down, and Cmd+A; confirm selected items match the icon grid order.
+- **Open/navigate:** double-click a local folder and a remote folder in Icon view and confirm navigation; double-click files and confirm local/remote open behavior matches List view.
+- **Context menu and rename:** right-click local and remote icon items and confirm existing selected-item menus appear. Use Rename/F2 and confirm the inline icon-label editor commits and cancels correctly.
+- **Transfers:** drag a local icon item to the remote pane and a remote icon item to the local pane; confirm upload/download Jobs are queued as in List view.
+- **List compatibility:** switch back to List view and confirm column widths, visible columns, sorting, disclosure controls, and row selection still behave as before.
+
 ## V2.0 stable personal release
 
 - **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.
