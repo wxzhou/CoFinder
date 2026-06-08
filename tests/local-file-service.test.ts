@@ -132,6 +132,34 @@ describe("LocalFileService readTextFile", () => {
   });
 });
 
+describe("LocalFileService searchText", () => {
+  it("searches local files and returns matching lines", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "notes.txt");
+    await fs.writeFile(source, "alpha\nneedle one\nbeta\nneedle two\n", "utf8");
+
+    const result = await service.searchText(source, "needle");
+
+    expect(result.rootPath).toBe(source);
+    expect(result.matches.map((match) => match.preview)).toEqual(["needle one", "needle two"]);
+    expect(result.matches.map((match) => match.line)).toEqual([2, 4]);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("limits local search matches", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "notes.txt");
+    await fs.writeFile(source, "needle 1\nneedle 2\nneedle 3\n", "utf8");
+
+    const result = await service.searchText(source, "needle", { maxMatches: 2 });
+
+    expect(result.matches).toHaveLength(2);
+    expect(result.truncated).toBe(true);
+  });
+});
+
 describe("LocalFileService compressFileGzip", () => {
   it("compresses a single local file without overwriting existing gzip target", async () => {
     const service = new LocalFileService();

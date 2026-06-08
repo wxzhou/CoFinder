@@ -152,6 +152,20 @@ export type TextContentReadResponse = {
   truncated: boolean;
 };
 
+export type TextSearchMatch = {
+  path: string;
+  line: number;
+  preview: string;
+};
+
+export type TextSearchResponse = {
+  query: string;
+  rootPath: string;
+  matches: TextSearchMatch[];
+  truncated: boolean;
+  tool: "rg" | "grep";
+};
+
 export type EnqueueUploadRequest = {
   tabId: string;
   profileId?: string;
@@ -336,6 +350,7 @@ export interface IpcApi {
     touch: (request: { path: string; timestamp?: string }) => Promise<IpcResponse<{ touched: true }>>;
     getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
     readText: (request: { path: string; byteOffset?: number; maxBytes?: number }) => Promise<IpcResponse<TextContentReadResponse>>;
+    searchText: (request: { path: string; query: string; maxMatches?: number }) => Promise<IpcResponse<TextSearchResponse>>;
   };
   remote: {
     connect: (request: RemoteConnectRequest) => Promise<IpcResponse<RemoteConnectResponse>>;
@@ -354,6 +369,7 @@ export interface IpcApi {
       includeDirectorySize?: boolean;
     }) => Promise<IpcResponse<{ info: PathInfo }>>;
     readText: (request: { connectionId: string; path: string; byteOffset?: number; maxBytes?: number }) => Promise<IpcResponse<TextContentReadResponse>>;
+    searchText: (request: { connectionId: string; path: string; query: string; maxMatches?: number }) => Promise<IpcResponse<TextSearchResponse>>;
     mkdir: (request: { connectionId: string; parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
     createTextFile: (request: {
       connectionId: string;

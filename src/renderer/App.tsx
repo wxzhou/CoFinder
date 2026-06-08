@@ -58,6 +58,7 @@ import type {
   RemoteConnectRequest,
   RemoteEditUpdatePayload,
   TextContentReadResponse,
+  TextSearchResponse,
   TransferConflict,
   TransferConflictPolicy,
   TransferUpdatePayload
@@ -191,6 +192,20 @@ type TextViewerDialogState = {
   error: string;
 };
 
+type TextSearchDialogState = {
+  pane: ActivePane;
+  tabId: string;
+  connectionId?: string;
+  path: string;
+  title: string;
+  query: string;
+  matches: TextSearchResponse["matches"];
+  truncated: boolean;
+  tool: TextSearchResponse["tool"] | null;
+  status: "idle" | "loading" | "ready" | "error";
+  error: string;
+};
+
 type ActivePane = "local" | "remote";
 
 type TransferDragPayload = {
@@ -245,6 +260,7 @@ const COFINDER_V12_COLUMNS_KEY = "cofinder.v12FileColumns.v2";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
 const TEXT_VIEWER_CHUNK_BYTES = 256 * 1024;
+const TEXT_SEARCH_MAX_MATCHES = 200;
 const V12_DEFAULT_COLUMNS: V12FileColumn[] = [
   { key: "name", label: "Name", width: 320, visible: true, required: true },
   { key: "mtime", label: "Date modified", width: 136, visible: true },
@@ -390,6 +406,7 @@ export function App(props: AppProps = {}) {
   const [timestampDialog, setTimestampDialog] = useState<TimestampDialogState | null>(null);
   const [remoteCopyMoveDialog, setRemoteCopyMoveDialog] = useState<RemoteCopyMoveDialogState | null>(null);
   const [textViewerDialog, setTextViewerDialog] = useState<TextViewerDialogState | null>(null);
+  const [textSearchDialog, setTextSearchDialog] = useState<TextSearchDialogState | null>(null);
   const timestampInputRefs = useRef<Record<TimestampPartKey, HTMLInputElement | null>>({
     year: null,
     month: null,
@@ -3373,6 +3390,11 @@ export function App(props: AppProps = {}) {
     const targetPath = pane === "local" ? tab?.localPane.selectedFullPaths[0] : tab?.remotePane.selectedFullPaths[0];
     const connectionId = pane === "remote" ? tab?.remotePane.connectionId ?? undefined : undefined;
     if (!tab || !targetPath || (pane === "remote" && !connectionId)) return;
+    await openTextViewerPath(tabId, pane, targetPath, connectionId);
+  }
+
+  async function openTextViewerPath(tabId: string, pane: ActivePane, targetPath: string, connectionId?: string): Promise<void> {
+    if (!targetPath || (pane === "remote" && !connectionId)) return;
     const initialState: TextViewerDialogState = {
       pane,
       tabId,
@@ -3429,6 +3451,65 @@ export function App(props: AppProps = {}) {
             nextByteOffset: result.data.nextByteOffset,
             size: result.data.size,
             truncated: result.data.truncated,
+            status: "ready",
+            error: ""
+          }
+        : prev
+    );
+  }
+
+  function openTextSearchDialog(tabId: string, pane: ActivePane): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = pane === "local" ? tab?.localPane.selectedFullPaths[0] : tab?.remotePane.selectedFullPaths[0];
+    const connectionId = pane === "remote" ? tab?.remotePane.connectionId ?? undefined : undefined;
+    if (!tab || !targetPath || (pane === "remote" && !connectionId)) return;
+    setTextSearchDialog({
+      pane,
+      tabId,
+      connectionId,
+      path: targetPath,
+      title: basenameRemotePath(targetPath),
+      query: "",
+      matches: [],
+      truncated: false,
+      tool: null,
+      status: "idle",
+      error: ""
+    });
+  }
+
+  async function submitTextSearchDialog(): Promise<void> {
+    const dialog = textSearchDialog;
+    if (!dialog || dialog.status === "loading") return;
+    const query = dialog.query.trim();
+    if (!query) {
+      setTextSearchDialog((prev) => (prev ? { ...prev, error: "Search query is required.", status: "error" } : prev));
+      return;
+    }
+    setTextSearchDialog((prev) => (prev ? { ...prev, query, status: "loading", error: "" } : prev));
+    const result = dialog.pane === "local"
+      ? await window.cofinder.local.searchText({ path: dialog.path, query, maxMatches: TEXT_SEARCH_MAX_MATCHES })
+      : await window.cofinder.remote.searchText({
+          connectionId: dialog.connectionId ?? "",
+          path: dialog.path,
+          query,
+          maxMatches: TEXT_SEARCH_MAX_MATCHES
+        });
+    if (!result.ok) {
+      if (dialog.pane === "remote" && dialog.connectionId && result.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(dialog.tabId, dialog.connectionId, result.error.message);
+      }
+      setTextSearchDialog((prev) => (prev?.path === dialog.path ? { ...prev, status: "error", error: result.error.message, matches: [] } : prev));
+      return;
+    }
+    setTextSearchDialog((prev) =>
+      prev?.path === dialog.path
+        ? {
+            ...prev,
+            query: result.data.query,
+            matches: result.data.matches,
+            truncated: result.data.truncated,
+            tool: result.data.tool,
             status: "ready",
             error: ""
           }
@@ -6162,6 +6243,12 @@ export function App(props: AppProps = {}) {
                         }}>
                           Decompress
                         </button>
+                        <button type="button" className="context-item" onClick={() => {
+                          openTextSearchDialog(contextMenu.tabId, "local");
+                          setContextMenu(null);
+                        }}>
+                          Search Contents...
+                        </button>
                         <button type="button" className="context-item" onClick={async () => {
                           await openTextViewerSelection(contextMenu.tabId, "local");
                           setContextMenu(null);
@@ -6352,6 +6439,12 @@ export function App(props: AppProps = {}) {
                           setContextMenu(null);
                         }}>
                           Decompress
+                        </button>
+                        <button type="button" className="context-item" onClick={() => {
+                          openTextSearchDialog(contextMenu.tabId, "remote");
+                          setContextMenu(null);
+                        }}>
+                          Search Contents...
                         </button>
                         <button type="button" className="context-item" onClick={async () => {
                           await openTextViewerSelection(contextMenu.tabId, "remote");
@@ -6601,6 +6694,74 @@ export function App(props: AppProps = {}) {
               >
                 {remoteCopyMoveDialog.busy ? "Queueing..." : remoteCopyMoveDialog.operation === "copy" ? "Copy" : "Move"}
               </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {textSearchDialog ? (
+        <div
+          className="delete-confirm-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && textSearchDialog.status !== "loading") setTextSearchDialog(null);
+          }}
+        >
+          <div className="text-search-dialog" role="dialog" aria-modal="true" aria-labelledby="text-search-title">
+            <div className="text-viewer-head">
+              <div>
+                <h3 id="text-search-title">Search Contents</h3>
+                <p>{textSearchDialog.title}</p>
+              </div>
+              <button type="button" className="toolbar-button" disabled={textSearchDialog.status === "loading"} onClick={() => setTextSearchDialog(null)}>
+                Close
+              </button>
+            </div>
+            <div className="text-search-form">
+              <input
+                autoFocus
+                value={textSearchDialog.query}
+                disabled={textSearchDialog.status === "loading"}
+                placeholder="Search text"
+                onChange={(event) => setTextSearchDialog((prev) => (prev ? { ...prev, query: event.target.value, error: "" } : prev))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    void submitTextSearchDialog();
+                  } else if (event.key === "Escape" && textSearchDialog.status !== "loading") {
+                    event.preventDefault();
+                    setTextSearchDialog(null);
+                  }
+                }}
+              />
+              <button type="button" className="toolbar-button is-active" disabled={textSearchDialog.status === "loading"} onClick={() => void submitTextSearchDialog()}>
+                {textSearchDialog.status === "loading" ? "Searching..." : "Search"}
+              </button>
+            </div>
+            {textSearchDialog.error ? <div className="error-banner">{textSearchDialog.error}</div> : null}
+            <div className="text-search-summary">
+              {textSearchDialog.status === "ready"
+                ? `${textSearchDialog.matches.length}${textSearchDialog.truncated ? "+" : ""} matches${textSearchDialog.tool ? ` via ${textSearchDialog.tool}` : ""}`
+                : textSearchDialog.status === "loading" ? "Searching..." : "Enter a query and press Return."}
+            </div>
+            <div className="text-search-results" role="list" aria-label="Search results">
+              {textSearchDialog.matches.length === 0 && textSearchDialog.status === "ready" ? (
+                <div className="text-search-empty">No matches.</div>
+              ) : null}
+              {textSearchDialog.matches.map((match, index) => (
+                <div key={`${match.path}:${match.line}:${index}`} className="text-search-result" role="listitem">
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    onClick={() => void openTextViewerPath(textSearchDialog.tabId, textSearchDialog.pane, match.path, textSearchDialog.connectionId)}
+                  >
+                    View
+                  </button>
+                  <div>
+                    <div className="text-search-result-path">{match.path}:{match.line}</div>
+                    <pre>{match.preview}</pre>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>

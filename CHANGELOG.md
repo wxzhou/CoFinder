@@ -10,6 +10,7 @@
 
 - Starting the content-inspection checkpoint for `Search Contents...` and `View Text...` under `File Operation`.
 - Added local and remote `View Text...` as a read-only in-app text viewer with bounded chunk loading and binary-looking file rejection.
+- Added local and remote selected-item `Search Contents...` with bounded literal text search results, using local/remote `rg` when available and falling back to `grep`.
 
 ## v1.9.3 development
 

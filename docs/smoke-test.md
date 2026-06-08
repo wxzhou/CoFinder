@@ -108,6 +108,10 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 ## V2.10 M3 / v1.9.4 content inspection
 
+- **Search local contents:** right-click a local text file or folder -> File Operation -> `Search Contents...`, search for a known literal string, and confirm matching path/line/preview rows appear.
+- **Search remote contents:** repeat on a disposable remote text file or small folder and confirm results show without downloading the searched file into an edit session.
+- **Search result View:** click `View` on a search result and confirm the read-only `View Text` dialog opens for that result path.
+- **Search cap:** search a fixture with more than 200 matches and confirm the result count is capped/truncated rather than flooding the UI.
 - **View local text:** right-click a local text file -> File Operation -> `View Text...`; confirm the in-app read-only viewer opens and `Load More` is disabled for small files.
 - **View remote text:** connect to a disposable remote test root, create/select a text file, use File Operation -> `View Text...`, and confirm the viewer opens without creating a remote edit session or local editable copy.
 - **Large text chunking:** open a text file larger than 256 KiB and confirm the viewer initially loads the first chunk, shows loaded/total size, and can append more with `Load More`.

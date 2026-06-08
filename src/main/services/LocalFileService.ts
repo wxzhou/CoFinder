@@ -9,7 +9,7 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
-import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo, TextContentReadResponse } from "../../shared/types/ipc";
+import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo, TextContentReadResponse, TextSearchResponse } from "../../shared/types/ipc";
 import { parseTimestampInput } from "../../shared/timestampInput";
 import { normalizeLocalPath } from "../utils/pathSafety";
 import { modeToRwx } from "./permissionDisplay";
@@ -19,6 +19,7 @@ const execFileAsync = promisify(execFile);
 const localOwnerNameCache = new Map<number, string>();
 const DEFAULT_TEXT_READ_BYTES = 256 * 1024;
 const TEXT_SNIFF_BYTES = 8192;
+const DEFAULT_TEXT_SEARCH_MATCHES = 200;
 
 class LocalFileServiceError extends Error {
   constructor(
@@ -281,6 +282,28 @@ export class LocalFileService {
     }
   }
 
+  async searchText(targetPath: string, query: string, options: { maxMatches?: number } = {}): Promise<TextSearchResponse> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const trimmedQuery = query.trim();
+    const maxMatches = normalizeSearchMatchLimit(options.maxMatches);
+    if (!trimmedQuery) throw new LocalFileServiceError("CONTENT_FAILED", "Search query is required.");
+    try {
+      const stats = await fs.lstat(normalizedPath);
+      if (!stats.isFile() && !stats.isDirectory()) throw new LocalFileServiceError("CONTENT_FAILED", "Search Contents supports files and folders only.");
+      const result = await runLocalTextSearch(normalizedPath, trimmedQuery, stats.isDirectory(), maxMatches);
+      return {
+        query: trimmedQuery,
+        rootPath: normalizedPath,
+        matches: result.matches,
+        truncated: result.truncated,
+        tool: result.tool
+      };
+    } catch (error) {
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapContentError(error, normalizedPath);
+    }
+  }
+
   private mapEntryType(dirent: { isDirectory: () => boolean; isFile: () => boolean; isSymbolicLink: () => boolean }) {
     if (dirent.isDirectory()) return "directory";
     if (dirent.isFile()) return "file";
@@ -422,6 +445,12 @@ function normalizeTextReadLimit(value: unknown): number {
   return Math.min(Math.floor(numeric), DEFAULT_TEXT_READ_BYTES);
 }
 
+function normalizeSearchMatchLimit(value: unknown): number {
+  const numeric = typeof value === "number" ? value : DEFAULT_TEXT_SEARCH_MATCHES;
+  if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_TEXT_SEARCH_MATCHES;
+  return Math.min(Math.floor(numeric), DEFAULT_TEXT_SEARCH_MATCHES);
+}
+
 async function readLocalFileChunk(targetPath: string, byteOffset: number, maxBytes: number): Promise<Buffer> {
   if (maxBytes <= 0) return Buffer.alloc(0);
   const handle = await fs.open(targetPath, "r");
@@ -432,6 +461,78 @@ async function readLocalFileChunk(targetPath: string, byteOffset: number, maxByt
   } finally {
     await handle.close();
   }
+}
+
+async function runLocalTextSearch(
+  targetPath: string,
+  query: string,
+  isDirectory: boolean,
+  maxMatches: number
+): Promise<{ matches: TextSearchResponse["matches"]; truncated: boolean; tool: "rg" | "grep" }> {
+  try {
+    const output = await execSearchCommand("rg", ["--line-number", "--with-filename", "--fixed-strings", "--no-heading", "--color", "never", "--", query, targetPath]);
+    return parseSearchOutput(output, maxMatches, "rg");
+  } catch (error) {
+    if (!isCommandMissing(error)) {
+      const output = execErrorOutput(error);
+      if (output !== "") return parseSearchOutput(output, maxMatches, "rg");
+      if (isNoMatchesExit(error)) return { matches: [], truncated: false, tool: "rg" };
+    }
+  }
+  const grepArgs = isDirectory
+    ? ["-R", "-n", "-H", "-F", "--", query, targetPath]
+    : ["-n", "-H", "-F", "--", query, targetPath];
+  try {
+    const output = await execSearchCommand("grep", grepArgs);
+    return parseSearchOutput(output, maxMatches, "grep");
+  } catch (error) {
+    const output = execErrorOutput(error);
+    if (output !== "") return parseSearchOutput(output, maxMatches, "grep");
+    if (isNoMatchesExit(error)) return { matches: [], truncated: false, tool: "grep" };
+    throw error;
+  }
+}
+
+async function execSearchCommand(command: string, args: string[]): Promise<string> {
+  const { stdout } = await execFileAsync(command, args, { maxBuffer: 1024 * 1024 });
+  return stdout;
+}
+
+function parseSearchOutput(output: string, maxMatches: number, tool: "rg" | "grep"): { matches: TextSearchResponse["matches"]; truncated: boolean; tool: "rg" | "grep" } {
+  const matches: TextSearchResponse["matches"] = [];
+  const lines = output.split(/\r?\n/).filter(Boolean);
+  for (const line of lines) {
+    const parsed = parseSearchLine(line);
+    if (!parsed) continue;
+    matches.push(parsed);
+    if (matches.length >= maxMatches) break;
+  }
+  return { matches, truncated: lines.length > matches.length, tool };
+}
+
+function parseSearchLine(line: string): TextSearchResponse["matches"][number] | null {
+  const match = /^(.*):(\d+):(.*)$/.exec(line);
+  if (!match) return null;
+  return {
+    path: match[1],
+    line: Number(match[2]),
+    preview: match[3]
+  };
+}
+
+function execErrorOutput(error: unknown): string {
+  const maybe = error as { stdout?: unknown };
+  return typeof maybe.stdout === "string" ? maybe.stdout : "";
+}
+
+function isCommandMissing(error: unknown): boolean {
+  const maybe = error as { code?: unknown };
+  return maybe.code === "ENOENT";
+}
+
+function isNoMatchesExit(error: unknown): boolean {
+  const maybe = error as { code?: unknown };
+  return maybe.code === 1;
 }
 
 async function ensureLocalTargetAbsent(targetPath: string): Promise<void> {

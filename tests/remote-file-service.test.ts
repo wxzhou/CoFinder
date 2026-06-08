@@ -1060,3 +1060,65 @@ describe("RemoteFileService readTextFile", () => {
     await expect(service.readTextFile("c1", "/data/blob.bin")).rejects.toMatchObject({ code: "REMOTE_CONTENT_FAILED" });
   });
 });
+
+describe("RemoteFileService searchText", () => {
+  it("parses bounded remote search output and reports the selected tool", async () => {
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      expect(command).toContain("rg --line-number");
+      const stream = new EventEmitter() as EventEmitter & { stderr?: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        stream.emit("data", "__COFINDER_SEARCH_TOOL__:rg\n/data/a.txt:2:needle one\n/data/b.txt:7:needle two\n");
+        stream.emit("close", 0);
+      });
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: {
+          stat: vi.fn().mockResolvedValue({ type: "d", size: 0, modifyTime: Date.now() }),
+          client: { exec }
+        }
+      })
+    } as any);
+
+    const result = await service.searchText("c1", "/data", "needle");
+
+    expect(result.tool).toBe("rg");
+    expect(result.matches).toEqual([
+      { path: "/data/a.txt", line: 2, preview: "needle one" },
+      { path: "/data/b.txt", line: 7, preview: "needle two" }
+    ]);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("marks remote search results truncated when more than the match cap is returned", async () => {
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr?: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        stream.emit("data", "__COFINDER_SEARCH_TOOL__:grep\n/data/a.txt:1:x\n/data/a.txt:2:x\n/data/a.txt:3:x\n");
+        stream.emit("close", 0);
+      });
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: {
+          stat: vi.fn().mockResolvedValue({ type: "-", size: 10, modifyTime: Date.now() }),
+          client: { exec }
+        }
+      })
+    } as any);
+
+    const result = await service.searchText("c1", "/data/a.txt", "x", { maxMatches: 2 });
+
+    expect(result.tool).toBe("grep");
+    expect(result.matches).toHaveLength(2);
+    expect(result.truncated).toBe(true);
+  });
+});

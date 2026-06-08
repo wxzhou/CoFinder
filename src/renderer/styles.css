@@ -2049,6 +2049,19 @@ body,
   gap: 10px;
 }
 
+.text-search-dialog {
+  width: min(900px, calc(100vw - 42px));
+  height: min(680px, calc(100vh - 42px));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 18px 42px color-mix(in srgb, #000 18%, transparent);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .text-viewer-head,
 .text-viewer-foot {
   display: flex;
@@ -2082,6 +2095,75 @@ body,
   font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.text-search-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.text-search-form input {
+  height: 30px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 0 8px;
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.text-search-form input:focus {
+  outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  outline-offset: 1px;
+}
+
+.text-search-summary {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.text-search-results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: #fbfbfc;
+}
+
+.text-search-result {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 8px 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 62%, transparent);
+}
+
+.text-search-result:last-child {
+  border-bottom: 0;
+}
+
+.text-search-result-path {
+  color: var(--text-secondary);
+  font-size: 11px;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-search-result pre {
+  margin: 0;
+  color: var(--text-primary);
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.text-search-empty {
+  color: var(--text-secondary);
+  font-size: 12px;
+  padding: 12px;
 }
 
 .chmod-grid {

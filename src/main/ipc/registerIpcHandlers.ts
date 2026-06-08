@@ -266,6 +266,20 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.searchText, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:searchText request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const query = requiredString(body.query, "query", "LOCAL_INVALID_INPUT", undefined, { maxLength: 512 });
+      const data = await localFileService.searchText(targetPath, query, {
+        maxMatches: optionalFiniteNumber(body.maxMatches)
+      });
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "LOCAL_CONTENT_FAILED", "Failed to search local text.");
+    }
+  });
+
   registerChannel(
     IPC_CHANNELS.remote.connect,
     async (_event, request: unknown): Promise<IpcResponse<RemoteConnectResponse>> => {
@@ -394,6 +408,21 @@ export function registerIpcHandlers(): void {
       return ok(data);
     } catch (error) {
       return toIpcError(error, "REMOTE_CONTENT_FAILED", "Failed to read remote text file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.searchText, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:searchText request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const query = requiredString(body.query, "query", "REMOTE_INVALID_INPUT", undefined, { maxLength: 512 });
+      const data = await remoteFileService.searchText(connectionId, targetPath, query, {
+        maxMatches: optionalFiniteNumber(body.maxMatches)
+      });
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "REMOTE_CONTENT_FAILED", "Failed to search remote text.");
     }
   });
 

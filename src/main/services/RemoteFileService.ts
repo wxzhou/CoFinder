@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
-import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse, TextContentReadResponse } from "../../shared/types/ipc";
+import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse, TextContentReadResponse, TextSearchResponse } from "../../shared/types/ipc";
 import { timestampInputToTouchStamp } from "../../shared/timestampInput";
 import { ConnectionManager } from "./ConnectionManager";
 import { isSafeHostOrUsername, normalizeRemotePosixPath } from "../utils/pathSafety";
@@ -13,6 +13,8 @@ import { sniffPreviewKind } from "./RemotePreviewService";
 const posixPath = path.posix;
 const DEFAULT_TEXT_READ_BYTES = 256 * 1024;
 const TEXT_SNIFF_BYTES = 8192;
+const DEFAULT_TEXT_SEARCH_MATCHES = 200;
+const REMOTE_SEARCH_TOOL_MARKER = "__COFINDER_SEARCH_TOOL__:";
 type RemoteListItem = {
   name: string;
   type: string;
@@ -602,6 +604,38 @@ export class RemoteFileService {
         nextByteOffset,
         size,
         truncated: nextByteOffset < size
+      };
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapContentError(error);
+    }
+  }
+
+  async searchText(connectionId: string, targetPath: string, query: string, options: { maxMatches?: number } = {}): Promise<TextSearchResponse> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const trimmedQuery = query.trim();
+    const maxMatches = normalizeSearchMatchLimit(options.maxMatches);
+    if (!trimmedQuery) throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "Search query is required.");
+    const client = connection.client as unknown as RemoteContentClient;
+    try {
+      const stat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      const type = resolveRemoteType(stat);
+      if (type !== "file" && type !== "directory") throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "Search Contents supports files and folders only.");
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "Remote command execution is unavailable for Search Contents.");
+      const output = await execRemoteOutput(exec, buildRemoteSearchCommand(normalizedPath, trimmedQuery, maxMatches), {
+        code: "REMOTE_CONTENT_FAILED",
+        message: "Remote search command failed."
+      });
+      const parsed = parseRemoteSearchOutput(output.toString("utf8"), maxMatches);
+      return {
+        query: trimmedQuery,
+        rootPath: normalizedPath,
+        matches: parsed.matches,
+        truncated: parsed.truncated,
+        tool: parsed.tool
       };
     } catch (error) {
       if (error instanceof RemoteServiceError) throw error;
@@ -1262,6 +1296,28 @@ function buildRemoteReadChunkCommand(targetPath: string, byteOffset: number, max
   return `LC_ALL=C dd if=${shellQuote(targetPath)} bs=1 skip=${byteOffset} count=${maxBytes} 2>/dev/null`;
 }
 
+function buildRemoteSearchCommand(targetPath: string, query: string, maxMatches: number): string {
+  const root = shellQuote(targetPath);
+  const needle = shellQuote(query);
+  const lineLimit = maxMatches + 1;
+  const marker = shellQuote(REMOTE_SEARCH_TOOL_MARKER);
+  return [
+    "set +e",
+    "if command -v rg >/dev/null 2>&1; then",
+    `  printf '%srg\\n' ${marker}`,
+    `  rg --line-number --with-filename --fixed-strings --no-heading --color never -- ${needle} ${root} | head -n ${lineLimit}`,
+    "  exit 0",
+    "fi",
+    "if command -v grep >/dev/null 2>&1; then",
+    `  printf '%sgrep\\n' ${marker}`,
+    `  if [ -d ${root} ]; then grep -R -n -H -F -- ${needle} ${root}; else grep -n -H -F -- ${needle} ${root}; fi | head -n ${lineLimit}`,
+    "  exit 0",
+    "fi",
+    "printf '%s\\n' 'Neither rg nor grep is available on the remote server.' >&2",
+    "exit 127"
+  ].join("\n");
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
@@ -1293,6 +1349,36 @@ function normalizeTextReadLimit(value: unknown): number {
   const numeric = typeof value === "number" ? value : DEFAULT_TEXT_READ_BYTES;
   if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_TEXT_READ_BYTES;
   return Math.min(Math.floor(numeric), DEFAULT_TEXT_READ_BYTES);
+}
+
+function normalizeSearchMatchLimit(value: unknown): number {
+  const numeric = typeof value === "number" ? value : DEFAULT_TEXT_SEARCH_MATCHES;
+  if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_TEXT_SEARCH_MATCHES;
+  return Math.min(Math.floor(numeric), DEFAULT_TEXT_SEARCH_MATCHES);
+}
+
+function parseRemoteSearchOutput(output: string, maxMatches: number): { matches: TextSearchResponse["matches"]; truncated: boolean; tool: "rg" | "grep" } {
+  const lines = output.split(/\r?\n/).filter(Boolean);
+  const marker = lines[0]?.startsWith(REMOTE_SEARCH_TOOL_MARKER) ? lines.shift() : undefined;
+  const tool = marker?.endsWith("grep") ? "grep" : "rg";
+  const matches: TextSearchResponse["matches"] = [];
+  for (const line of lines) {
+    const parsed = parseSearchLine(line);
+    if (!parsed) continue;
+    matches.push(parsed);
+    if (matches.length >= maxMatches) break;
+  }
+  return { matches, truncated: lines.length > matches.length, tool };
+}
+
+function parseSearchLine(line: string): TextSearchResponse["matches"][number] | null {
+  const match = /^(.*):(\d+):(.*)$/.exec(line);
+  if (!match) return null;
+  return {
+    path: match[1],
+    line: Number(match[2]),
+    preview: match[3]
+  };
 }
 
 async function readRemoteFileChunk(client: RemoteContentClient, remotePath: string, byteOffset: number, maxBytes: number): Promise<Buffer> {
