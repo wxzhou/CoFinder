@@ -6,7 +6,11 @@
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
 - **Latest release: v1.9.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
-## Unreleased / v1.9.3 development
+## Unreleased / v1.9.4 development
+
+- Starting the content-inspection checkpoint for `Search Contents...` and `View Text...` under `File Operation`.
+
+## v1.9.3 development
 
 - Added remote selected-item `Copy To...` and `Move To...` actions as visible Jobs tasks.
 - Remote copy/move run server-side over the active SSH/SFTP connection using `cp -a` and `mv`, avoiding rsync/passwordless-SSH requirements.

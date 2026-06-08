@@ -41,8 +41,8 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.9 release rollup | v1.9.0 | Shipped |
 | V2.10 planning | v1.9.1 | Planning branch |
 | V2.10 M1 | v1.9.2 | Complete on dev |
-| V2.10 M2 | v1.9.3 | Complete on feature branch |
-| V2.10 M3 | v1.9.4 | Planned |
+| V2.10 M2 | v1.9.3 | Complete on dev |
+| V2.10 M3 | v1.9.4 | Implementation branch |
 | V2.10 M4 | v1.9.5 | Planned |
 | V2.10 M5 | v1.9.6 | Planned |
 | V2.10 M6 | v1.9.7 | Planned |
@@ -96,8 +96,8 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.9 release rollup | v1.9.0 | Stability rollup after v1.8.0 — shipped |
 | V2.10 planning | v1.9.1 | Hard-feature design and version sequencing — planning branch |
 | V2.10 M1 | v1.9.2 | Multi-lane Jobs scheduler and path locks — complete on dev |
-| V2.10 M2 | v1.9.3 | Remote Copy To / Move To jobs — complete on feature branch |
-| V2.10 M3 | v1.9.4 | Grep/Search Contents and read-only text viewer — planned |
+| V2.10 M2 | v1.9.3 | Remote Copy To / Move To jobs — complete on dev |
+| V2.10 M3 | v1.9.4 | Grep/Search Contents and read-only text viewer — implementation branch |
 | V2.10 M4 | v1.9.5 | Expandable list rows / outline mode — planned |
 | V2.10 M5 | v1.9.6 | View-mode foundation and icon view — planned |
 | V2.10 M6 | v1.9.7 | Column view — planned |

@@ -2,7 +2,7 @@
 
 CoFinder is a macOS-only Electron file manager inspired by WinSCP. It provides a Finder-like dual-pane interface for local and SFTP remote browsing, rsync-based transfers, remote text editing, and personal daily file-management workflows.
 
-Current development version: **v1.9.3** (`package.json` version `1.9.3`). Latest published release: **v1.9.0**.
+Current development version: **v1.9.4** (`package.json` version `1.9.4`). Latest published release: **v1.9.0**.
 
 ## Current Capabilities
 
