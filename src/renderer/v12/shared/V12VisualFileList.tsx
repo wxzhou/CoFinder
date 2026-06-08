@@ -125,7 +125,7 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
                 onClick={(event) => outline.onToggle(entry, event)}
               >
                 <svg className="v12m-disclosure-svg" viewBox="0 0 12 12" aria-hidden>
-                  <path d={expanded ? "M3 4.45h6L6 7.55z" : "M4.45 3l3.1 3-3.1 3z"} />
+                  <path d={expanded ? "M3.2 4.45 6 7.25l2.8-2.8" : "M4.55 3.2 7.35 6l-2.8 2.8"} />
                 </svg>
               </button>
             ) : (

@@ -914,10 +914,10 @@
 
 .cfv12-root .v12m-disclosure,
 .cfv12-root .v12m-disclosure-spacer {
-  width: 8px;
+  width: 9px;
   height: 20px;
-  margin: 0 -2px 0 -4px;
-  flex: 0 0 8px;
+  margin: 0 -2px 0 -3px;
+  flex: 0 0 9px;
 }
 
 .cfv12-root .v12m-disclosure {
@@ -936,13 +936,17 @@
 }
 
 .cfv12-root .v12m-disclosure-svg {
-  width: 12px;
-  height: 12px;
+  width: 13px;
+  height: 13px;
   overflow: visible;
 }
 
 .cfv12-root .v12m-disclosure-svg path {
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .cfv12-root .v12m-disclosure.is-loading svg {

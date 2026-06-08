@@ -17,7 +17,7 @@
 - Replaced text `Close` buttons in app dialogs with the same compact close glyph used by Site Manager.
 - Reduced `View Text` first-page latency by using one bounded local/SFTP chunk read for both text sniffing and initial content instead of doing a separate sniff read.
 - Reworked Gallery view toward Finder's layout with a main preview area, bottom item strip, right metadata panel, and bounded sniffed image previews.
-- Tightened list disclosure spacing, kept expanded child indentation stable while selected, and added Finder-like rounded alternating row backgrounds in list view.
+- Tightened list disclosure spacing with rounded Finder-like chevrons, kept expanded child indentation stable while selected, and added Finder-like rounded alternating row backgrounds in list view.
 
 ## v1.9.8 development
 
