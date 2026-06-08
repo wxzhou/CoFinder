@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { V12_JOB_LANE_FILTER_LABELS } from "../src/renderer/v12/V12TransferDrawer";
 import { formatTransferTaskMetaLine } from "../src/renderer/v12/v12TransferRowSummary";
 import type { TransferTask } from "../src/shared/types/models";
 
@@ -56,5 +57,14 @@ describe("formatTransferTaskMetaLine", () => {
         })
       )
     ).toBe("done");
+  });
+});
+
+describe("V12TransferDrawer lane filter labels", () => {
+  it("uses concise queue names for compression and remote relocate work", () => {
+    expect(Object.fromEntries(V12_JOB_LANE_FILTER_LABELS)).toMatchObject({
+      compression: "Compress",
+      remoteMutation: "Relocate"
+    });
   });
 });

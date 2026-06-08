@@ -2,7 +2,7 @@ export type EntryType = "file" | "directory" | "symlink" | "unknown";
 export type SortKey = "name" | "size" | "mtime";
 export type SortDirection = "asc" | "desc";
 export type TransferDirection = "upload" | "download";
-export type JobTaskKind = TransferDirection | "delete" | "gzip" | "decompress" | "md5";
+export type JobTaskKind = TransferDirection | "delete" | "gzip" | "decompress" | "md5" | "remoteCopy" | "remoteMove";
 export type JobPaneKind = "local" | "remote";
 export type TransferStatus =
   | "checking"
@@ -146,6 +146,8 @@ export interface TransferTask {
   operationPaths?: string[];
   operationLockKey?: string;
   deleteSourceAfterSuccess?: boolean;
+  remoteCopyMoveConflictPolicy?: "fail" | "rename";
+  remoteCopyMoveForceDestinationDirectory?: boolean;
   status: TransferStatus;
   progressText?: string;
   percent?: number;

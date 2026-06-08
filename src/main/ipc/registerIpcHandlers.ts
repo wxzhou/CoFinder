@@ -42,6 +42,7 @@ import type {
   EnqueueDownloadRequest,
   EnqueueGzipRequest,
   EnqueueMd5Request,
+  EnqueueRemoteCopyMoveRequest,
   EnqueueUploadRequest,
   IpcResponse,
   ProfileUpsertPayload,
@@ -69,6 +70,8 @@ const transferQueueService = new TransferQueueService({
   remoteDecompress: (connectionId, targetPath) => remoteFileService.decompressPath(connectionId, targetPath),
   localMd5: (targetPath) => localFileService.generateMd5File(targetPath),
   remoteMd5: (connectionId, targetPath) => remoteFileService.generateMd5File(connectionId, targetPath),
+  remoteCopy: (connectionId, sourcePath, destinationPath, options) => remoteFileService.copyPath(connectionId, sourcePath, destinationPath, options),
+  remoteMove: (connectionId, sourcePath, destinationPath, options) => remoteFileService.movePath(connectionId, sourcePath, destinationPath, options),
   remoteUploadFallback: (connectionId, localPath, remotePath) => remoteFileService.uploadPathToRemote(connectionId, localPath, remotePath),
   remoteDownloadFallback: (connectionId, remotePath, localPath) => remoteFileService.downloadPathToLocal(connectionId, remotePath, localPath)
 });
@@ -758,6 +761,34 @@ export function registerIpcHandlers(): void {
     }
   );
 
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueRemoteCopy,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueRemoteCopy request.");
+        const req = parseRemoteCopyMoveRequest(body);
+        const data = await transferQueueService.enqueueRemoteCopy(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
+      }
+    }
+  );
+
+  registerChannel(
+    IPC_CHANNELS.transfer.enqueueRemoteMove,
+    async (_event, request: unknown): Promise<IpcResponse<{ queued: true; taskIds: string[] }>> => {
+      try {
+        const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:enqueueRemoteMove request.");
+        const req = parseRemoteCopyMoveRequest(body);
+        const data = await transferQueueService.enqueueRemoteMove(req);
+        return ok(data);
+      } catch (error) {
+        return toIpcError(error, "TRANSFER_QUEUE_ERROR", "Unexpected job queue error.");
+      }
+    }
+  );
+
   registerChannel(IPC_CHANNELS.transfer.cancel, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "TRANSFER_INVALID_REQUEST", "Invalid transfer:cancel request.");
@@ -1355,6 +1386,18 @@ function parseMd5Request(body: Record<string, unknown>): EnqueueMd5Request {
     path: pane === "remote"
       ? normalizeRemotePathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
       : validateLocalPathInput(body.path, "TRANSFER_INVALID_REQUEST", "path")
+  };
+}
+
+function parseRemoteCopyMoveRequest(body: Record<string, unknown>): EnqueueRemoteCopyMoveRequest {
+  return {
+    tabId: requiredId(body.tabId, "tabId", "TRANSFER_INVALID_REQUEST"),
+    connectionId: requiredId(body.connectionId, "connectionId", "TRANSFER_INVALID_REQUEST"),
+    sources: Array.isArray(body.sources)
+      ? body.sources.map((v) => normalizeRemotePathInput(v, "TRANSFER_INVALID_REQUEST", "source"))
+      : [],
+    destinationPath: normalizeRemotePathInput(body.destinationPath, "TRANSFER_INVALID_REQUEST", "destinationPath"),
+    conflictPolicy: body.conflictPolicy === "rename" ? "rename" : "fail"
   };
 }
 

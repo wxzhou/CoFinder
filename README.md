@@ -2,13 +2,13 @@
 
 CoFinder is a macOS-only Electron file manager inspired by WinSCP. It provides a Finder-like dual-pane interface for local and SFTP remote browsing, rsync-based transfers, remote text editing, and personal daily file-management workflows.
 
-Current development version: **v1.9.2** (`package.json` version `1.9.2`). Latest published release: **v1.9.0**.
+Current development version: **v1.9.3** (`package.json` version `1.9.3`). Latest published release: **v1.9.0**.
 
 ## Current Capabilities
 
 - Dual-pane local / remote browsing with tabs, sorting, filtering, breadcrumbs, history, recents, and favorites.
 - SFTP connection profiles, optional password saving through Electron `safeStorage`, and per-profile remote favorites.
-- Unified Jobs pane for rsync upload/download plus delete, compress/decompress, and MD5 work, with conflict handling, retry, progress/status, folder-upload file detail, drag-and-drop between panes, and lane-aware scheduling.
+- Unified Jobs pane for rsync upload/download plus delete, compress/decompress, MD5, and remote copy/move work, with conflict handling, retry, progress/status, folder-upload file detail, drag-and-drop between panes, and lane-aware scheduling.
 - Local and remote file operations: rename, delete, new folder, new text file, touch, change timestamp, file/folder compression and decompression, MD5 sidecar generation, basic metadata/Inspector, and selected remote operations such as chmod and small-file duplicate.
 - Local Quick Look for local files.
 - Remote local-copy workflow: open remote files with the default macOS app or a configured text editor, watch local saves, upload back, and surface conflicts safely. Text-editor opens are optimized for sniffed text and require confirmation before forcing binary files; default-app opens warn for large/executable files.

@@ -3,7 +3,17 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { posix as posixPath } from "node:path";
-import type { EnqueueDecompressRequest, EnqueueDeleteRequest, EnqueueDownloadRequest, EnqueueGzipRequest, EnqueueMd5Request, EnqueueUploadRequest, TransferUpdatePayload } from "../../shared/types/ipc";
+import type {
+  EnqueueDecompressRequest,
+  EnqueueDeleteRequest,
+  EnqueueDownloadRequest,
+  EnqueueGzipRequest,
+  EnqueueMd5Request,
+  EnqueueRemoteCopyMoveRequest,
+  EnqueueUploadRequest,
+  RemoteCopyMoveConflictPolicy,
+  TransferUpdatePayload
+} from "../../shared/types/ipc";
 import type { TransferErrorCategory, TransferTask, TransferTaskItem } from "../../shared/types/models";
 import { redactSensitivePlaintext } from "../security/redactSensitive";
 import { buildProcessEnv } from "../utils/processEnv";
@@ -45,6 +55,8 @@ type TransferQueueDeps = {
   remoteDecompress: (connectionId: string, path: string) => Promise<string>;
   localMd5: (path: string) => Promise<string>;
   remoteMd5: (connectionId: string, path: string) => Promise<string>;
+  remoteCopy: (connectionId: string, sourcePath: string, destinationPath: string, options: { conflictPolicy: RemoteCopyMoveConflictPolicy; forceDestinationDirectory: boolean }) => Promise<string>;
+  remoteMove: (connectionId: string, sourcePath: string, destinationPath: string, options: { conflictPolicy: RemoteCopyMoveConflictPolicy; forceDestinationDirectory: boolean }) => Promise<string>;
   remoteUploadFallback: (connectionId: string, localPath: string, remotePath: string) => Promise<void>;
   remoteDownloadFallback: (connectionId: string, remotePath: string, localPath: string) => Promise<void>;
   compressionConcurrency: number;
@@ -74,6 +86,8 @@ export class TransferQueueService {
       remoteDecompress: deps?.remoteDecompress ?? defaultUnavailableRemoteDecompress,
       localMd5: deps?.localMd5 ?? defaultUnavailableLocalMd5,
       remoteMd5: deps?.remoteMd5 ?? defaultUnavailableRemoteMd5,
+      remoteCopy: deps?.remoteCopy ?? defaultUnavailableRemoteCopy,
+      remoteMove: deps?.remoteMove ?? defaultUnavailableRemoteMove,
       remoteUploadFallback: deps?.remoteUploadFallback ?? defaultUnavailableRemoteUploadFallback,
       remoteDownloadFallback: deps?.remoteDownloadFallback ?? defaultUnavailableRemoteDownloadFallback,
       compressionConcurrency: clampCompressionConcurrency(deps?.compressionConcurrency)
@@ -313,6 +327,63 @@ export class TransferQueueService {
     return { queued: true, taskIds: [task.id] };
   }
 
+  async enqueueRemoteCopy(request: EnqueueRemoteCopyMoveRequest): Promise<{ queued: true; taskIds: string[] }> {
+    return this.enqueueRemoteCopyMove("remoteCopy", request);
+  }
+
+  async enqueueRemoteMove(request: EnqueueRemoteCopyMoveRequest): Promise<{ queued: true; taskIds: string[] }> {
+    return this.enqueueRemoteCopyMove("remoteMove", request);
+  }
+
+  private async enqueueRemoteCopyMove(
+    kind: "remoteCopy" | "remoteMove",
+    request: EnqueueRemoteCopyMoveRequest
+  ): Promise<{ queued: true; taskIds: string[] }> {
+    if (!request.tabId.trim()) throw transferError("TRANSFER_INVALID_REQUEST", "Tab id is required.");
+    if (!request.connectionId?.trim()) {
+      throw transferError("TRANSFER_INVALID_REQUEST", "Remote connection id is required.");
+    }
+    if (request.sources.length === 0) {
+      throw transferError("TRANSFER_INVALID_REQUEST", `Select at least one remote item to ${kind === "remoteCopy" ? "copy" : "move"}.`);
+    }
+    const sources = unique(request.sources.map((item) => validateRsyncPath(item)));
+    const destinationInput = validateRsyncPath(request.destinationPath);
+    const conflictPolicy = request.conflictPolicy === "rename" ? "rename" : "fail";
+    const forceDestinationDirectory = sources.length > 1 || request.destinationPath.trim().endsWith("/");
+    const taskIds: string[] = [];
+    for (const source of sources) {
+      const destinationDisplay = forceDestinationDirectory
+        ? posixPath.join(destinationInput, posixPath.basename(source))
+        : destinationInput;
+      const lockKey = operationLockKey(kind, "remote", request.connectionId, [source, destinationDisplay]);
+      this.assertNoConflictingOperation(lockKey, `A remote ${kind === "remoteCopy" ? "copy" : "move"} job is already queued or running for this path.`);
+      const task = this.makeTask({
+        tabId: request.tabId,
+        kind,
+        pane: "remote",
+        source,
+        destination: destinationInput,
+        sourceDisplay: `${kind === "remoteCopy" ? "Remote copy" : "Remote move"}: ${source}`,
+        destinationDisplay,
+        connectionId: request.connectionId,
+        host: "",
+        port: 0,
+        username: "",
+        remotePath: source,
+        localPath: "",
+        operationPaths: [source, destinationInput],
+        operationLockKey: lockKey,
+        remoteCopyMoveConflictPolicy: conflictPolicy,
+        remoteCopyMoveForceDestinationDirectory: forceDestinationDirectory
+      });
+      this.tasks.push(task);
+      taskIds.push(task.id);
+    }
+    this.emit();
+    void this.pump();
+    return { queued: true, taskIds };
+  }
+
   async cancel(taskId: string): Promise<{ canceled: true }> {
     const task = this.tasks.find((item) => item.id === taskId);
     if (!task) throw transferError("TRANSFER_NOT_FOUND", "Transfer task not found.");
@@ -452,7 +523,7 @@ export class TransferQueueService {
     task.error = undefined;
     this.emit();
 
-    if (task.kind === "delete" || task.kind === "gzip" || task.kind === "decompress" || task.kind === "md5") {
+    if (task.kind === "delete" || task.kind === "gzip" || task.kind === "decompress" || task.kind === "md5" || task.kind === "remoteCopy" || task.kind === "remoteMove") {
       await this.runOperationTask(task);
       return;
     }
@@ -605,6 +676,30 @@ export class TransferQueueService {
         task.finishedAt = this.deps.now();
         task.progressText = `Deleted ${deleted} ${deleted === 1 ? "item" : "items"}.`;
         this.appendLog(task, task.progressText);
+        this.emit();
+        return;
+      }
+
+      if (task.kind === "remoteCopy" || task.kind === "remoteMove") {
+        task.currentFile = task.source;
+        task.progressText = task.kind === "remoteCopy" ? "Copying remote item..." : "Moving remote item...";
+        this.emit();
+        const output = task.kind === "remoteCopy"
+          ? await this.deps.remoteCopy(requiredConnectionId(task), task.source, task.destination, {
+              conflictPolicy: task.remoteCopyMoveConflictPolicy ?? "fail",
+              forceDestinationDirectory: !!task.remoteCopyMoveForceDestinationDirectory
+            })
+          : await this.deps.remoteMove(requiredConnectionId(task), task.source, task.destination, {
+              conflictPolicy: task.remoteCopyMoveConflictPolicy ?? "fail",
+              forceDestinationDirectory: !!task.remoteCopyMoveForceDestinationDirectory
+            });
+        if (task.status !== "running") return;
+        task.status = "success";
+        task.destination = output;
+        task.destinationDisplay = output;
+        task.finishedAt = this.deps.now();
+        task.progressText = task.kind === "remoteCopy" ? "Remote copy completed." : "Remote move completed.";
+        this.appendLog(task, `${task.kind === "remoteCopy" ? "Remote copy" : "Remote move"} completed: ${output}`);
         this.emit();
         return;
       }
@@ -802,6 +897,18 @@ function locksForTask(task: TransferTask): PathLock[] {
       makePathLock(task.pane ?? "local", task.connectionId, task.destination, "write")
     ].filter(isPathLock);
   }
+  if (task.kind === "remoteCopy") {
+    return [
+      makePathLock("remote", task.connectionId, task.source, "read"),
+      makePathLock("remote", task.connectionId, task.destination, "write")
+    ].filter(isPathLock);
+  }
+  if (task.kind === "remoteMove") {
+    return [
+      makePathLock("remote", task.connectionId, task.source, "write"),
+      makePathLock("remote", task.connectionId, task.destination, "write")
+    ].filter(isPathLock);
+  }
   return [];
 }
 
@@ -918,7 +1025,7 @@ function validateOperationPath(input: string): string {
   return value;
 }
 
-function operationLockKey(kind: "delete" | "gzip" | "decompress" | "md5", pane: "local" | "remote", connectionId: string | undefined, paths: string[]): string {
+function operationLockKey(kind: "delete" | "gzip" | "decompress" | "md5" | "remoteCopy" | "remoteMove", pane: "local" | "remote", connectionId: string | undefined, paths: string[]): string {
   return `${kind}\u0000${pane}\u0000${connectionId ?? ""}\u0000${paths.slice().sort().join("\u0000")}`;
 }
 
@@ -1085,6 +1192,14 @@ async function defaultUnavailableLocalMd5(): Promise<string> {
 
 async function defaultUnavailableRemoteMd5(): Promise<string> {
   throw transferError("TRANSFER_INVALID_REQUEST", "Remote MD5 job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteCopy(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Remote copy job support is unavailable.");
+}
+
+async function defaultUnavailableRemoteMove(): Promise<string> {
+  throw transferError("TRANSFER_INVALID_REQUEST", "Remote move job support is unavailable.");
 }
 
 async function defaultUnavailableRemoteUploadFallback(): Promise<void> {
