@@ -21,6 +21,8 @@ import {
   V12PaneFootStatus,
   V12ProdDevHint,
   V12TbIcon,
+  type V12Column,
+  V12VisualColumnView,
   V12VisualFileList,
   V12VisualIconGrid,
   V12VisualLocationStrip,
@@ -77,6 +79,10 @@ type HistoryState = {
 type RemoteConnectionStatus = "disconnected" | "connecting" | "connected" | "failed";
 type V12FileColumnSettings = Record<V12FileColumnKey, { width: number; visible: boolean }>;
 type V12PaneFileColumnSettings = Record<"local" | "remote", V12FileColumnSettings>;
+type V12ColumnPaneState<T extends LocalFileEntry | RemoteFileEntry> = {
+  selectedPaths: string[];
+  cache: Record<string, { status: "loading" | "ready" | "error"; entries: T[]; error?: string }>;
+};
 type LocalPaneState = {
   currentPath: string;
   pathInput: string;
@@ -440,6 +446,8 @@ export function App(props: AppProps = {}) {
   const [v12FileColumnSettings, setV12FileColumnSettings] = useState<V12PaneFileColumnSettings>(() => readV12FileColumnSettings());
   const [v12LocalOutlineByTab, setV12LocalOutlineByTab] = useState<Record<string, OutlineState<LocalFileEntry>>>({});
   const [v12RemoteOutlineByTab, setV12RemoteOutlineByTab] = useState<Record<string, OutlineState<RemoteFileEntry>>>({});
+  const [v12LocalColumnsByTab, setV12LocalColumnsByTab] = useState<Record<string, V12ColumnPaneState<LocalFileEntry>>>({});
+  const [v12RemoteColumnsByTab, setV12RemoteColumnsByTab] = useState<Record<string, V12ColumnPaneState<RemoteFileEntry>>>({});
   const v12LocalInspTokenRef = useRef(0);
   const v12RemoteInspTokenRef = useRef(0);
   const v12LocalInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1189,6 +1197,12 @@ export function App(props: AppProps = {}) {
       delete next[tabId];
       return next;
     });
+    setV12LocalColumnsByTab((prev) => {
+      if (!prev[tabId]) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
     rememberLocalRecent(response.data.path);
     return true;
   }
@@ -1370,6 +1384,8 @@ export function App(props: AppProps = {}) {
 
   const activeLocalOutline = v12LocalOutlineByTab[activeTab.id] ?? {};
   const activeRemoteOutline = v12RemoteOutlineByTab[activeTab.id] ?? {};
+  const activeLocalColumns = v12LocalColumnsByTab[activeTab.id] ?? { selectedPaths: [], cache: {} };
+  const activeRemoteColumns = v12RemoteColumnsByTab[activeTab.id] ?? { selectedPaths: [], cache: {} };
   const localVisibleEntries = useMemo<OutlineRow<LocalFileEntry>[]>(
     () =>
       appSettings.appearance.showListDisclosureControls
@@ -1404,16 +1420,76 @@ export function App(props: AppProps = {}) {
       sortedRemoteEntries
     ]
   );
+  const localColumnViewColumns = useMemo<Array<V12Column<LocalFileEntry>>>(() => {
+    const columns: Array<V12Column<LocalFileEntry>> = [
+      { path: localPane.currentPath || "/", title: localPaneTitleFromPath(localPane.currentPath), entries: sortedEntries, status: "ready" }
+    ];
+    for (const selectedPath of activeLocalColumns.selectedPaths) {
+      const node = activeLocalColumns.cache[selectedPath];
+      columns.push({
+        path: selectedPath,
+        title: getEntryNameFromPath(selectedPath),
+        entries: node?.entries ? sortAndFilterFileEntries(node.entries, localPane.sortKey, localPane.sortDirection, localPane.filterText) : [],
+        status: node?.status ?? "loading",
+        error: node?.error
+      });
+      if (node?.status !== "ready") break;
+    }
+    return columns;
+  }, [activeLocalColumns, localPane.currentPath, localPane.filterText, localPane.sortDirection, localPane.sortKey, sortAndFilterFileEntries, sortedEntries]);
+  const remoteColumnViewColumns = useMemo<Array<V12Column<RemoteFileEntry>>>(() => {
+    const columns: Array<V12Column<RemoteFileEntry>> = [
+      { path: remotePane.currentPath || "/", title: getEntryNameFromPath(remotePane.currentPath || "/") || "/", entries: sortedRemoteEntries, status: remotePane.isListing ? "loading" : "ready" }
+    ];
+    for (const selectedPath of activeRemoteColumns.selectedPaths) {
+      const node = activeRemoteColumns.cache[selectedPath];
+      columns.push({
+        path: selectedPath,
+        title: getEntryNameFromPath(selectedPath),
+        entries: node?.entries ? sortAndFilterFileEntries(node.entries, remotePane.sortKey, remotePane.sortDirection, remotePane.filterText) : [],
+        status: node?.status ?? "loading",
+        error: node?.error
+      });
+      if (node?.status !== "ready") break;
+    }
+    return columns;
+  }, [activeRemoteColumns, remotePane.currentPath, remotePane.filterText, remotePane.isListing, remotePane.sortDirection, remotePane.sortKey, sortAndFilterFileEntries, sortedRemoteEntries]);
   useEffect(() => {
-    localVisibleEntriesRef.current = localPane.viewMode === "list" ? localVisibleEntries : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+    localVisibleEntriesRef.current =
+      localPane.viewMode === "list"
+        ? localVisibleEntries
+        : localPane.viewMode === "column"
+          ? localColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+          : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
     remoteVisibleEntriesRef.current =
-      remotePane.viewMode === "list" ? remoteVisibleEntries : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
-  }, [localPane.viewMode, localVisibleEntries, remotePane.viewMode, remoteVisibleEntries, sortedEntries, sortedRemoteEntries]);
+      remotePane.viewMode === "list"
+        ? remoteVisibleEntries
+        : remotePane.viewMode === "column"
+          ? remoteColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+          : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+  }, [
+    localColumnViewColumns,
+    localPane.viewMode,
+    localVisibleEntries,
+    remoteColumnViewColumns,
+    remotePane.viewMode,
+    remoteVisibleEntries,
+    sortedEntries,
+    sortedRemoteEntries
+  ]);
 
   const localCurrentViewEntries =
-    localPane.viewMode === "list" ? localVisibleEntries : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+    localPane.viewMode === "list"
+      ? localVisibleEntries
+      : localPane.viewMode === "column"
+        ? localColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+        : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
   const remoteCurrentViewEntries =
-    remotePane.viewMode === "list" ? remoteVisibleEntries : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+    remotePane.viewMode === "list"
+      ? remoteVisibleEntries
+      : remotePane.viewMode === "column"
+        ? remoteColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+        : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
 
   const selectedEntries = localCurrentViewEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
@@ -2357,6 +2433,12 @@ export function App(props: AppProps = {}) {
       delete next[tabId];
       return next;
     });
+    setV12RemoteColumnsByTab((prev) => {
+      if (!prev[tabId]) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
     rememberRemoteRecent(profileId, payload.path);
     return true;
   }
@@ -2965,6 +3047,79 @@ export function App(props: AppProps = {}) {
         [entry.fullPath]: result.ok
           ? { expanded: true, status: "ready", entries: result.data.entries }
           : { expanded: false, status: "error", entries: [], error: result.error.message }
+      }
+    }));
+  }
+
+  async function openLocalColumnPath(tabId: string, entry: LocalFileEntry, columnIndex: number): Promise<void> {
+    const nextSelectedPaths = entry.type === "directory" ? [...activeLocalColumns.selectedPaths.slice(0, columnIndex), entry.fullPath] : activeLocalColumns.selectedPaths.slice(0, columnIndex);
+    setV12LocalColumnsByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        selectedPaths: nextSelectedPaths,
+        cache: prev[tabId]?.cache ?? {}
+      }
+    }));
+    if (entry.type !== "directory" || activeLocalColumns.cache[entry.fullPath]?.status === "ready") return;
+    setV12LocalColumnsByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        selectedPaths: nextSelectedPaths,
+        cache: {
+          ...(prev[tabId]?.cache ?? {}),
+          [entry.fullPath]: { status: "loading", entries: prev[tabId]?.cache?.[entry.fullPath]?.entries ?? [] }
+        }
+      }
+    }));
+    const result = await window.cofinder.local.listDirectory({ path: entry.fullPath });
+    setV12LocalColumnsByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        selectedPaths: prev[tabId]?.selectedPaths ?? nextSelectedPaths,
+        cache: {
+          ...(prev[tabId]?.cache ?? {}),
+          [entry.fullPath]: result.ok
+            ? { status: "ready", entries: result.data.entries }
+            : { status: "error", entries: [], error: result.error.message }
+        }
+      }
+    }));
+  }
+
+  async function openRemoteColumnPath(tabId: string, entry: RemoteFileEntry, columnIndex: number): Promise<void> {
+    const tab = tabsRef.current.find((item) => item.id === tabId);
+    const connectionId = tab?.remotePane.connectionId;
+    if (!connectionId) return;
+    const nextSelectedPaths = entry.type === "directory" ? [...activeRemoteColumns.selectedPaths.slice(0, columnIndex), entry.fullPath] : activeRemoteColumns.selectedPaths.slice(0, columnIndex);
+    setV12RemoteColumnsByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        selectedPaths: nextSelectedPaths,
+        cache: prev[tabId]?.cache ?? {}
+      }
+    }));
+    if (entry.type !== "directory" || activeRemoteColumns.cache[entry.fullPath]?.status === "ready") return;
+    setV12RemoteColumnsByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        selectedPaths: nextSelectedPaths,
+        cache: {
+          ...(prev[tabId]?.cache ?? {}),
+          [entry.fullPath]: { status: "loading", entries: prev[tabId]?.cache?.[entry.fullPath]?.entries ?? [] }
+        }
+      }
+    }));
+    const result = await window.cofinder.remote.listDirectory({ connectionId, path: entry.fullPath });
+    setV12RemoteColumnsByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        selectedPaths: prev[tabId]?.selectedPaths ?? nextSelectedPaths,
+        cache: {
+          ...(prev[tabId]?.cache ?? {}),
+          [entry.fullPath]: result.ok
+            ? { status: "ready", entries: result.data.entries }
+            : { status: "error", entries: [], error: result.error.message }
+        }
       }
     }));
   }
@@ -4690,7 +4845,8 @@ export function App(props: AppProps = {}) {
     <div className="v12m-view-mode-toggle" aria-label={`${pane} view mode`}>
       {[
         { mode: "list" as const, icon: "list-bullet", label: "List view" },
-        { mode: "icon" as const, icon: "grid-2x2", label: "Icon view" }
+        { mode: "icon" as const, icon: "grid-2x2", label: "Icon view" },
+        { mode: "column" as const, icon: "columns-3", label: "Column view" }
       ].map((item) => (
         <button
           key={item.mode}
@@ -5209,7 +5365,42 @@ export function App(props: AppProps = {}) {
             <div className="v12m-pane-split">
               <div className="v12m-pane-main v12m-pane-main--stack">
                 {localPane.error ? <div className="cfv12p-error">{localPane.error}</div> : null}
-                {localPane.viewMode === "icon" ? (
+                {localPane.viewMode === "column" ? (
+                  <V12VisualColumnView
+                    pane="local"
+                    isPaneActive={activePane === "local"}
+                    columns={localColumnViewColumns}
+                    selectedFullPaths={localPane.selectedFullPaths}
+                    selectedColumnPaths={activeLocalColumns.selectedPaths}
+                    onItemClick={(entry, columnIndex, event) => {
+                      handleLocalPrimaryEntryClick(entry, event);
+                      void openLocalColumnPath(activeTab.id, entry, columnIndex);
+                    }}
+                    onItemContextMenu={(entry, event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      openContextMenu(activeTab.id, "local", entry, event);
+                    }}
+                    onItemDoubleClick={(entry) => {
+                      if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                      void handleRowDoubleClick(activeTab.id, entry);
+                    }}
+                    onBackgroundMouseDown={(event) => beginMarqueeSelection("local", event)}
+                    onBackgroundContextMenu={(event) => {
+                      event.preventDefault();
+                      openBackgroundContextMenu(activeTab.id, "local", event);
+                    }}
+                    onBackgroundDragOver={(event) => handleTransferDragOver("local", localPane.currentPath, event)}
+                    onBackgroundDrop={(event) => void handleTransferDrop("local", localPane.currentPath, event)}
+                    onDragLeave={handleTransferDragLeave}
+                    onItemDragStart={(entry, event) => beginTransferDrag("local", entry, event)}
+                    onItemDragOver={(entry, event) => handleDirectoryRowDragOver("local", entry, event)}
+                    onItemDrop={(entry, event) => void handleDirectoryRowDrop("local", entry, event)}
+                    onItemDragEnd={() => setDropTarget(null)}
+                    getItemClassName={(entry) => rowDropClass("local", entry.fullPath)}
+                    inlineRename={localInlineRenameProps}
+                  />
+                ) : localPane.viewMode === "icon" ? (
                   <V12VisualIconGrid
                     pane="local"
                     isPaneActive={activePane === "local"}
@@ -5650,7 +5841,42 @@ export function App(props: AppProps = {}) {
               <div className="v12m-pane-split">
                 <div className="v12m-pane-main v12m-pane-main--stack">
                   {remotePane.error ? <div className="cfv12p-error">{remotePane.error}</div> : null}
-                  {remotePane.viewMode === "icon" ? (
+                  {remotePane.viewMode === "column" ? (
+                    <V12VisualColumnView
+                      pane="remote"
+                      isPaneActive={activePane === "remote"}
+                      columns={remoteColumnViewColumns}
+                      selectedFullPaths={remotePane.selectedFullPaths}
+                      selectedColumnPaths={activeRemoteColumns.selectedPaths}
+                      onItemClick={(entry, columnIndex, event) => {
+                        handleRemotePrimaryEntryClick(entry, event);
+                        void openRemoteColumnPath(activeTab.id, entry, columnIndex);
+                      }}
+                      onItemContextMenu={(entry, event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        openContextMenu(activeTab.id, "remote", entry, event);
+                      }}
+                      onItemDoubleClick={(entry) => {
+                        if (inlineRename && inlineRename.tabId === activeTab.id && inlineRename.sourcePath === entry.fullPath) return;
+                        void handleRemoteDoubleClick(activeTab.id, entry);
+                      }}
+                      onBackgroundMouseDown={(event) => beginMarqueeSelection("remote", event)}
+                      onBackgroundContextMenu={(event) => {
+                        event.preventDefault();
+                        openBackgroundContextMenu(activeTab.id, "remote", event);
+                      }}
+                      onBackgroundDragOver={(event) => handleTransferDragOver("remote", remotePane.currentPath, event)}
+                      onBackgroundDrop={(event) => void handleTransferDrop("remote", remotePane.currentPath, event)}
+                      onDragLeave={handleTransferDragLeave}
+                      onItemDragStart={(entry, event) => beginTransferDrag("remote", entry, event)}
+                      onItemDragOver={(entry, event) => handleDirectoryRowDragOver("remote", entry, event)}
+                      onItemDrop={(entry, event) => void handleDirectoryRowDrop("remote", entry, event)}
+                      onItemDragEnd={() => setDropTarget(null)}
+                      getItemClassName={(entry) => rowDropClass("remote", entry.fullPath)}
+                      inlineRename={remoteInlineRenameProps}
+                    />
+                  ) : remotePane.viewMode === "icon" ? (
                     <V12VisualIconGrid
                       pane="remote"
                       isPaneActive={activePane === "remote"}
@@ -6479,6 +6705,7 @@ export function App(props: AppProps = {}) {
                       >
                         <option value="list">List</option>
                         <option value="icon">Icon</option>
+                        <option value="column">Column</option>
                       </select>
                     </label>
                     <label>
@@ -6497,6 +6724,7 @@ export function App(props: AppProps = {}) {
                       >
                         <option value="list">List</option>
                         <option value="icon">Icon</option>
+                        <option value="column">Column</option>
                       </select>
                     </label>
                     <label className="preferences-check">

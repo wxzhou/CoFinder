@@ -137,6 +137,16 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Transfers:** drag a local icon item to the remote pane and a remote icon item to the local pane; confirm upload/download Jobs are queued as in List view.
 - **List compatibility:** switch back to List view and confirm column widths, visible columns, sorting, disclosure controls, and row selection still behave as before.
 
+## V2.10 M6 / v1.9.7 column view
+
+- **Switching:** switch local and remote panes independently to Column view, then back to List/Icon; confirm each pane keeps its own mode and does not affect the other pane.
+- **Local columns:** in local Column view, click a folder and confirm its contents appear in the adjacent column without navigating away; click a nested folder and confirm a third column appears.
+- **Remote columns:** repeat under an isolated remote test root; confirm remote child columns show loading/error/empty states as needed and do not disconnect the pane on a child-listing failure.
+- **Selection and operations:** select files/folders in any column and confirm context menus, Rename/F2, Delete, Copy Name, Copy Full Path, and Inspector use the selected item.
+- **Double-click behavior:** double-click a folder in Column view and confirm the pane navigates into it; double-click a file and confirm the same open/edit behavior as List view.
+- **Drag/drop:** drag a local column item to the remote pane and a remote column item to the local pane; confirm Jobs enqueue the same upload/download work as List view.
+- **Refresh invalidation:** open multiple child columns, refresh or navigate the pane, and confirm old child columns disappear instead of showing stale listings.
+
 ## V2.0 stable personal release
 
 - **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.

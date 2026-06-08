@@ -9,6 +9,9 @@
 ## Unreleased / v1.9.7 development
 
 - Starting the Finder-style column view checkpoint.
+- Added V12 Column view for local and remote panes, reusing the pane-independent view-mode foundation.
+- Column view opens child folders on demand into adjacent columns, keeps local and remote column caches per tab/pane, and clears them on navigation/refresh.
+- Column view preserves selected-item context menus, inline rename, double-click open/navigate, drag/drop transfer hooks, and active/inactive pane selection colors.
 
 ## v1.9.6 development
 
