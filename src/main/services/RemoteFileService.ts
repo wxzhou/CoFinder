@@ -591,11 +591,10 @@ export class RemoteFileService {
       const stat = (await client.stat(normalizedPath)) as RemoteStatItem;
       if (resolveRemoteType(stat) !== "file") throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "View Text supports files only.");
       const size = stat.size ?? 0;
-      const sample = await readRemoteFileChunk(client, normalizedPath, 0, Math.min(TEXT_SNIFF_BYTES, Math.max(size, 0)));
-      if (sniffPreviewKind(sample) !== "text") {
+      const chunk = await readRemoteFileChunk(client, normalizedPath, byteOffset, maxBytes);
+      if (byteOffset === 0 && sniffPreviewKind(chunk.subarray(0, Math.min(TEXT_SNIFF_BYTES, chunk.length))) !== "text") {
         throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "Selected remote file does not look like text.");
       }
-      const chunk = await readRemoteFileChunk(client, normalizedPath, byteOffset, maxBytes);
       const nextByteOffset = byteOffset + chunk.length;
       return {
         path: normalizedPath,

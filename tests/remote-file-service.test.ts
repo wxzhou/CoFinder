@@ -1031,7 +1031,7 @@ describe("RemoteFileService readTextFile", () => {
 
     expect(result.content).toBe("hello");
     expect(result.truncated).toBe(true);
-    expect(exec).toHaveBeenCalled();
+    expect(exec).toHaveBeenCalledTimes(1);
     expect(get).not.toHaveBeenCalled();
   });
 
@@ -1058,6 +1058,7 @@ describe("RemoteFileService readTextFile", () => {
     } as any);
 
     await expect(service.readTextFile("c1", "/data/blob.bin")).rejects.toMatchObject({ code: "REMOTE_CONTENT_FAILED" });
+    expect(exec).toHaveBeenCalledTimes(1);
   });
 });
 

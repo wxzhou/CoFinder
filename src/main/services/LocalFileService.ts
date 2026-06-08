@@ -262,11 +262,10 @@ export class LocalFileService {
     try {
       const stats = await fs.lstat(normalizedPath);
       if (!stats.isFile()) throw new LocalFileServiceError("CONTENT_FAILED", "View Text supports files only.");
-      const sample = await readLocalFileChunk(normalizedPath, 0, Math.min(TEXT_SNIFF_BYTES, Math.max(stats.size, 0)));
-      if (sniffPreviewKind(sample) !== "text") {
+      const chunk = await readLocalFileChunk(normalizedPath, byteOffset, maxBytes);
+      if (byteOffset === 0 && sniffPreviewKind(chunk.subarray(0, Math.min(TEXT_SNIFF_BYTES, chunk.length))) !== "text") {
         throw new LocalFileServiceError("CONTENT_FAILED", "Selected file does not look like text.");
       }
-      const chunk = await readLocalFileChunk(normalizedPath, byteOffset, maxBytes);
       const nextByteOffset = byteOffset + chunk.length;
       return {
         path: normalizedPath,
