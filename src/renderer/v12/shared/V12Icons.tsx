@@ -283,6 +283,14 @@ export function V12TbIcon(props: { name: string }): ReactElement {
           <rect x="12.5" y="4" width="4" height="12" rx="1" />
         </svg>
       );
+    case "gallery":
+      return (
+        <svg {...s}>
+          <rect x="3.5" y="5" width="13" height="10" rx="1.5" />
+          <path d="M5.5 13l3-3 2 2 1.5-1.5 2.5 2.5" />
+          <circle cx="7.2" cy="8" r="0.9" />
+        </svg>
+      );
     case "clock":
       return (
         <svg {...s}>

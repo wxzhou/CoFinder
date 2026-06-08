@@ -147,6 +147,16 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Drag/drop:** drag a local column item to the remote pane and a remote column item to the local pane; confirm Jobs enqueue the same upload/download work as List view.
 - **Refresh invalidation:** open multiple child columns, refresh or navigate the pane, and confirm old child columns disappear instead of showing stale listings.
 
+## V2.10 M7 / v1.9.8 gallery view
+
+- **Switching:** switch local and remote panes independently to Gallery view, then back to List/Icon/Column; confirm each pane keeps its own mode and selection remains pane-scoped.
+- **Text preview:** select a small local text file and a small remote text file; confirm the preview pane shows a bounded inline text preview and metadata.
+- **Unsupported preview:** select a binary-looking file and confirm Gallery shows a clear preview-unavailable message rather than opening an external app or creating an editable remote copy.
+- **Folder preview:** select a local and remote folder and confirm the preview pane shows folder identity/metadata without recursively scanning size/counts.
+- **Operations:** in Gallery view, confirm right-click menus, Rename/F2, Delete, Copy Name, Copy Full Path, Inspector, and double-click open/navigate match List view.
+- **Transfers:** drag a local gallery item to the remote pane and a remote gallery item to the local pane; confirm upload/download Jobs are queued.
+- **Guardrails:** select a large remote file and confirm Gallery does not silently download/open it; use existing Open/Edit actions when an explicit local-copy workflow is desired.
+
 ## V2.0 stable personal release
 
 - **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.

@@ -9,6 +9,10 @@
 ## Unreleased / v1.9.8 development
 
 - Starting the preview-focused Gallery view checkpoint.
+- Added V12 Gallery view for local and remote panes, completing the first pass of Finder-style list/icon/column/gallery view modes.
+- Gallery view keeps a selectable item strip plus a preview pane with large file/folder identity, metadata, and bounded inline text previews.
+- Local and remote Gallery previews read only a small text chunk through existing sniffing/guardrail services; binary-looking or unsupported files show a clear preview-unavailable state instead of forcing a download/open.
+- Gallery view preserves selected-item context menus, inline rename, double-click open/navigate, drag/drop transfer hooks, and pane-independent mode switching.
 
 ## v1.9.7 development
 
