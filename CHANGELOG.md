@@ -6,7 +6,11 @@
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
 - **Latest release: v1.9.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
-## Unreleased / v1.9.4 development
+## Unreleased / v1.9.5 development
+
+- Starting the expandable list rows / outline mode checkpoint for optional inline folder expansion in list view.
+
+## v1.9.4 development
 
 - Starting the content-inspection checkpoint for `Search Contents...` and `View Text...` under `File Operation`.
 - Added local and remote `View Text...` as a read-only in-app text viewer with bounded chunk loading and binary-looking file rejection.
