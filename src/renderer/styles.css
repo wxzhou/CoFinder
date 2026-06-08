@@ -1689,11 +1689,41 @@ body,
   box-shadow: none;
 }
 
+.cfv12-root .v12m-lrow {
+  position: relative;
+  min-height: 23px;
+  padding: 0 6px;
+  border-bottom: 0;
+}
+
+.cfv12-root .v12m-lrow::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: 1px 5px;
+  border-radius: 7px;
+  background: transparent;
+  pointer-events: none;
+}
+
+.cfv12-root .v12m-lrow > * {
+  position: relative;
+  z-index: 1;
+}
+
 .cfv12-root .v12m-list .v12m-lrow:nth-child(even):not(.sel-active):not(.sel-inactive) {
-  background: color-mix(in srgb, var(--m-fg, #1f2937) 3.5%, transparent);
+  background: transparent;
+}
+
+.cfv12-root .v12m-list .v12m-lrow:nth-child(even):not(.sel-active):not(.sel-inactive)::before {
+  background: color-mix(in srgb, var(--m-fg, #1f2937) 4%, transparent);
 }
 
 .cfv12-root .v12m-list .v12m-lrow:hover:not(.sel-active):not(.sel-inactive) {
+  background: transparent;
+}
+
+.cfv12-root .v12m-list .v12m-lrow:hover:not(.sel-active):not(.sel-inactive)::before {
   background: var(--m-hover);
 }
 
@@ -1746,15 +1776,16 @@ body,
 }
 
 .cfv12-root .v12m-lname {
-  padding-left: calc((var(--outline-depth, 0) * 14px));
+  gap: 6px;
+  padding-left: calc((var(--outline-depth, 0) * 13px));
 }
 
 .cfv12-root .v12m-disclosure,
 .cfv12-root .v12m-disclosure-spacer {
-  width: 10px;
+  width: 8px;
   height: 20px;
-  margin: 0 -1px 0 -3px;
-  flex: 0 0 10px;
+  margin: 0 -2px 0 -4px;
+  flex: 0 0 8px;
 }
 
 .cfv12-root .v12m-disclosure {
@@ -1764,7 +1795,7 @@ body,
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: color-mix(in srgb, var(--m-fg) 72%, transparent);
+  color: color-mix(in srgb, var(--m-fg) 84%, transparent);
   padding: 0;
 }
 
@@ -1772,9 +1803,14 @@ body,
   background: color-mix(in srgb, var(--m-fg) 9%, transparent);
 }
 
-.cfv12-root .v12m-disclosure svg {
-  width: 11px;
-  height: 11px;
+.cfv12-root .v12m-disclosure-svg {
+  width: 12px;
+  height: 12px;
+  overflow: visible;
+}
+
+.cfv12-root .v12m-disclosure-svg path {
+  fill: currentColor;
 }
 
 .cfv12-root .v12m-disclosure.is-loading svg {

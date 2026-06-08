@@ -124,7 +124,9 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
                 }}
                 onClick={(event) => outline.onToggle(entry, event)}
               >
-                <V12TbIcon name={expanded ? "chevron-down" : "chevron-forward"} />
+                <svg className="v12m-disclosure-svg" viewBox="0 0 12 12" aria-hidden>
+                  <path d={expanded ? "M3 4.45h6L6 7.55z" : "M4.45 3l3.1 3-3.1 3z"} />
+                </svg>
               </button>
             ) : (
               <span className="v12m-disclosure-spacer" aria-hidden />
