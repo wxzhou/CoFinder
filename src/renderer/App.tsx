@@ -356,7 +356,7 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     defaultPaneRatio: 0.5,
     sidebarVisible: true,
     sidebarWidth: 260,
-    showListDisclosureControls: false,
+    showListDisclosureControls: true,
     defaultLocalViewMode: "list",
     defaultRemoteViewMode: "list"
   }
@@ -1430,14 +1430,11 @@ export function App(props: AppProps = {}) {
   const activeRemoteColumns = v12RemoteColumnsByTab[activeTab.id] ?? { selectedPaths: [], cache: {} };
   const localVisibleEntries = useMemo<OutlineRow<LocalFileEntry>[]>(
     () =>
-      appSettings.appearance.showListDisclosureControls
-        ? flattenOutlineRows(sortedEntries, activeLocalOutline, {
-            sortAndFilter: (entries) => sortAndFilterFileEntries(entries, localPane.sortKey, localPane.sortDirection, localPane.filterText)
-          })
-        : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 })),
+      flattenOutlineRows(sortedEntries, activeLocalOutline, {
+        sortAndFilter: (entries) => sortAndFilterFileEntries(entries, localPane.sortKey, localPane.sortDirection, localPane.filterText)
+      }),
     [
       activeLocalOutline,
-      appSettings.appearance.showListDisclosureControls,
       localPane.filterText,
       localPane.sortDirection,
       localPane.sortKey,
@@ -1447,14 +1444,11 @@ export function App(props: AppProps = {}) {
   );
   const remoteVisibleEntries = useMemo<OutlineRow<RemoteFileEntry>[]>(
     () =>
-      appSettings.appearance.showListDisclosureControls
-        ? flattenOutlineRows(sortedRemoteEntries, activeRemoteOutline, {
-            sortAndFilter: (entries) => sortAndFilterFileEntries(entries, remotePane.sortKey, remotePane.sortDirection, remotePane.filterText)
-          })
-        : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 })),
+      flattenOutlineRows(sortedRemoteEntries, activeRemoteOutline, {
+        sortAndFilter: (entries) => sortAndFilterFileEntries(entries, remotePane.sortKey, remotePane.sortDirection, remotePane.filterText)
+      }),
     [
       activeRemoteOutline,
-      appSettings.appearance.showListDisclosureControls,
       remotePane.filterText,
       remotePane.sortDirection,
       remotePane.sortKey,
@@ -5630,7 +5624,7 @@ export function App(props: AppProps = {}) {
                     selectedFullPaths={localPane.selectedFullPaths}
                     columns={v12LocalFileColumns}
                     outline={{
-                      enabled: appSettings.appearance.showListDisclosureControls,
+                      enabled: true,
                       getDepth: (entry) => entry.outlineDepth ?? 0,
                       canExpand: (entry) => entry.type === "directory",
                       isExpanded: (entry) => Boolean(activeLocalOutline[entry.fullPath]?.expanded),
@@ -6153,7 +6147,7 @@ export function App(props: AppProps = {}) {
                       selectedFullPaths={remotePane.selectedFullPaths}
                       columns={v12RemoteFileColumns}
                       outline={{
-                        enabled: appSettings.appearance.showListDisclosureControls,
+                        enabled: true,
                         getDepth: (entry) => entry.outlineDepth ?? 0,
                         canExpand: (entry) => entry.type === "directory",
                         isExpanded: (entry) => Boolean(activeRemoteOutline[entry.fullPath]?.expanded),
@@ -6963,22 +6957,6 @@ export function App(props: AppProps = {}) {
                         }
                       />
                       Show sidebar
-                    </label>
-                    <label className="preferences-check">
-                      <input
-                        type="checkbox"
-                        checked={preferences.draft.appearance.showListDisclosureControls}
-                        onChange={(e) =>
-                          setPreferences((p) => ({
-                            ...p,
-                            draft: {
-                              ...p.draft,
-                              appearance: { ...p.draft.appearance, showListDisclosureControls: e.target.checked }
-                            }
-                          }))
-                        }
-                      />
-                      Show folder disclosure controls in list view
                     </label>
                   </div>
                 ) : null}

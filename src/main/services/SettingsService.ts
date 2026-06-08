@@ -33,7 +33,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     defaultPaneRatio: 0.5,
     sidebarVisible: true,
     sidebarWidth: 260,
-    showListDisclosureControls: false,
+    showListDisclosureControls: true,
     defaultLocalViewMode: "list",
     defaultRemoteViewMode: "list"
   }

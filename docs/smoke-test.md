@@ -119,7 +119,7 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 ## V2.10 M4 / v1.9.5 expandable list rows
 
-- **Preference default:** open Preferences -> Appearance and confirm `Show folder disclosure controls in list view` is off by default; save it on and confirm both panes show vector disclosure controls beside folders.
+- **Disclosure controls:** confirm list view always shows vector disclosure controls beside folders in both panes; Preferences no longer exposes a disclosure-control toggle.
 - **Local expansion:** expand a local folder, confirm children appear indented inline, nested folders can expand again, and clicking the folder name still selects while double-clicking navigates into the folder.
 - **Remote expansion:** connect to an isolated remote test root, expand a remote folder, confirm children load on demand without navigating away, and expand a nested remote folder.
 - **Selection order:** with expanded children visible, use click, Shift-click, Arrow Up/Down, Shift+Arrow Up/Down, and Cmd+A; confirm selection follows the visible flattened order.

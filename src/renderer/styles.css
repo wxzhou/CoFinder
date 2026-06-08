@@ -1705,7 +1705,6 @@ body,
 .cfv12-root .v12m-lrow.sel-active .v12m-lname,
 .cfv12-root .v12m-lrow.sel-inactive .v12m-lname {
   margin-left: 0;
-  padding: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -1744,10 +1743,10 @@ body,
 
 .cfv12-root .v12m-disclosure,
 .cfv12-root .v12m-disclosure-spacer {
-  width: 16px;
+  width: 12px;
   height: 20px;
-  margin: 0 1px 0 -1px;
-  flex: 0 0 16px;
+  margin: 0 -1px 0 -2px;
+  flex: 0 0 12px;
 }
 
 .cfv12-root .v12m-disclosure {
@@ -1766,8 +1765,8 @@ body,
 }
 
 .cfv12-root .v12m-disclosure svg {
-  width: 13px;
-  height: 13px;
+  width: 12px;
+  height: 12px;
 }
 
 .cfv12-root .v12m-disclosure.is-loading svg {
