@@ -12,6 +12,7 @@ export const IPC_CHANNELS = {
     touch: "local:touch",
     getInfo: "local:getInfo",
     readText: "local:readText",
+    readPreview: "local:readPreview",
     searchText: "local:searchText"
   },
   remote: {
@@ -23,6 +24,7 @@ export const IPC_CHANNELS = {
     delete: "remote:delete",
     getInfo: "remote:getInfo",
     readText: "remote:readText",
+    readPreview: "remote:readPreview",
     searchText: "remote:searchText",
     mkdir: "remote:mkdir",
     createTextFile: "remote:createTextFile",

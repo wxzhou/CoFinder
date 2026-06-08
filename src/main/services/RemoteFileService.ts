@@ -3,16 +3,17 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
-import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse, TextContentReadResponse, TextSearchResponse } from "../../shared/types/ipc";
+import type { FilePreviewReadResponse, PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse, TextContentReadResponse, TextSearchResponse } from "../../shared/types/ipc";
 import { timestampInputToTouchStamp } from "../../shared/timestampInput";
 import { ConnectionManager } from "./ConnectionManager";
 import { isSafeHostOrUsername, normalizeRemotePosixPath } from "../utils/pathSafety";
 import { modeToRwx, rightsToRwx } from "./permissionDisplay";
-import { sniffPreviewKind } from "./RemotePreviewService";
+import { sniffImageMimeType, sniffPreviewKind } from "./RemotePreviewService";
 
 const posixPath = path.posix;
 const DEFAULT_TEXT_READ_BYTES = 256 * 1024;
 const TEXT_SNIFF_BYTES = 8192;
+const DEFAULT_IMAGE_PREVIEW_BYTES = 12 * 1024 * 1024;
 const DEFAULT_TEXT_SEARCH_MATCHES = 200;
 const REMOTE_SEARCH_TOOL_MARKER = "__COFINDER_SEARCH_TOOL__:";
 type RemoteListItem = {
@@ -604,6 +605,47 @@ export class RemoteFileService {
         size,
         truncated: nextByteOffset < size
       };
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapContentError(error);
+    }
+  }
+
+  async readPreviewFile(connectionId: string, targetPath: string, options: { maxTextBytes?: number; maxImageBytes?: number } = {}): Promise<FilePreviewReadResponse> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const maxTextBytes = normalizeTextReadLimit(options.maxTextBytes);
+    const maxImageBytes = normalizeImagePreviewLimit(options.maxImageBytes);
+    const client = connection.client as unknown as RemoteContentClient;
+    try {
+      const stat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      if (resolveRemoteType(stat) !== "file") throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "Preview supports files only.");
+      const size = stat.size ?? 0;
+      const initialBytes = Math.min(Math.max(TEXT_SNIFF_BYTES, maxTextBytes), Math.max(size, 0));
+      const initialChunk = await readRemoteFileChunk(client, normalizedPath, 0, initialBytes);
+      const sample = initialChunk.subarray(0, Math.min(TEXT_SNIFF_BYTES, initialChunk.length));
+      const kind = sniffPreviewKind(sample);
+      if (kind === "text") {
+        const content = initialChunk.subarray(0, maxTextBytes).toString("utf8");
+        return { path: normalizedPath, kind: "text", size, content, truncated: maxTextBytes < size };
+      }
+      if (kind === "image") {
+        if (size > maxImageBytes) {
+          throw new RemoteServiceError("REMOTE_CONTENT_FAILED", `Image preview supports files up to ${formatPreviewLimit(maxImageBytes)}.`);
+        }
+        const imageBytes = initialChunk.length >= size ? initialChunk.subarray(0, size) : await readRemoteFileChunk(client, normalizedPath, 0, size);
+        const mimeType = sniffImageMimeType(imageBytes.subarray(0, Math.min(TEXT_SNIFF_BYTES, imageBytes.length))) ?? "application/octet-stream";
+        return {
+          path: normalizedPath,
+          kind: "image",
+          size,
+          mimeType,
+          imageDataUrl: `data:${mimeType};base64,${imageBytes.toString("base64")}`,
+          truncated: false
+        };
+      }
+      throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "Selected remote file does not look like previewable text or image.");
     } catch (error) {
       if (error instanceof RemoteServiceError) throw error;
       throw this.mapContentError(error);
@@ -1348,6 +1390,16 @@ function normalizeTextReadLimit(value: unknown): number {
   const numeric = typeof value === "number" ? value : DEFAULT_TEXT_READ_BYTES;
   if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_TEXT_READ_BYTES;
   return Math.min(Math.floor(numeric), DEFAULT_TEXT_READ_BYTES);
+}
+
+function normalizeImagePreviewLimit(value: unknown): number {
+  const numeric = typeof value === "number" ? value : DEFAULT_IMAGE_PREVIEW_BYTES;
+  if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_IMAGE_PREVIEW_BYTES;
+  return Math.min(Math.floor(numeric), DEFAULT_IMAGE_PREVIEW_BYTES);
+}
+
+function formatPreviewLimit(bytes: number): string {
+  return `${Math.round(bytes / 1024 / 1024)} MB`;
 }
 
 function normalizeSearchMatchLimit(value: unknown): number {

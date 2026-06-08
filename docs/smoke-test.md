@@ -151,11 +151,12 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 - **Switching:** switch local and remote panes independently to Gallery view, then back to List/Icon/Column; confirm each pane keeps its own mode and selection remains pane-scoped.
 - **Text preview:** select a small local text file and a small remote text file; confirm the preview pane shows a bounded inline text preview and metadata.
+- **Image preview:** select a small local image and a small remote image; confirm Gallery shows the image in the main preview area, with a lightweight thumbnail in the bottom strip and metadata on the right.
 - **Unsupported preview:** select a binary-looking file and confirm Gallery shows a clear preview-unavailable message rather than opening an external app or creating an editable remote copy.
 - **Folder preview:** select a local and remote folder and confirm the preview pane shows folder identity/metadata without recursively scanning size/counts.
 - **Operations:** in Gallery view, confirm right-click menus, Rename/F2, Delete, Copy Name, Copy Full Path, Inspector, and double-click open/navigate match List view.
 - **Transfers:** drag a local gallery item to the remote pane and a remote gallery item to the local pane; confirm upload/download Jobs are queued.
-- **Guardrails:** select a large remote file and confirm Gallery does not silently download/open it; use existing Open/Edit actions when an explicit local-copy workflow is desired.
+- **Guardrails:** select a large remote image/file and confirm Gallery shows a clear limit/unsupported message rather than silently downloading/opening it; use existing Open/Edit actions when an explicit local-copy workflow is desired.
 
 ## V2.0 stable personal release
 

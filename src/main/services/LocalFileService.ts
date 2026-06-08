@@ -9,16 +9,17 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
-import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo, TextContentReadResponse, TextSearchResponse } from "../../shared/types/ipc";
+import type { FilePreviewReadResponse, LocalListDirectoryResponse, LocalErrorCode, PathInfo, TextContentReadResponse, TextSearchResponse } from "../../shared/types/ipc";
 import { parseTimestampInput } from "../../shared/timestampInput";
 import { normalizeLocalPath } from "../utils/pathSafety";
 import { modeToRwx } from "./permissionDisplay";
-import { sniffPreviewKind } from "./RemotePreviewService";
+import { sniffImageMimeType, sniffPreviewKind } from "./RemotePreviewService";
 
 const execFileAsync = promisify(execFile);
 const localOwnerNameCache = new Map<number, string>();
 const DEFAULT_TEXT_READ_BYTES = 256 * 1024;
 const TEXT_SNIFF_BYTES = 8192;
+const DEFAULT_IMAGE_PREVIEW_BYTES = 12 * 1024 * 1024;
 const DEFAULT_TEXT_SEARCH_MATCHES = 200;
 
 class LocalFileServiceError extends Error {
@@ -281,6 +282,44 @@ export class LocalFileService {
     }
   }
 
+  async readPreviewFile(targetPath: string, options: { maxTextBytes?: number; maxImageBytes?: number } = {}): Promise<FilePreviewReadResponse> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const maxTextBytes = normalizeTextReadLimit(options.maxTextBytes);
+    const maxImageBytes = normalizeImagePreviewLimit(options.maxImageBytes);
+    try {
+      const stats = await fs.lstat(normalizedPath);
+      if (!stats.isFile()) throw new LocalFileServiceError("CONTENT_FAILED", "Preview supports files only.");
+      const size = stats.size;
+      const initialBytes = Math.min(Math.max(TEXT_SNIFF_BYTES, maxTextBytes), Math.max(size, 0));
+      const initialChunk = await readLocalFileChunk(normalizedPath, 0, initialBytes);
+      const sample = initialChunk.subarray(0, Math.min(TEXT_SNIFF_BYTES, initialChunk.length));
+      const kind = sniffPreviewKind(sample);
+      if (kind === "text") {
+        const content = initialChunk.subarray(0, maxTextBytes).toString("utf8");
+        return { path: normalizedPath, kind: "text", size, content, truncated: maxTextBytes < size };
+      }
+      if (kind === "image") {
+        if (size > maxImageBytes) {
+          throw new LocalFileServiceError("CONTENT_FAILED", `Image preview supports files up to ${formatPreviewLimit(maxImageBytes)}.`);
+        }
+        const imageBytes = initialChunk.length >= size ? initialChunk.subarray(0, size) : await readLocalFileChunk(normalizedPath, 0, size);
+        const mimeType = sniffImageMimeType(imageBytes.subarray(0, Math.min(TEXT_SNIFF_BYTES, imageBytes.length))) ?? "application/octet-stream";
+        return {
+          path: normalizedPath,
+          kind: "image",
+          size,
+          mimeType,
+          imageDataUrl: `data:${mimeType};base64,${imageBytes.toString("base64")}`,
+          truncated: false
+        };
+      }
+      throw new LocalFileServiceError("CONTENT_FAILED", "Selected file does not look like previewable text or image.");
+    } catch (error) {
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapContentError(error, normalizedPath);
+    }
+  }
+
   async searchText(targetPath: string, query: string, options: { maxMatches?: number } = {}): Promise<TextSearchResponse> {
     const normalizedPath = normalizeLocalPath(targetPath);
     const trimmedQuery = query.trim();
@@ -442,6 +481,16 @@ function normalizeTextReadLimit(value: unknown): number {
   const numeric = typeof value === "number" ? value : DEFAULT_TEXT_READ_BYTES;
   if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_TEXT_READ_BYTES;
   return Math.min(Math.floor(numeric), DEFAULT_TEXT_READ_BYTES);
+}
+
+function normalizeImagePreviewLimit(value: unknown): number {
+  const numeric = typeof value === "number" ? value : DEFAULT_IMAGE_PREVIEW_BYTES;
+  if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_IMAGE_PREVIEW_BYTES;
+  return Math.min(Math.floor(numeric), DEFAULT_IMAGE_PREVIEW_BYTES);
+}
+
+function formatPreviewLimit(bytes: number): string {
+  return `${Math.round(bytes / 1024 / 1024)} MB`;
 }
 
 function normalizeSearchMatchLimit(value: unknown): number {

@@ -4,7 +4,10 @@ import { V12Icon } from "./V12Icons";
 
 export type V12GalleryPreview = {
   status: "idle" | "loading" | "ready" | "error";
+  kind?: "text" | "image";
   content?: string;
+  imageDataUrl?: string;
+  mimeType?: string;
   error?: string;
   truncated?: boolean;
 };
@@ -44,6 +47,48 @@ export type V12VisualGalleryViewProps<T extends FileEntry> = {
 
 export function V12VisualGalleryView<T extends FileEntry>(props: V12VisualGalleryViewProps<T>): ReactElement {
   const selected = props.entries.find((entry) => props.selectedFullPaths[0] === entry.fullPath);
+  const renderPreviewContent = () => {
+    if (!selected) return <div className="v12m-gallery-preview-empty">Select one file to preview it.</div>;
+    if (selected.type === "directory") {
+      return (
+        <div className="v12m-gallery-preview-placeholder">
+          <V12Icon name="folder" size="lg" />
+          <span>Double-click to open this folder.</span>
+        </div>
+      );
+    }
+    if (props.preview.status === "loading") return <div className="v12m-gallery-preview-placeholder">Loading preview...</div>;
+    if (props.preview.status === "ready" && props.preview.kind === "image" && props.preview.imageDataUrl) {
+      return <img className="v12m-gallery-preview-image" src={props.preview.imageDataUrl} alt={selected.name} />;
+    }
+    if (props.preview.status === "ready" && props.preview.kind === "text") {
+      return (
+        <pre className="v12m-gallery-preview-text">
+          {props.preview.content}
+          {props.preview.truncated ? "\n\n..." : ""}
+        </pre>
+      );
+    }
+    if (props.preview.status === "error") {
+      return <div className="v12m-gallery-preview-placeholder">{props.preview.error || "Preview unavailable."}</div>;
+    }
+    return <div className="v12m-gallery-preview-placeholder">Select a file to preview it.</div>;
+  };
+
+  const renderThumb = (entry: T, selectedThumb: boolean) => {
+    if (selectedThumb && props.preview.status === "ready" && props.preview.kind === "image" && props.preview.imageDataUrl) {
+      return <img className="v12m-gallery-thumb-image" src={props.preview.imageDataUrl} alt="" />;
+    }
+    if (selectedThumb && props.preview.status === "ready" && props.preview.kind === "text") {
+      return (
+        <span className="v12m-gallery-thumb-text" aria-hidden>
+          {(props.preview.content ?? "").slice(0, 80)}
+        </span>
+      );
+    }
+    return <V12Icon name={entry.type === "directory" ? "folder" : "doc"} size="md" />;
+  };
+
   return (
     <div
       className="v12m-gallery"
@@ -61,6 +106,28 @@ export function V12VisualGalleryView<T extends FileEntry>(props: V12VisualGaller
       onDrop={props.onBackgroundDrop}
       onDragLeave={props.onDragLeave}
     >
+      <div className="v12m-gallery-main">{renderPreviewContent()}</div>
+      <aside className="v12m-gallery-info">
+        {selected ? (
+          <>
+            <div className="v12m-gallery-preview-hero">
+              {props.preview.status === "ready" && props.preview.kind === "image" && props.preview.imageDataUrl ? (
+                <img src={props.preview.imageDataUrl} alt="" />
+              ) : (
+                <V12Icon name={selected.type === "directory" ? "folder" : "doc"} size="lg" />
+              )}
+            </div>
+            <div className="v12m-gallery-preview-title">{selected.name}</div>
+            <div className="v12m-gallery-preview-meta">
+              <span>{props.formatKind(selected)}</span>
+              <span>{selected.type === "directory" ? "Folder" : props.formatSize(selected.size)}</span>
+              <span>{props.formatTime(selected.mtime)}</span>
+            </div>
+          </>
+        ) : (
+          <div className="v12m-gallery-preview-empty">Select one file to preview it.</div>
+        )}
+      </aside>
       <div className="v12m-gallery-strip" role="list">
         {props.entries.length === 0 ? <div className="v12m-list-empty">This folder is empty.</div> : null}
         {props.entries.map((entry) => {
@@ -91,7 +158,7 @@ export function V12VisualGalleryView<T extends FileEntry>(props: V12VisualGaller
               onDrop={(event) => props.onItemDrop?.(entry, event)}
               onDragEnd={(event) => props.onItemDragEnd?.(event)}
             >
-              <V12Icon name={entry.type === "directory" ? "folder" : "doc"} size="md" />
+              <span className="v12m-gallery-thumb">{renderThumb(entry, itemSelected)}</span>
               {renaming && props.inlineRename ? (
                 <input
                   className="v12m-gallery-rename-input"
@@ -112,37 +179,6 @@ export function V12VisualGalleryView<T extends FileEntry>(props: V12VisualGaller
           );
         })}
       </div>
-      <div className="v12m-gallery-preview">
-        {selected ? (
-          <>
-            <div className="v12m-gallery-preview-hero">
-              <V12Icon name={selected.type === "directory" ? "folder" : "doc"} size="lg" />
-            </div>
-            <div className="v12m-gallery-preview-title">{selected.name}</div>
-            <div className="v12m-gallery-preview-meta">
-              <span>{props.formatKind(selected)}</span>
-              <span>{selected.type === "directory" ? "Folder" : props.formatSize(selected.size)}</span>
-              <span>{props.formatTime(selected.mtime)}</span>
-            </div>
-            <div className="v12m-gallery-preview-body">
-              {selected.type === "directory" ? (
-                <div className="v12m-gallery-preview-placeholder">Select or double-click a file to preview or open it.</div>
-              ) : props.preview.status === "loading" ? (
-                <div className="v12m-gallery-preview-placeholder">Loading preview...</div>
-              ) : props.preview.status === "ready" ? (
-                <pre>{props.preview.content}{props.preview.truncated ? "\n\n..." : ""}</pre>
-              ) : props.preview.status === "error" ? (
-                <div className="v12m-gallery-preview-placeholder">{props.preview.error || "Preview unavailable."}</div>
-              ) : (
-                <div className="v12m-gallery-preview-placeholder">Select a file to preview it.</div>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="v12m-gallery-preview-empty">Select one file to preview it.</div>
-        )}
-      </div>
     </div>
   );
 }
-

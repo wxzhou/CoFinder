@@ -266,6 +266,20 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.readPreview, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:readPreview request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const data = await localFileService.readPreviewFile(targetPath, {
+        maxTextBytes: optionalFiniteNumber(body.maxTextBytes),
+        maxImageBytes: optionalFiniteNumber(body.maxImageBytes)
+      });
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "LOCAL_CONTENT_FAILED", "Failed to preview local file.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.local.searchText, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:searchText request.");
@@ -408,6 +422,21 @@ export function registerIpcHandlers(): void {
       return ok(data);
     } catch (error) {
       return toIpcError(error, "REMOTE_CONTENT_FAILED", "Failed to read remote text file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.readPreview, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:readPreview request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const data = await remoteFileService.readPreviewFile(connectionId, targetPath, {
+        maxTextBytes: optionalFiniteNumber(body.maxTextBytes),
+        maxImageBytes: optionalFiniteNumber(body.maxImageBytes)
+      });
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "REMOTE_CONTENT_FAILED", "Failed to preview remote file.");
     }
   });
 

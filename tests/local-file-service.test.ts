@@ -132,6 +132,21 @@ describe("LocalFileService readTextFile", () => {
   });
 });
 
+describe("LocalFileService readPreviewFile", () => {
+  it("previews local text through a bounded chunk", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "note.txt");
+    await fs.writeFile(source, "hello\nworld\n", "utf8");
+
+    const result = await service.readPreviewFile(source, { maxTextBytes: 6 });
+
+    expect(result.kind).toBe("text");
+    expect(result.content).toBe("hello\n");
+    expect(result.truncated).toBe(true);
+  });
+});
+
 describe("LocalFileService searchText", () => {
   it("searches local files and returns matching lines", async () => {
     const service = new LocalFileService();

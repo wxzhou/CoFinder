@@ -15,6 +15,7 @@ const api: IpcApi = {
     touch: (request) => ipcRenderer.invoke("local:touch", request),
     getInfo: (request) => ipcRenderer.invoke("local:getInfo", request),
     readText: (request) => ipcRenderer.invoke("local:readText", request),
+    readPreview: (request) => ipcRenderer.invoke("local:readPreview", request),
     searchText: (request) => ipcRenderer.invoke("local:searchText", request)
   },
   remote: {
@@ -26,6 +27,7 @@ const api: IpcApi = {
     delete: (request) => ipcRenderer.invoke("remote:delete", request),
     getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request),
     readText: (request) => ipcRenderer.invoke("remote:readText", request),
+    readPreview: (request) => ipcRenderer.invoke("remote:readPreview", request),
     searchText: (request) => ipcRenderer.invoke("remote:searchText", request),
     mkdir: (request) => ipcRenderer.invoke("remote:mkdir", request),
     createTextFile: (request) => ipcRenderer.invoke("remote:createTextFile", request),

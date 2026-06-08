@@ -1062,6 +1062,40 @@ describe("RemoteFileService readTextFile", () => {
   });
 });
 
+describe("RemoteFileService readPreviewFile", () => {
+  it("returns image data URLs for bounded remote images", async () => {
+    const remoteData = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]);
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr?: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        const offset = Number(command.match(/skip=(\d+)/)?.[1] ?? 0);
+        const count = Number(command.match(/count=(\d+)/)?.[1] ?? remoteData.length);
+        stream.emit("data", remoteData.subarray(offset, offset + count));
+        stream.emit("close", 0);
+      });
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: {
+          stat: vi.fn().mockResolvedValue({ type: "-", size: remoteData.length, modifyTime: Date.now() }),
+          client: { exec }
+        }
+      })
+    } as any);
+
+    const result = await service.readPreviewFile("c1", "/data/image.png", { maxImageBytes: 1024 });
+
+    expect(result.kind).toBe("image");
+    expect(result.mimeType).toBe("image/png");
+    expect(result.imageDataUrl).toBe(`data:image/png;base64,${remoteData.toString("base64")}`);
+    expect(exec).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("RemoteFileService searchText", () => {
   it("parses bounded remote search output and reports the selected tool", async () => {
     const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {

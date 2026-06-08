@@ -16,6 +16,7 @@
 - Removed the list-disclosure preference; list view now always shows compact folder disclosure controls and preserves child-row indentation when selecting expanded contents.
 - Replaced text `Close` buttons in app dialogs with the same compact close glyph used by Site Manager.
 - Reduced `View Text` first-page latency by using one bounded local/SFTP chunk read for both text sniffing and initial content instead of doing a separate sniff read.
+- Reworked Gallery view toward Finder's layout with a main preview area, bottom item strip, right metadata panel, and bounded sniffed image previews.
 
 ## v1.9.8 development
 

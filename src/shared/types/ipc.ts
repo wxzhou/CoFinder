@@ -154,6 +154,16 @@ export type TextContentReadResponse = {
   truncated: boolean;
 };
 
+export type FilePreviewReadResponse = {
+  path: string;
+  kind: "text" | "image";
+  size: number;
+  content?: string;
+  imageDataUrl?: string;
+  mimeType?: string;
+  truncated?: boolean;
+};
+
 export type TextSearchMatch = {
   path: string;
   line: number;
@@ -355,6 +365,7 @@ export interface IpcApi {
     touch: (request: { path: string; timestamp?: string }) => Promise<IpcResponse<{ touched: true }>>;
     getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
     readText: (request: { path: string; byteOffset?: number; maxBytes?: number }) => Promise<IpcResponse<TextContentReadResponse>>;
+    readPreview: (request: { path: string; maxTextBytes?: number; maxImageBytes?: number }) => Promise<IpcResponse<FilePreviewReadResponse>>;
     searchText: (request: { path: string; query: string; maxMatches?: number }) => Promise<IpcResponse<TextSearchResponse>>;
   };
   remote: {
@@ -374,6 +385,7 @@ export interface IpcApi {
       includeDirectorySize?: boolean;
     }) => Promise<IpcResponse<{ info: PathInfo }>>;
     readText: (request: { connectionId: string; path: string; byteOffset?: number; maxBytes?: number }) => Promise<IpcResponse<TextContentReadResponse>>;
+    readPreview: (request: { connectionId: string; path: string; maxTextBytes?: number; maxImageBytes?: number }) => Promise<IpcResponse<FilePreviewReadResponse>>;
     searchText: (request: { connectionId: string; path: string; query: string; maxMatches?: number }) => Promise<IpcResponse<TextSearchResponse>>;
     mkdir: (request: { connectionId: string; parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
     createTextFile: (request: {

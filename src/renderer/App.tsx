@@ -230,7 +230,10 @@ function galleryPreviewPaneStateEqual(a: GalleryPreviewPaneState, b: GalleryPrev
     a.status === b.status &&
     a.tabId === b.tabId &&
     a.path === b.path &&
+    a.kind === b.kind &&
     a.content === b.content &&
+    a.imageDataUrl === b.imageDataUrl &&
+    a.mimeType === b.mimeType &&
     a.error === b.error &&
     a.truncated === b.truncated
   );
@@ -1570,7 +1573,7 @@ export function App(props: AppProps = {}) {
       withGalleryPreviewPaneState(prev, "local", { status: "loading", tabId: activeTab.id, path: localEntry.fullPath })
     );
     void window.cofinder.local
-      .readText({ path: localEntry.fullPath, maxBytes: 16 * 1024 })
+      .readPreview({ path: localEntry.fullPath, maxTextBytes: 16 * 1024, maxImageBytes: 12 * 1024 * 1024 })
       .then((result) => {
         if (v12GalleryPreviewTokenRef.current.local !== token) return;
         setV12GalleryPreview((prev) =>
@@ -1582,7 +1585,10 @@ export function App(props: AppProps = {}) {
                   status: "ready",
                   tabId: activeTab.id,
                   path: localEntry.fullPath,
+                  kind: result.data.kind,
                   content: result.data.content,
+                  imageDataUrl: result.data.imageDataUrl,
+                  mimeType: result.data.mimeType,
                   truncated: result.data.truncated
                 }
               : { status: "error", tabId: activeTab.id, path: localEntry.fullPath, error: result.error.message }
@@ -1615,7 +1621,7 @@ export function App(props: AppProps = {}) {
       withGalleryPreviewPaneState(prev, "remote", { status: "loading", tabId: activeTab.id, path: remoteEntry.fullPath })
     );
     void window.cofinder.remote
-      .readText({ connectionId, path: remoteEntry.fullPath, maxBytes: 16 * 1024 })
+      .readPreview({ connectionId, path: remoteEntry.fullPath, maxTextBytes: 16 * 1024, maxImageBytes: 12 * 1024 * 1024 })
       .then((result) => {
         if (v12GalleryPreviewTokenRef.current.remote !== token) return;
         setV12GalleryPreview((prev) =>
@@ -1627,7 +1633,10 @@ export function App(props: AppProps = {}) {
                   status: "ready",
                   tabId: activeTab.id,
                   path: remoteEntry.fullPath,
+                  kind: result.data.kind,
                   content: result.data.content,
+                  imageDataUrl: result.data.imageDataUrl,
+                  mimeType: result.data.mimeType,
                   truncated: result.data.truncated
                 }
               : { status: "error", tabId: activeTab.id, path: remoteEntry.fullPath, error: result.error.message }

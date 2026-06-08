@@ -186,18 +186,18 @@ async function readSample(localPath: string): Promise<Buffer> {
 }
 
 export function sniffPreviewKind(sample: Buffer): PreviewKind | null {
-  if (isSupportedImage(sample)) return "image";
+  if (sniffImageMimeType(sample)) return "image";
   if (isLikelyText(sample)) return "text";
   return null;
 }
 
-function isSupportedImage(sample: Buffer): boolean {
-  if (sample.length >= 8 && sample.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return true;
-  if (sample.length >= 3 && sample[0] === 0xff && sample[1] === 0xd8 && sample[2] === 0xff) return true;
-  if (sample.length >= 6 && (sample.subarray(0, 6).toString("ascii") === "GIF87a" || sample.subarray(0, 6).toString("ascii") === "GIF89a")) return true;
-  if (sample.length >= 12 && sample.subarray(0, 4).toString("ascii") === "RIFF" && sample.subarray(8, 12).toString("ascii") === "WEBP") return true;
-  if (sample.length >= 4 && (sample.subarray(0, 4).toString("ascii") === "MM\u0000*" || sample.subarray(0, 4).toString("ascii") === "II*\u0000")) return true;
-  return false;
+export function sniffImageMimeType(sample: Buffer): string | null {
+  if (sample.length >= 8 && sample.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return "image/png";
+  if (sample.length >= 3 && sample[0] === 0xff && sample[1] === 0xd8 && sample[2] === 0xff) return "image/jpeg";
+  if (sample.length >= 6 && (sample.subarray(0, 6).toString("ascii") === "GIF87a" || sample.subarray(0, 6).toString("ascii") === "GIF89a")) return "image/gif";
+  if (sample.length >= 12 && sample.subarray(0, 4).toString("ascii") === "RIFF" && sample.subarray(8, 12).toString("ascii") === "WEBP") return "image/webp";
+  if (sample.length >= 4 && (sample.subarray(0, 4).toString("ascii") === "MM\u0000*" || sample.subarray(0, 4).toString("ascii") === "II*\u0000")) return "image/tiff";
+  return null;
 }
 
 function isLikelyText(sample: Buffer): boolean {
