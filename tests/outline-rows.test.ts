@@ -1,0 +1,76 @@
+import { describe, expect, it } from "vitest";
+import { flattenOutlineRows, hiddenDescendantPaths, type OutlineState } from "../src/renderer/v12/outlineRows";
+import type { FileEntry } from "../src/shared/types/models";
+
+const entry = (fullPath: string, type: FileEntry["type"] = "file"): FileEntry => ({
+  name: fullPath.split("/").filter(Boolean).at(-1) ?? "/",
+  fullPath,
+  type,
+  size: 0,
+  mtime: "2026-01-01T00:00:00.000Z"
+});
+
+const sortAndFilter = (rows: FileEntry[]): FileEntry[] => rows.slice().sort((a, b) => a.name.localeCompare(b.name));
+
+describe("outline rows", () => {
+  it("flattens expanded nested folders with depth metadata", () => {
+    const roots = [entry("/root/b", "directory"), entry("/root/a.txt")];
+    const outline: OutlineState<FileEntry> = {
+      "/root/b": {
+        expanded: true,
+        status: "ready",
+        entries: [entry("/root/b/d.txt"), entry("/root/b/c", "directory")]
+      },
+      "/root/b/c": {
+        expanded: true,
+        status: "ready",
+        entries: [entry("/root/b/c/e.txt")]
+      }
+    };
+
+    const rows = flattenOutlineRows(roots, outline, { sortAndFilter });
+
+    expect(rows.map((row) => [row.fullPath, row.outlineDepth, row.outlineParentPath ?? ""])).toEqual([
+      ["/root/b", 0, ""],
+      ["/root/b/c", 1, "/root/b"],
+      ["/root/b/c/e.txt", 2, "/root/b/c"],
+      ["/root/b/d.txt", 1, "/root/b"],
+      ["/root/a.txt", 0, ""]
+    ]);
+  });
+
+  it("does not include children for collapsed folders", () => {
+    const roots = [entry("/root/folder", "directory")];
+    const outline: OutlineState<FileEntry> = {
+      "/root/folder": {
+        expanded: false,
+        status: "ready",
+        entries: [entry("/root/folder/hidden.txt")]
+      }
+    };
+
+    expect(flattenOutlineRows(roots, outline, { sortAndFilter }).map((row) => row.fullPath)).toEqual(["/root/folder"]);
+  });
+
+  it("collects hidden descendants when a folder collapses", () => {
+    const outline: OutlineState<FileEntry> = {
+      "/root/folder": {
+        expanded: true,
+        status: "ready",
+        entries: [entry("/root/folder/child", "directory"), entry("/root/folder/a.txt")]
+      },
+      "/root/folder/child": {
+        expanded: true,
+        status: "ready",
+        entries: [entry("/root/folder/child/deep.txt")]
+      }
+    };
+
+    expect([...hiddenDescendantPaths("/root/folder", outline)].sort()).toEqual([
+      "/root/folder/a.txt",
+      "/root/folder/child",
+      "/root/folder/child/deep.txt"
+    ]);
+  });
+});
+

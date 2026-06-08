@@ -267,6 +267,7 @@ export type AppSettings = {
     defaultPaneRatio: number;
     sidebarVisible: boolean;
     sidebarWidth: number;
+    showListDisclosureControls: boolean;
   };
 };
 

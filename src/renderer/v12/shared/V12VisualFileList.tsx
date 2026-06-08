@@ -51,6 +51,15 @@ export type V12VisualFileListProps<T extends FileEntry> = {
   formatTime: (iso: string) => string;
   /** Human-readable kind column (mock uses “Folder” / “Document”). */
   formatKind: (entry: T) => string;
+  outline?: {
+    enabled: boolean;
+    getDepth: (entry: T) => number;
+    canExpand: (entry: T) => boolean;
+    isExpanded: (entry: T) => boolean;
+    isLoading: (entry: T) => boolean;
+    getError: (entry: T) => string;
+    onToggle: (entry: T, event: MouseEvent<HTMLButtonElement>) => void;
+  };
   emptyMessage?: string;
 };
 
@@ -93,8 +102,34 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
     if (key === "name") {
       const isDir = entry.type === "directory";
       const renaming = props.inlineRename?.sourcePath === entry.fullPath;
+      const outline = props.outline?.enabled ? props.outline : null;
+      const depth = outline?.getDepth(entry) ?? 0;
+      const canExpand = outline?.canExpand(entry) ?? false;
+      const loading = outline?.isLoading(entry) ?? false;
+      const expanded = outline?.isExpanded(entry) ?? false;
+      const outlineError = outline?.getError(entry) ?? "";
       return (
-        <div className="v12m-lname">
+        <div className="v12m-lname" style={{ "--outline-depth": depth } as CSSProperties}>
+          {outline ? (
+            canExpand ? (
+              <button
+                type="button"
+                className={`v12m-disclosure${expanded ? " is-open" : ""}${loading ? " is-loading" : ""}${outlineError ? " has-error" : ""}`}
+                title={outlineError || (expanded ? "Collapse folder" : "Expand folder")}
+                aria-label={expanded ? `Collapse ${entry.name}` : `Expand ${entry.name}`}
+                aria-expanded={expanded}
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+                onClick={(event) => outline.onToggle(entry, event)}
+              >
+                <V12TbIcon name={expanded ? "chevron-down" : "chevron-forward"} />
+              </button>
+            ) : (
+              <span className="v12m-disclosure-spacer" aria-hidden />
+            )
+          ) : null}
           <span className={`v12m-file-ico ${isDir ? "v12m-file-ico--dir" : "v12m-file-ico--file"}`}>
             <V12Icon name={isDir ? "folder" : "doc"} />
           </span>

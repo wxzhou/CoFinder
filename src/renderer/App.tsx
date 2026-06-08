@@ -27,6 +27,7 @@ import {
 } from "./v12/shared";
 import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
+import { flattenOutlineRows, hiddenDescendantPaths, type OutlineRow, type OutlineState } from "./v12/outlineRows";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
 import {
   addRecentPath,
@@ -316,7 +317,8 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     defaultInspectorVisible: false,
     defaultPaneRatio: 0.5,
     sidebarVisible: true,
-    sidebarWidth: 260
+    sidebarWidth: 260,
+    showListDisclosureControls: false
   }
 };
 
@@ -356,6 +358,8 @@ export function App(props: AppProps = {}) {
   const [tabs, setTabs] = useState<UiTabState[]>(tabState.tabs);
   const [activeTabId, setActiveTabId] = useState<string>(tabState.activeTabId);
   const tabsRef = useRef<UiTabState[]>(tabState.tabs);
+  const localVisibleEntriesRef = useRef<OutlineRow<LocalFileEntry>[]>([]);
+  const remoteVisibleEntriesRef = useRef<OutlineRow<RemoteFileEntry>[]>([]);
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
@@ -427,6 +431,8 @@ export function App(props: AppProps = {}) {
     return Number.isFinite(n) && n >= 0.25 && n <= 0.75 ? n : 0.5;
   });
   const [v12FileColumnSettings, setV12FileColumnSettings] = useState<V12PaneFileColumnSettings>(() => readV12FileColumnSettings());
+  const [v12LocalOutlineByTab, setV12LocalOutlineByTab] = useState<Record<string, OutlineState<LocalFileEntry>>>({});
+  const [v12RemoteOutlineByTab, setV12RemoteOutlineByTab] = useState<Record<string, OutlineState<RemoteFileEntry>>>({});
   const v12LocalInspTokenRef = useRef(0);
   const v12RemoteInspTokenRef = useRef(0);
   const v12LocalInspRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -773,7 +779,7 @@ export function App(props: AppProps = {}) {
         if (isEditableTarget(document.activeElement)) return;
 
         if (activePane === "local") {
-          const selectedState = selectAllRows(sortedEntries, "first");
+          const selectedState = selectAllRows(localVisibleEntriesRef.current, "first");
           setTabs((prev) =>
             prev.map((tab) =>
               tab.id === activeTab.id ? { ...tab, localPane: { ...tab.localPane, ...selectedState } } : tab
@@ -786,7 +792,7 @@ export function App(props: AppProps = {}) {
           event.stopPropagation();
         }
         if (activePane === "remote") {
-          const selectedState = selectAllRows(sortedRemoteEntries, "first");
+          const selectedState = selectAllRows(remoteVisibleEntriesRef.current, "first");
           setTabs((prev) =>
             prev.map((tab) =>
               tab.id === activeTab.id ? { ...tab, remotePane: { ...tab.remotePane, ...selectedState } } : tab
@@ -1142,6 +1148,12 @@ export function App(props: AppProps = {}) {
         };
       })
     );
+    setV12LocalOutlineByTab((prev) => {
+      if (!prev[tabId]) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
     rememberLocalRecent(response.data.path);
     return true;
   }
@@ -1293,41 +1305,81 @@ export function App(props: AppProps = {}) {
     };
   }, [drawerTransferTasks.length, queuePinned, queueStats.allDone, queueStats.failedCount, appSettings.transfer.queueAutoHideDelayMs]);
 
-  const sortedEntries = useMemo(() => {
-    const copied = localPane.entries.filter((entry) => appSettings.general.showHiddenFiles || !entry.name.startsWith("."));
-    copied.sort((a, b) => {
-      if (a.type === "directory" && b.type !== "directory") return -1;
-      if (a.type !== "directory" && b.type === "directory") return 1;
+  const sortAndFilterFileEntries = useCallback(
+    <T extends LocalFileEntry | RemoteFileEntry>(entries: T[], sortKey: SortKey, sortDirection: SortDirection, filterText: string): T[] => {
+      const copied = entries.filter((entry) => appSettings.general.showHiddenFiles || !entry.name.startsWith("."));
+      copied.sort((a, b) => {
+        if (a.type === "directory" && b.type !== "directory") return -1;
+        if (a.type !== "directory" && b.type === "directory") return 1;
 
-      let value = 0;
-      if (localPane.sortKey === "name") value = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      if (localPane.sortKey === "size") value = a.size - b.size;
-      if (localPane.sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
-      return localPane.sortDirection === "asc" ? value : -value;
-    });
-    return filterEntriesByName(copied, localPane.filterText);
-  }, [appSettings.general.showHiddenFiles, localPane.entries, localPane.filterText, localPane.sortDirection, localPane.sortKey]);
+        let value = 0;
+        if (sortKey === "name") value = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+        if (sortKey === "size") value = a.size - b.size;
+        if (sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
+        return sortDirection === "asc" ? value : -value;
+      });
+      return filterEntriesByName(copied, filterText);
+    },
+    [appSettings.general.showHiddenFiles]
+  );
 
-  const sortedRemoteEntries = useMemo(() => {
-    const copied = remotePane.entries.filter((entry) => appSettings.general.showHiddenFiles || !entry.name.startsWith("."));
-    copied.sort((a, b) => {
-      if (a.type === "directory" && b.type !== "directory") return -1;
-      if (a.type !== "directory" && b.type === "directory") return 1;
-      let value = 0;
-      if (remotePane.sortKey === "name") value = a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
-      if (remotePane.sortKey === "size") value = a.size - b.size;
-      if (remotePane.sortKey === "mtime") value = new Date(a.mtime).getTime() - new Date(b.mtime).getTime();
-      return remotePane.sortDirection === "asc" ? value : -value;
-    });
-    return filterEntriesByName(copied, remotePane.filterText);
-  }, [appSettings.general.showHiddenFiles, remotePane.entries, remotePane.filterText, remotePane.sortDirection, remotePane.sortKey]);
+  const sortedEntries = useMemo(
+    () => sortAndFilterFileEntries(localPane.entries, localPane.sortKey, localPane.sortDirection, localPane.filterText),
+    [localPane.entries, localPane.filterText, localPane.sortDirection, localPane.sortKey, sortAndFilterFileEntries]
+  );
 
-  const selectedEntries = sortedEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
+  const sortedRemoteEntries = useMemo(
+    () => sortAndFilterFileEntries(remotePane.entries, remotePane.sortKey, remotePane.sortDirection, remotePane.filterText),
+    [remotePane.entries, remotePane.filterText, remotePane.sortDirection, remotePane.sortKey, sortAndFilterFileEntries]
+  );
+
+  const activeLocalOutline = v12LocalOutlineByTab[activeTab.id] ?? {};
+  const activeRemoteOutline = v12RemoteOutlineByTab[activeTab.id] ?? {};
+  const localVisibleEntries = useMemo<OutlineRow<LocalFileEntry>[]>(
+    () =>
+      appSettings.appearance.showListDisclosureControls
+        ? flattenOutlineRows(sortedEntries, activeLocalOutline, {
+            sortAndFilter: (entries) => sortAndFilterFileEntries(entries, localPane.sortKey, localPane.sortDirection, localPane.filterText)
+          })
+        : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 })),
+    [
+      activeLocalOutline,
+      appSettings.appearance.showListDisclosureControls,
+      localPane.filterText,
+      localPane.sortDirection,
+      localPane.sortKey,
+      sortAndFilterFileEntries,
+      sortedEntries
+    ]
+  );
+  const remoteVisibleEntries = useMemo<OutlineRow<RemoteFileEntry>[]>(
+    () =>
+      appSettings.appearance.showListDisclosureControls
+        ? flattenOutlineRows(sortedRemoteEntries, activeRemoteOutline, {
+            sortAndFilter: (entries) => sortAndFilterFileEntries(entries, remotePane.sortKey, remotePane.sortDirection, remotePane.filterText)
+          })
+        : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 })),
+    [
+      activeRemoteOutline,
+      appSettings.appearance.showListDisclosureControls,
+      remotePane.filterText,
+      remotePane.sortDirection,
+      remotePane.sortKey,
+      sortAndFilterFileEntries,
+      sortedRemoteEntries
+    ]
+  );
+  useEffect(() => {
+    localVisibleEntriesRef.current = localVisibleEntries;
+    remoteVisibleEntriesRef.current = remoteVisibleEntries;
+  }, [localVisibleEntries, remoteVisibleEntries]);
+
+  const selectedEntries = localVisibleEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const totalSize = sortedEntries.reduce((acc, item) => acc + item.size, 0);
-  const remoteSelectedEntries = sortedRemoteEntries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
+  const totalSize = localVisibleEntries.reduce((acc, item) => acc + item.size, 0);
+  const remoteSelectedEntries = remoteVisibleEntries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const remoteTotalSize = sortedRemoteEntries.reduce((acc, item) => acc + item.size, 0);
+  const remoteTotalSize = remoteVisibleEntries.reduce((acc, item) => acc + item.size, 0);
 
   useEffect(() => {
     if (uiShell !== "v12") {
@@ -2258,6 +2310,12 @@ export function App(props: AppProps = {}) {
       })
     );
     const profileId = tabsRef.current.find((tab) => tab.id === tabId)?.remotePane.activeProfileId;
+    setV12RemoteOutlineByTab((prev) => {
+      if (!prev[tabId]) return prev;
+      const next = { ...prev };
+      delete next[tabId];
+      return next;
+    });
     rememberRemoteRecent(profileId, payload.path);
     return true;
   }
@@ -2607,7 +2665,7 @@ export function App(props: AppProps = {}) {
           localPane: {
             ...tab.localPane,
             ...applyRowSelection(
-              sortedEntries,
+              localVisibleEntries,
               {
                 selectedFullPaths: tab.localPane.selectedFullPaths,
                 selectionAnchorFullPath: tab.localPane.selectionAnchorFullPath
@@ -2644,7 +2702,7 @@ export function App(props: AppProps = {}) {
           remotePane: {
             ...tab.remotePane,
             ...applyRowSelection(
-              sortedRemoteEntries,
+              remoteVisibleEntries,
               {
                 selectedFullPaths: tab.remotePane.selectedFullPaths,
                 selectionAnchorFullPath: tab.remotePane.selectionAnchorFullPath
@@ -2678,7 +2736,7 @@ export function App(props: AppProps = {}) {
             localPane: {
               ...tab.localPane,
               ...applyKeyboardRowSelection(
-                sortedEntries,
+                localVisibleEntries,
                 {
                   selectedFullPaths: tab.localPane.selectedFullPaths,
                   selectionAnchorFullPath: tab.localPane.selectionAnchorFullPath
@@ -2694,7 +2752,7 @@ export function App(props: AppProps = {}) {
           remotePane: {
             ...tab.remotePane,
             ...applyKeyboardRowSelection(
-              sortedRemoteEntries,
+              remoteVisibleEntries,
               {
                 selectedFullPaths: tab.remotePane.selectedFullPaths,
                 selectionAnchorFullPath: tab.remotePane.selectionAnchorFullPath
@@ -2742,6 +2800,132 @@ export function App(props: AppProps = {}) {
           : tab
       )
     );
+  }
+
+  function removeHiddenOutlineSelection(tabId: string, pane: ActivePane, hidden: Set<string>): void {
+    if (hidden.size === 0) return;
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        if (pane === "local") {
+          const selectedFullPaths = tab.localPane.selectedFullPaths.filter((path) => !hidden.has(path));
+          return {
+            ...tab,
+            localPane: {
+              ...tab.localPane,
+              selectedFullPaths,
+              selectionAnchorFullPath:
+                tab.localPane.selectionAnchorFullPath && hidden.has(tab.localPane.selectionAnchorFullPath)
+                  ? selectedFullPaths[0] ?? null
+                  : tab.localPane.selectionAnchorFullPath
+            }
+          };
+        }
+        const selectedFullPaths = tab.remotePane.selectedFullPaths.filter((path) => !hidden.has(path));
+        return {
+          ...tab,
+          remotePane: {
+            ...tab.remotePane,
+            selectedFullPaths,
+            selectionAnchorFullPath:
+              tab.remotePane.selectionAnchorFullPath && hidden.has(tab.remotePane.selectionAnchorFullPath)
+                ? selectedFullPaths[0] ?? null
+                : tab.remotePane.selectionAnchorFullPath
+          }
+        };
+      })
+    );
+  }
+
+  async function toggleLocalOutline(tabId: string, entry: LocalFileEntry): Promise<void> {
+    setActivePane("local");
+    const current = v12LocalOutlineByTab[tabId]?.[entry.fullPath];
+    if (current?.expanded) {
+      const hidden = hiddenDescendantPaths(entry.fullPath, v12LocalOutlineByTab[tabId] ?? {});
+      setV12LocalOutlineByTab((prev) => ({
+        ...prev,
+        [tabId]: {
+          ...(prev[tabId] ?? {}),
+          [entry.fullPath]: { ...((prev[tabId] ?? {})[entry.fullPath] ?? current), expanded: false }
+        }
+      }));
+      removeHiddenOutlineSelection(tabId, "local", hidden);
+      return;
+    }
+    if (current?.status === "ready") {
+      setV12LocalOutlineByTab((prev) => ({
+        ...prev,
+        [tabId]: {
+          ...(prev[tabId] ?? {}),
+          [entry.fullPath]: { ...current, expanded: true }
+        }
+      }));
+      return;
+    }
+    setV12LocalOutlineByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        ...(prev[tabId] ?? {}),
+        [entry.fullPath]: { expanded: true, status: "loading", entries: current?.entries ?? [] }
+      }
+    }));
+    const result = await window.cofinder.local.listDirectory({ path: entry.fullPath });
+    setV12LocalOutlineByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        ...(prev[tabId] ?? {}),
+        [entry.fullPath]: result.ok
+          ? { expanded: true, status: "ready", entries: result.data.entries }
+          : { expanded: false, status: "error", entries: [], error: result.error.message }
+      }
+    }));
+  }
+
+  async function toggleRemoteOutline(tabId: string, entry: RemoteFileEntry): Promise<void> {
+    setActivePane("remote");
+    const tab = tabsRef.current.find((item) => item.id === tabId);
+    const connectionId = tab?.remotePane.connectionId;
+    if (!connectionId) return;
+    const current = v12RemoteOutlineByTab[tabId]?.[entry.fullPath];
+    if (current?.expanded) {
+      const hidden = hiddenDescendantPaths(entry.fullPath, v12RemoteOutlineByTab[tabId] ?? {});
+      setV12RemoteOutlineByTab((prev) => ({
+        ...prev,
+        [tabId]: {
+          ...(prev[tabId] ?? {}),
+          [entry.fullPath]: { ...((prev[tabId] ?? {})[entry.fullPath] ?? current), expanded: false }
+        }
+      }));
+      removeHiddenOutlineSelection(tabId, "remote", hidden);
+      return;
+    }
+    if (current?.status === "ready") {
+      setV12RemoteOutlineByTab((prev) => ({
+        ...prev,
+        [tabId]: {
+          ...(prev[tabId] ?? {}),
+          [entry.fullPath]: { ...current, expanded: true }
+        }
+      }));
+      return;
+    }
+    setV12RemoteOutlineByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        ...(prev[tabId] ?? {}),
+        [entry.fullPath]: { expanded: true, status: "loading", entries: current?.entries ?? [] }
+      }
+    }));
+    const result = await window.cofinder.remote.listDirectory({ connectionId, path: entry.fullPath });
+    setV12RemoteOutlineByTab((prev) => ({
+      ...prev,
+      [tabId]: {
+        ...(prev[tabId] ?? {}),
+        [entry.fullPath]: result.ok
+          ? { expanded: true, status: "ready", entries: result.data.entries }
+          : { expanded: false, status: "error", entries: [], error: result.error.message }
+      }
+    }));
   }
 
   function openContextMenu(
@@ -2821,8 +3005,8 @@ export function App(props: AppProps = {}) {
   async function copySelection(tabId: string, pane: "local" | "remote", mode: "name" | "path"): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab) return;
-    const localEntriesForCopy = tab.id === activeTab.id ? sortedEntries : tab.localPane.entries;
-    const remoteEntriesForCopy = tab.id === activeTab.id ? sortedRemoteEntries : tab.remotePane.entries;
+    const localEntriesForCopy = tab.id === activeTab.id ? localVisibleEntries : tab.localPane.entries;
+    const remoteEntriesForCopy = tab.id === activeTab.id ? remoteVisibleEntries : tab.remotePane.entries;
     const text =
       pane === "local"
         ? stringifySelection(tab.localPane.selectedFullPaths, localEntriesForCopy, mode)
@@ -4854,12 +5038,25 @@ export function App(props: AppProps = {}) {
                 <V12VisualFileList
                   pane="local"
                   isPaneActive={activePane === "local"}
-                  entries={sortedEntries}
+                  entries={localVisibleEntries}
                   emptyMessage={localPane.error ? "Local folder could not be loaded." : "This local folder is empty."}
                   sortKey={localPane.sortKey}
                   sortDirection={localPane.sortDirection}
                   selectedFullPaths={localPane.selectedFullPaths}
                   columns={v12LocalFileColumns}
+                  outline={{
+                    enabled: appSettings.appearance.showListDisclosureControls,
+                    getDepth: (entry) => entry.outlineDepth ?? 0,
+                    canExpand: (entry) => entry.type === "directory",
+                    isExpanded: (entry) => Boolean(activeLocalOutline[entry.fullPath]?.expanded),
+                    isLoading: (entry) => activeLocalOutline[entry.fullPath]?.status === "loading",
+                    getError: (entry) => activeLocalOutline[entry.fullPath]?.error ?? "",
+                    onToggle: (entry, event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void toggleLocalOutline(activeTab.id, entry);
+                    }
+                  }}
                   onColumnWidthChange={(key, width) => updateV12ColumnWidth("local", key, width)}
                   onColumnVisibilityChange={(key, visible) => updateV12ColumnVisibility("local", key, visible)}
                   onSort={(key) => handleSort(activeTab.id, key)}
@@ -4943,7 +5140,7 @@ export function App(props: AppProps = {}) {
                 />
                 <V12PaneFootStatus
                   selectedCount={selectedEntries.length}
-                  totalCount={sortedEntries.length}
+                  totalCount={localVisibleEntries.length}
                   selectedSizeLabel={formatSize(selectedSize)}
                   totalSizeLabel={formatSize(totalSize)}
                 />
@@ -4953,7 +5150,7 @@ export function App(props: AppProps = {}) {
                   scope="local"
                   selectionCount={localPane.selectedFullPaths.length}
                   selectedPaths={localPane.selectedFullPaths}
-                  entries={sortedEntries}
+                  entries={localVisibleEntries}
                   info={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.info : null}
                   infoLoading={localPane.selectedFullPaths.length === 1 && v12LocalInsp.status === "loading"}
                   infoError={localPane.selectedFullPaths.length === 1 ? v12LocalInsp.error : ""}
@@ -5288,7 +5485,7 @@ export function App(props: AppProps = {}) {
                   <V12VisualFileList
                     pane="remote"
                     isPaneActive={activePane === "remote"}
-                    entries={sortedRemoteEntries}
+                    entries={remoteVisibleEntries}
                     emptyMessage={
                       remotePane.isListing ? "Loading remote folder..." : remotePane.error ? "Remote folder could not be loaded." : "This remote folder is empty."
                     }
@@ -5296,6 +5493,19 @@ export function App(props: AppProps = {}) {
                     sortDirection={remotePane.sortDirection}
                     selectedFullPaths={remotePane.selectedFullPaths}
                     columns={v12RemoteFileColumns}
+                    outline={{
+                      enabled: appSettings.appearance.showListDisclosureControls,
+                      getDepth: (entry) => entry.outlineDepth ?? 0,
+                      canExpand: (entry) => entry.type === "directory",
+                      isExpanded: (entry) => Boolean(activeRemoteOutline[entry.fullPath]?.expanded),
+                      isLoading: (entry) => activeRemoteOutline[entry.fullPath]?.status === "loading",
+                      getError: (entry) => activeRemoteOutline[entry.fullPath]?.error ?? "",
+                      onToggle: (entry, event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        void toggleRemoteOutline(activeTab.id, entry);
+                      }
+                    }}
                     onColumnWidthChange={(key, width) => updateV12ColumnWidth("remote", key, width)}
                     onColumnVisibilityChange={(key, visible) => updateV12ColumnVisibility("remote", key, visible)}
                     onSort={(key) => handleRemoteSort(activeTab.id, key)}
@@ -5379,7 +5589,7 @@ export function App(props: AppProps = {}) {
                   />
                   <V12PaneFootStatus
                     selectedCount={remoteSelectedEntries.length}
-                    totalCount={sortedRemoteEntries.length}
+                    totalCount={remoteVisibleEntries.length}
                     selectedSizeLabel={formatSize(remoteSelectedSize)}
                     totalSizeLabel={formatSize(remoteTotalSize)}
                   />
@@ -5389,7 +5599,7 @@ export function App(props: AppProps = {}) {
                     scope="remote"
                     selectionCount={remotePane.selectedFullPaths.length}
                     selectedPaths={remotePane.selectedFullPaths}
-                    entries={sortedRemoteEntries}
+                    entries={remoteVisibleEntries}
                     info={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.info : null}
                     infoLoading={remotePane.selectedFullPaths.length === 1 && v12RemoteInsp.status === "loading"}
                     infoError={remotePane.selectedFullPaths.length === 1 ? v12RemoteInsp.error : ""}
@@ -6093,6 +6303,22 @@ export function App(props: AppProps = {}) {
                         }
                       />
                       Show sidebar
+                    </label>
+                    <label className="preferences-check">
+                      <input
+                        type="checkbox"
+                        checked={preferences.draft.appearance.showListDisclosureControls}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: {
+                              ...p.draft,
+                              appearance: { ...p.draft.appearance, showListDisclosureControls: e.target.checked }
+                            }
+                          }))
+                        }
+                      />
+                      Show folder disclosure controls in list view
                     </label>
                   </div>
                 ) : null}

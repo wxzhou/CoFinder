@@ -9,6 +9,10 @@
 ## Unreleased / v1.9.5 development
 
 - Starting the expandable list rows / outline mode checkpoint for optional inline folder expansion in list view.
+- Added a Preferences -> Appearance toggle for folder disclosure controls in list view, off by default.
+- Added local and remote inline folder expansion with nested expansion, per-pane caches, and refresh/navigation invalidation.
+- Updated list selection, keyboard movement, Shift ranges, Cmd+A, and Copy Name / Copy Full Path ordering to operate on the flattened visible list when outline rows are enabled.
+- Added focused tests for outline flattening, nested depth metadata, collapsed rows, and hidden-descendant selection cleanup.
 
 ## v1.9.4 development
 

@@ -870,6 +870,46 @@
   color: rgba(255, 255, 255, 0.88);
 }
 
+.cfv12-root .v12m-lname {
+  padding-left: calc((var(--outline-depth, 0) * 18px));
+}
+
+.cfv12-root .v12m-disclosure,
+.cfv12-root .v12m-disclosure-spacer {
+  width: 16px;
+  height: 20px;
+  margin: 0 1px 0 -1px;
+  flex: 0 0 16px;
+}
+
+.cfv12-root .v12m-disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: color-mix(in srgb, var(--m-fg) 72%, transparent);
+  padding: 0;
+}
+
+.cfv12-root .v12m-disclosure:hover {
+  background: color-mix(in srgb, var(--m-fg) 9%, transparent);
+}
+
+.cfv12-root .v12m-disclosure svg {
+  width: 13px;
+  height: 13px;
+}
+
+.cfv12-root .v12m-disclosure.is-loading svg {
+  opacity: 0.55;
+}
+
+.cfv12-root .v12m-disclosure.has-error {
+  color: #c9342b;
+}
+
 .cfv12-root .v12m-insp-iconwrap {
   width: auto;
   height: auto;
