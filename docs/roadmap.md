@@ -44,7 +44,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.10 M2 | v1.9.3 | Complete on dev |
 | V2.10 M3 | v1.9.4 | Complete on feature branch |
 | V2.10 M4 | v1.9.5 | Complete on feature branch |
-| V2.10 M5 | v1.9.6 | Planned |
+| V2.10 M5 | v1.9.6 | Implementation branch |
 | V2.10 M6 | v1.9.7 | Planned |
 | V2.10 M7 | v1.9.8 | Planned |
 
@@ -99,7 +99,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.10 M2 | v1.9.3 | Remote Copy To / Move To jobs — complete on dev |
 | V2.10 M3 | v1.9.4 | Grep/Search Contents and read-only text viewer — complete on feature branch |
 | V2.10 M4 | v1.9.5 | Expandable list rows / outline mode — complete on feature branch |
-| V2.10 M5 | v1.9.6 | View-mode foundation and icon view — planned |
+| V2.10 M5 | v1.9.6 | View-mode foundation and icon view — implementation branch |
 | V2.10 M6 | v1.9.7 | Column view — planned |
 | V2.10 M7 | v1.9.8 | Gallery view — planned |
 

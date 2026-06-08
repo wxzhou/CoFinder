@@ -6,7 +6,11 @@
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
 - **Latest release: v1.9.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
-## Unreleased / v1.9.5 development
+## Unreleased / v1.9.6 development
+
+- Starting the view-mode foundation and icon view checkpoint.
+
+## v1.9.5 development
 
 - Starting the expandable list rows / outline mode checkpoint for optional inline folder expansion in list view.
 - Added a Preferences -> Appearance toggle for folder disclosure controls in list view, off by default.
