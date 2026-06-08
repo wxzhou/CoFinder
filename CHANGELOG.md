@@ -6,7 +6,11 @@
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
 - **Latest release: v1.9.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
-## Unreleased / v1.9.7 development
+## Unreleased / v1.9.8 development
+
+- Starting the preview-focused Gallery view checkpoint.
+
+## v1.9.7 development
 
 - Starting the Finder-style column view checkpoint.
 - Added V12 Column view for local and remote panes, reusing the pane-independent view-mode foundation.
