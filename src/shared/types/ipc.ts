@@ -13,6 +13,7 @@ export type LocalErrorCode =
   | "COMPRESS_FAILED"
   | "TOUCH_FAILED"
   | "INFO_FAILED"
+  | "CONTENT_FAILED"
   | "UNKNOWN";
 
 export type PathInfo = {
@@ -51,6 +52,7 @@ export type RemoteErrorCode =
   | "LOCAL_COMPRESS_FAILED"
   | "LOCAL_TOUCH_FAILED"
   | "LOCAL_INFO_FAILED"
+  | "LOCAL_CONTENT_FAILED"
   | "LOCAL_UNKNOWN_ERROR"
   | "SYSTEM_INVALID_INPUT"
   | "SYSTEM_PREVIEW_FAILED"
@@ -67,6 +69,7 @@ export type RemoteErrorCode =
   | "REMOTE_RENAME_FAILED"
   | "REMOTE_DELETE_FAILED"
   | "REMOTE_INFO_FAILED"
+  | "REMOTE_CONTENT_FAILED"
   | "REMOTE_MKDIR_FAILED"
   | "REMOTE_CREATE_FILE_FAILED"
   | "REMOTE_COMPRESS_FAILED"
@@ -139,6 +142,15 @@ export interface RemoteListDirectoryResponse {
   path: string;
   entries: RemoteFileEntry[];
 }
+
+export type TextContentReadResponse = {
+  path: string;
+  content: string;
+  byteOffset: number;
+  nextByteOffset: number;
+  size: number;
+  truncated: boolean;
+};
 
 export type EnqueueUploadRequest = {
   tabId: string;
@@ -323,6 +335,7 @@ export interface IpcApi {
     compressGzip: (request: { path: string }) => Promise<IpcResponse<{ compressed: true; path: string }>>;
     touch: (request: { path: string; timestamp?: string }) => Promise<IpcResponse<{ touched: true }>>;
     getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
+    readText: (request: { path: string; byteOffset?: number; maxBytes?: number }) => Promise<IpcResponse<TextContentReadResponse>>;
   };
   remote: {
     connect: (request: RemoteConnectRequest) => Promise<IpcResponse<RemoteConnectResponse>>;
@@ -340,6 +353,7 @@ export interface IpcApi {
       path: string;
       includeDirectorySize?: boolean;
     }) => Promise<IpcResponse<{ info: PathInfo }>>;
+    readText: (request: { connectionId: string; path: string; byteOffset?: number; maxBytes?: number }) => Promise<IpcResponse<TextContentReadResponse>>;
     mkdir: (request: { connectionId: string; parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
     createTextFile: (request: {
       connectionId: string;

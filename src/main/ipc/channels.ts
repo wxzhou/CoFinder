@@ -10,7 +10,8 @@ export const IPC_CHANNELS = {
     createTextFile: "local:createTextFile",
     compressGzip: "local:compressGzip",
     touch: "local:touch",
-    getInfo: "local:getInfo"
+    getInfo: "local:getInfo",
+    readText: "local:readText"
   },
   remote: {
     connect: "remote:connect",
@@ -20,6 +21,7 @@ export const IPC_CHANNELS = {
     rename: "remote:rename",
     delete: "remote:delete",
     getInfo: "remote:getInfo",
+    readText: "remote:readText",
     mkdir: "remote:mkdir",
     createTextFile: "remote:createTextFile",
     compressGzip: "remote:compressGzip",

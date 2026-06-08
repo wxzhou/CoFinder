@@ -106,6 +106,13 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Failure visibility:** copy or move to an unwritable/missing destination and confirm the job remains visible as failed with an actionable error.
 - **Path locks:** enqueue a long remote delete on a parent disposable folder, then enqueue `Move To...` for a child path before delete finishes. Confirm the move remains pending until the delete releases the path lock.
 
+## V2.10 M3 / v1.9.4 content inspection
+
+- **View local text:** right-click a local text file -> File Operation -> `View Text...`; confirm the in-app read-only viewer opens and `Load More` is disabled for small files.
+- **View remote text:** connect to a disposable remote test root, create/select a text file, use File Operation -> `View Text...`, and confirm the viewer opens without creating a remote edit session or local editable copy.
+- **Large text chunking:** open a text file larger than 256 KiB and confirm the viewer initially loads the first chunk, shows loaded/total size, and can append more with `Load More`.
+- **Binary rejection:** select a binary-looking local and remote file and confirm `View Text...` shows a clear unsupported-text error instead of opening unreadable bytes.
+
 ## V2.0 stable personal release
 
 - **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.

@@ -106,6 +106,32 @@ describe("LocalFileService creation", () => {
   });
 });
 
+describe("LocalFileService readTextFile", () => {
+  it("reads a bounded chunk and reports truncation", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "note.txt");
+    await fs.writeFile(source, "hello\nworld\n", "utf8");
+
+    const result = await service.readTextFile(source, { maxBytes: 6 });
+
+    expect(result.content).toBe("hello\n");
+    expect(result.byteOffset).toBe(0);
+    expect(result.nextByteOffset).toBe(6);
+    expect(result.size).toBe(12);
+    expect(result.truncated).toBe(true);
+  });
+
+  it("rejects binary-looking files", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "data.bin");
+    await fs.writeFile(source, Buffer.from([0x00, 0x01, 0x02, 0xff]));
+
+    await expect(service.readTextFile(source)).rejects.toMatchObject({ code: "CONTENT_FAILED" });
+  });
+});
+
 describe("LocalFileService compressFileGzip", () => {
   it("compresses a single local file without overwriting existing gzip target", async () => {
     const service = new LocalFileService();

@@ -13,7 +13,8 @@ const api: IpcApi = {
     createTextFile: (request) => ipcRenderer.invoke("local:createTextFile", request),
     compressGzip: (request) => ipcRenderer.invoke("local:compressGzip", request),
     touch: (request) => ipcRenderer.invoke("local:touch", request),
-    getInfo: (request) => ipcRenderer.invoke("local:getInfo", request)
+    getInfo: (request) => ipcRenderer.invoke("local:getInfo", request),
+    readText: (request) => ipcRenderer.invoke("local:readText", request)
   },
   remote: {
     connect: (request) => ipcRenderer.invoke("remote:connect", request),
@@ -23,6 +24,7 @@ const api: IpcApi = {
     rename: (request) => ipcRenderer.invoke("remote:rename", request),
     delete: (request) => ipcRenderer.invoke("remote:delete", request),
     getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request),
+    readText: (request) => ipcRenderer.invoke("remote:readText", request),
     mkdir: (request) => ipcRenderer.invoke("remote:mkdir", request),
     createTextFile: (request) => ipcRenderer.invoke("remote:createTextFile", request),
     compressGzip: (request) => ipcRenderer.invoke("remote:compressGzip", request),

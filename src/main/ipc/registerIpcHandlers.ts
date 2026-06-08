@@ -252,6 +252,20 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.readText, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:readText request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const data = await localFileService.readTextFile(targetPath, {
+        byteOffset: optionalFiniteNumber(body.byteOffset),
+        maxBytes: optionalFiniteNumber(body.maxBytes)
+      });
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "LOCAL_CONTENT_FAILED", "Failed to read local text file.");
+    }
+  });
+
   registerChannel(
     IPC_CHANNELS.remote.connect,
     async (_event, request: unknown): Promise<IpcResponse<RemoteConnectResponse>> => {
@@ -365,6 +379,21 @@ export function registerIpcHandlers(): void {
       return ok({ info });
     } catch (error) {
       return toIpcError(error, "REMOTE_INFO_FAILED", "Failed to load remote path info.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.readText, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:readText request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const data = await remoteFileService.readTextFile(connectionId, targetPath, {
+        byteOffset: optionalFiniteNumber(body.byteOffset),
+        maxBytes: optionalFiniteNumber(body.maxBytes)
+      });
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "REMOTE_CONTENT_FAILED", "Failed to read remote text file.");
     }
   });
 
@@ -1403,6 +1432,10 @@ function parseRemoteCopyMoveRequest(body: Record<string, unknown>): EnqueueRemot
 
 function optionalBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
+}
+
+function optionalFiniteNumber(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
 function parseConflictPolicy(value: unknown): EnqueueUploadRequest["conflictPolicy"] {

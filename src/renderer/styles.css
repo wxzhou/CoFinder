@@ -2036,6 +2036,54 @@ body,
   padding: 8px 10px;
 }
 
+.text-viewer-dialog {
+  width: min(860px, calc(100vw - 42px));
+  height: min(680px, calc(100vh - 42px));
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 18px 42px color-mix(in srgb, #000 18%, transparent);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.text-viewer-head,
+.text-viewer-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.text-viewer-head h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.text-viewer-head p,
+.text-viewer-foot {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.text-viewer-content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 72%, transparent);
+  border-radius: var(--radius-sm);
+  background: #fbfbfc;
+  color: var(--text-primary);
+  padding: 10px 12px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .chmod-grid {
   display: grid;
   grid-template-columns: minmax(72px, 1fr) repeat(3, 42px);

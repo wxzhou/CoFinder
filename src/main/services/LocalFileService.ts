@@ -9,13 +9,16 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
-import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo } from "../../shared/types/ipc";
+import type { LocalListDirectoryResponse, LocalErrorCode, PathInfo, TextContentReadResponse } from "../../shared/types/ipc";
 import { parseTimestampInput } from "../../shared/timestampInput";
 import { normalizeLocalPath } from "../utils/pathSafety";
 import { modeToRwx } from "./permissionDisplay";
+import { sniffPreviewKind } from "./RemotePreviewService";
 
 const execFileAsync = promisify(execFile);
 const localOwnerNameCache = new Map<number, string>();
+const DEFAULT_TEXT_READ_BYTES = 256 * 1024;
+const TEXT_SNIFF_BYTES = 8192;
 
 class LocalFileServiceError extends Error {
   constructor(
@@ -251,6 +254,33 @@ export class LocalFileService {
     }
   }
 
+  async readTextFile(targetPath: string, options: { byteOffset?: number; maxBytes?: number } = {}): Promise<TextContentReadResponse> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const byteOffset = normalizeByteOffset(options.byteOffset);
+    const maxBytes = normalizeTextReadLimit(options.maxBytes);
+    try {
+      const stats = await fs.lstat(normalizedPath);
+      if (!stats.isFile()) throw new LocalFileServiceError("CONTENT_FAILED", "View Text supports files only.");
+      const sample = await readLocalFileChunk(normalizedPath, 0, Math.min(TEXT_SNIFF_BYTES, Math.max(stats.size, 0)));
+      if (sniffPreviewKind(sample) !== "text") {
+        throw new LocalFileServiceError("CONTENT_FAILED", "Selected file does not look like text.");
+      }
+      const chunk = await readLocalFileChunk(normalizedPath, byteOffset, maxBytes);
+      const nextByteOffset = byteOffset + chunk.length;
+      return {
+        path: normalizedPath,
+        content: chunk.toString("utf8"),
+        byteOffset,
+        nextByteOffset,
+        size: stats.size,
+        truncated: nextByteOffset < stats.size
+      };
+    } catch (error) {
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapContentError(error, normalizedPath);
+    }
+  }
+
   private mapEntryType(dirent: { isDirectory: () => boolean; isFile: () => boolean; isSymbolicLink: () => boolean }) {
     if (dirent.isDirectory()) return "directory";
     if (dirent.isFile()) return "file";
@@ -305,6 +335,13 @@ export class LocalFileService {
       return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
     }
     return new LocalFileServiceError("INFO_FAILED", `Failed to get path info: ${requestedPath}`);
+  }
+
+  private mapContentError(error: unknown, requestedPath: string): LocalFileServiceError {
+    const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+    if (code === "ENOENT") return new LocalFileServiceError("NOT_FOUND", `Path not found: ${requestedPath}`);
+    if (code === "EACCES" || code === "EPERM") return new LocalFileServiceError("PERMISSION_DENIED", `Permission denied: ${requestedPath}`);
+    return new LocalFileServiceError("CONTENT_FAILED", `Failed to read local text file: ${requestedPath}`);
   }
 
   private mapCompressError(error: unknown, requestedPath: string): LocalFileServiceError {
@@ -371,6 +408,30 @@ function localDecompressDestination(input: string): string {
   if (input.endsWith(".tgz")) return input.slice(0, -4);
   if (input.endsWith(".gz")) return input.slice(0, -3);
   throw new LocalFileServiceError("COMPRESS_FAILED", "Selected item is not a supported compressed file.");
+}
+
+function normalizeByteOffset(value: unknown): number {
+  const numeric = typeof value === "number" ? value : 0;
+  if (!Number.isFinite(numeric) || numeric < 0) return 0;
+  return Math.floor(numeric);
+}
+
+function normalizeTextReadLimit(value: unknown): number {
+  const numeric = typeof value === "number" ? value : DEFAULT_TEXT_READ_BYTES;
+  if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_TEXT_READ_BYTES;
+  return Math.min(Math.floor(numeric), DEFAULT_TEXT_READ_BYTES);
+}
+
+async function readLocalFileChunk(targetPath: string, byteOffset: number, maxBytes: number): Promise<Buffer> {
+  if (maxBytes <= 0) return Buffer.alloc(0);
+  const handle = await fs.open(targetPath, "r");
+  try {
+    const buffer = Buffer.alloc(maxBytes);
+    const result = await handle.read(buffer, 0, maxBytes, byteOffset);
+    return buffer.subarray(0, result.bytesRead);
+  } finally {
+    await handle.close();
+  }
 }
 
 async function ensureLocalTargetAbsent(targetPath: string): Promise<void> {

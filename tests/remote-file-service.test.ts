@@ -999,3 +999,64 @@ describe("RemoteFileService path/list behavior", () => {
     expect(result.capped).toBe(true);
   });
 });
+
+describe("RemoteFileService readTextFile", () => {
+  it("reads remote text through bounded exec chunks", async () => {
+    const remoteData = Buffer.from("hello remote\nsecond line\n", "utf8");
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr?: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        const offset = Number(command.match(/skip=(\d+)/)?.[1] ?? 0);
+        const count = Number(command.match(/count=(\d+)/)?.[1] ?? remoteData.length);
+        stream.emit("data", remoteData.subarray(offset, offset + count));
+        stream.emit("close", 0);
+      });
+    });
+    const get = vi.fn();
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: {
+          stat: vi.fn().mockResolvedValue({ type: "-", size: remoteData.length, modifyTime: Date.now() }),
+          get,
+          client: { exec }
+        }
+      })
+    } as any);
+
+    const result = await service.readTextFile("c1", "/data/note.txt", { maxBytes: 5 });
+
+    expect(result.content).toBe("hello");
+    expect(result.truncated).toBe(true);
+    expect(exec).toHaveBeenCalled();
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  it("rejects binary-looking remote files", async () => {
+    const remoteData = Buffer.from([0x00, 0x01, 0x02, 0xff]);
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr?: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        stream.emit("data", remoteData);
+        stream.emit("close", 0);
+      });
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: {
+          stat: vi.fn().mockResolvedValue({ type: "-", size: remoteData.length, modifyTime: Date.now() }),
+          client: { exec }
+        }
+      })
+    } as any);
+
+    await expect(service.readTextFile("c1", "/data/blob.bin")).rejects.toMatchObject({ code: "REMOTE_CONTENT_FAILED" });
+  });
+});

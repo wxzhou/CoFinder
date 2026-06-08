@@ -3,13 +3,16 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
-import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse } from "../../shared/types/ipc";
+import type { PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse, TextContentReadResponse } from "../../shared/types/ipc";
 import { timestampInputToTouchStamp } from "../../shared/timestampInput";
 import { ConnectionManager } from "./ConnectionManager";
 import { isSafeHostOrUsername, normalizeRemotePosixPath } from "../utils/pathSafety";
 import { modeToRwx, rightsToRwx } from "./permissionDisplay";
+import { sniffPreviewKind } from "./RemotePreviewService";
 
 const posixPath = path.posix;
+const DEFAULT_TEXT_READ_BYTES = 256 * 1024;
+const TEXT_SNIFF_BYTES = 8192;
 type RemoteListItem = {
   name: string;
   type: string;
@@ -41,6 +44,13 @@ type RemoteCommandClient = {
 };
 type RemoteCopyMoveClient = {
   stat: (path: string) => Promise<RemoteStatItem>;
+  client?: {
+    exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
+  };
+};
+type RemoteContentClient = {
+  stat: (path: string) => Promise<RemoteStatItem>;
+  get?: (remotePath: string, localPath?: string) => Promise<unknown>;
   client?: {
     exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
   };
@@ -568,6 +578,37 @@ export class RemoteFileService {
     }
   }
 
+  async readTextFile(connectionId: string, targetPath: string, options: { byteOffset?: number; maxBytes?: number } = {}): Promise<TextContentReadResponse> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const byteOffset = normalizeByteOffset(options.byteOffset);
+    const maxBytes = normalizeTextReadLimit(options.maxBytes);
+    const client = connection.client as unknown as RemoteContentClient;
+    try {
+      const stat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      if (resolveRemoteType(stat) !== "file") throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "View Text supports files only.");
+      const size = stat.size ?? 0;
+      const sample = await readRemoteFileChunk(client, normalizedPath, 0, Math.min(TEXT_SNIFF_BYTES, Math.max(size, 0)));
+      if (sniffPreviewKind(sample) !== "text") {
+        throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "Selected remote file does not look like text.");
+      }
+      const chunk = await readRemoteFileChunk(client, normalizedPath, byteOffset, maxBytes);
+      const nextByteOffset = byteOffset + chunk.length;
+      return {
+        path: normalizedPath,
+        content: chunk.toString("utf8"),
+        byteOffset,
+        nextByteOffset,
+        size,
+        truncated: nextByteOffset < size
+      };
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapContentError(error);
+    }
+  }
+
   async calculateDirectorySize(
     connectionId: string,
     targetPath: string,
@@ -943,6 +984,21 @@ export class RemoteFileService {
     return new RemoteServiceError("REMOTE_INFO_FAILED", "Failed to load remote path info.", message);
   }
 
+  private mapContentError(error: unknown): RemoteServiceError {
+    const message =
+      typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote content read failed";
+    if (/No such file|ENOENT|no such path|does not exist/i.test(message)) {
+      return new RemoteServiceError("REMOTE_NOT_FOUND", "Remote path does not exist.", message);
+    }
+    if (/EACCES|Permission denied/i.test(message)) {
+      return new RemoteServiceError("REMOTE_PERMISSION_DENIED", "Permission denied on remote path.", message);
+    }
+    if (/Not connected|Connection lost|No response from server|Timed out|ECONNREFUSED|ENOTFOUND/i.test(message)) {
+      return new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection lost. Please reconnect.", message);
+    }
+    return new RemoteServiceError("REMOTE_CONTENT_FAILED", "Failed to read remote text file.", message);
+  }
+
   private mapMkdirError(error: unknown): RemoteServiceError {
     const message =
       typeof error === "object" && error !== null && "message" in error ? String(error.message) : "Remote mkdir failed";
@@ -1202,6 +1258,10 @@ function buildRemoteTouchCommand(targetPath: string, touchStamp?: string): strin
   return `if [ ! -e ${target} ] && [ ! -L ${target} ]; then exit 66; fi; touch ${timestampArgs}-- ${target}`;
 }
 
+function buildRemoteReadChunkCommand(targetPath: string, byteOffset: number, maxBytes: number): string {
+  return `LC_ALL=C dd if=${shellQuote(targetPath)} bs=1 skip=${byteOffset} count=${maxBytes} 2>/dev/null`;
+}
+
 function shellQuote(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
@@ -1221,6 +1281,34 @@ function pathContains(parent: string, child: string): boolean {
 function isMissingRemotePathError(error: unknown): boolean {
   const message = typeof error === "object" && error !== null && "message" in error ? String(error.message) : "";
   return /No such file|ENOENT|no such path|does not exist/i.test(message);
+}
+
+function normalizeByteOffset(value: unknown): number {
+  const numeric = typeof value === "number" ? value : 0;
+  if (!Number.isFinite(numeric) || numeric < 0) return 0;
+  return Math.floor(numeric);
+}
+
+function normalizeTextReadLimit(value: unknown): number {
+  const numeric = typeof value === "number" ? value : DEFAULT_TEXT_READ_BYTES;
+  if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_TEXT_READ_BYTES;
+  return Math.min(Math.floor(numeric), DEFAULT_TEXT_READ_BYTES);
+}
+
+async function readRemoteFileChunk(client: RemoteContentClient, remotePath: string, byteOffset: number, maxBytes: number): Promise<Buffer> {
+  if (maxBytes <= 0) return Buffer.alloc(0);
+  const exec = client.client?.exec?.bind(client.client);
+  if (exec) {
+    return execRemoteOutput(exec, buildRemoteReadChunkCommand(remotePath, byteOffset, maxBytes), {
+      code: "REMOTE_CONTENT_FAILED",
+      message: "Remote text read command failed."
+    });
+  }
+  if (byteOffset === 0 && typeof client.get === "function") {
+    const result = await client.get(remotePath);
+    if (Buffer.isBuffer(result)) return result.subarray(0, maxBytes);
+  }
+  throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "Remote chunked text reading is unavailable for this connection.");
 }
 
 async function downloadRemoteFileToLocal(client: RemoteDownloadClient, remotePath: string, localPath: string): Promise<void> {
@@ -1289,6 +1377,61 @@ async function execRemoteCommand(
         };
         readable.on("data", () => {
           // Drain stdout so long-running remote commands cannot block on a full channel buffer.
+        });
+        readable.stderr?.on("data", (chunk) => {
+          stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+        });
+        readable.on("exit", (code) => {
+          exitCode = code;
+          settle(code);
+        });
+        readable.on("close", (code) => {
+          settle(typeof code === "number" ? code : exitCode);
+        });
+        readable.on("error", (streamError) => {
+          if (settled) return;
+          settled = true;
+          reject(streamError instanceof Error ? streamError : new RemoteServiceError(failure.code, failure.message));
+        });
+      });
+    } catch (error) {
+      reject(error);
+    }
+  });
+}
+
+async function execRemoteOutput(
+  exec: RemoteExec,
+  command: string,
+  failure: RemoteCommandFailureOptions
+): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    const stdout: Buffer[] = [];
+    let stderr = "";
+    try {
+      exec(command, (error, stream) => {
+        if (error || !stream || typeof stream !== "object") {
+          reject(error ?? new RemoteServiceError(failure.code, "Remote command execution failed."));
+          return;
+        }
+        const readable = stream as {
+          on: (event: string, listener: (...args: unknown[]) => void) => unknown;
+          stderr?: { on: (event: string, listener: (...args: unknown[]) => void) => unknown };
+        };
+        let settled = false;
+        let exitCode: unknown;
+        const settle = (rawCode: unknown) => {
+          if (settled) return;
+          settled = true;
+          const code = typeof rawCode === "number" ? rawCode : 0;
+          if (code === 0) {
+            resolve(Buffer.concat(stdout));
+            return;
+          }
+          reject(new RemoteServiceError(failure.code, failure.message, stderr.trim().slice(0, 400) || undefined));
+        };
+        readable.on("data", (chunk) => {
+          stdout.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
         });
         readable.stderr?.on("data", (chunk) => {
           stderr += Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);

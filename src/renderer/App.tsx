@@ -57,6 +57,7 @@ import type {
   ProfileUpsertPayload,
   RemoteConnectRequest,
   RemoteEditUpdatePayload,
+  TextContentReadResponse,
   TransferConflict,
   TransferConflictPolicy,
   TransferUpdatePayload
@@ -175,6 +176,21 @@ type RemoteCopyMoveDialogState = {
   busy: boolean;
 };
 
+type TextViewerDialogState = {
+  pane: ActivePane;
+  tabId: string;
+  connectionId?: string;
+  path: string;
+  title: string;
+  content: string;
+  byteOffset: number;
+  nextByteOffset: number;
+  size: number;
+  truncated: boolean;
+  status: "loading" | "ready" | "error";
+  error: string;
+};
+
 type ActivePane = "local" | "remote";
 
 type TransferDragPayload = {
@@ -228,6 +244,7 @@ const COFINDER_REMOTE_RECENTS_KEY = "cofinder.recent.remotePathsByProfile.v1";
 const COFINDER_V12_COLUMNS_KEY = "cofinder.v12FileColumns.v2";
 const INLINE_RENAME_CLICK_MIN_MS = 350;
 const INLINE_RENAME_CLICK_MAX_MS = 1500;
+const TEXT_VIEWER_CHUNK_BYTES = 256 * 1024;
 const V12_DEFAULT_COLUMNS: V12FileColumn[] = [
   { key: "name", label: "Name", width: 320, visible: true, required: true },
   { key: "mtime", label: "Date modified", width: 136, visible: true },
@@ -372,6 +389,7 @@ export function App(props: AppProps = {}) {
   const [chmodDialog, setChmodDialog] = useState<ChmodDialogState | null>(null);
   const [timestampDialog, setTimestampDialog] = useState<TimestampDialogState | null>(null);
   const [remoteCopyMoveDialog, setRemoteCopyMoveDialog] = useState<RemoteCopyMoveDialogState | null>(null);
+  const [textViewerDialog, setTextViewerDialog] = useState<TextViewerDialogState | null>(null);
   const timestampInputRefs = useRef<Record<TimestampPartKey, HTMLInputElement | null>>({
     year: null,
     month: null,
@@ -3338,6 +3356,86 @@ export function App(props: AppProps = {}) {
     setRemoteCopyMoveDialog(null);
   }
 
+  function applyTextViewerResult(result: TextContentReadResponse): Pick<TextViewerDialogState, "content" | "byteOffset" | "nextByteOffset" | "size" | "truncated" | "status" | "error"> {
+    return {
+      content: result.content,
+      byteOffset: result.byteOffset,
+      nextByteOffset: result.nextByteOffset,
+      size: result.size,
+      truncated: result.truncated,
+      status: "ready",
+      error: ""
+    };
+  }
+
+  async function openTextViewerSelection(tabId: string, pane: ActivePane): Promise<void> {
+    const tab = tabs.find((item) => item.id === tabId);
+    const targetPath = pane === "local" ? tab?.localPane.selectedFullPaths[0] : tab?.remotePane.selectedFullPaths[0];
+    const connectionId = pane === "remote" ? tab?.remotePane.connectionId ?? undefined : undefined;
+    if (!tab || !targetPath || (pane === "remote" && !connectionId)) return;
+    const initialState: TextViewerDialogState = {
+      pane,
+      tabId,
+      connectionId,
+      path: targetPath,
+      title: basenameRemotePath(targetPath),
+      content: "",
+      byteOffset: 0,
+      nextByteOffset: 0,
+      size: 0,
+      truncated: false,
+      status: "loading",
+      error: ""
+    };
+    setTextViewerDialog(initialState);
+    const result = pane === "local"
+      ? await window.cofinder.local.readText({ path: targetPath, byteOffset: 0, maxBytes: TEXT_VIEWER_CHUNK_BYTES })
+      : await window.cofinder.remote.readText({ connectionId: connectionId!, path: targetPath, byteOffset: 0, maxBytes: TEXT_VIEWER_CHUNK_BYTES });
+    if (!result.ok) {
+      if (pane === "remote" && connectionId && result.error.code === "REMOTE_DISCONNECTED") markRemoteDisconnected(tabId, connectionId, result.error.message);
+      setTextViewerDialog((prev) =>
+        prev?.path === targetPath ? { ...prev, status: "error", error: result.error.message, size: 0, truncated: false } : prev
+      );
+      return;
+    }
+    setTextViewerDialog((prev) => (prev?.path === targetPath ? { ...prev, ...applyTextViewerResult(result.data) } : prev));
+  }
+
+  async function loadMoreTextViewer(): Promise<void> {
+    const viewer = textViewerDialog;
+    if (!viewer || viewer.status === "loading" || !viewer.truncated) return;
+    setTextViewerDialog((prev) => (prev ? { ...prev, status: "loading", error: "" } : prev));
+    const result = viewer.pane === "local"
+      ? await window.cofinder.local.readText({ path: viewer.path, byteOffset: viewer.nextByteOffset, maxBytes: TEXT_VIEWER_CHUNK_BYTES })
+      : await window.cofinder.remote.readText({
+          connectionId: viewer.connectionId ?? "",
+          path: viewer.path,
+          byteOffset: viewer.nextByteOffset,
+          maxBytes: TEXT_VIEWER_CHUNK_BYTES
+        });
+    if (!result.ok) {
+      if (viewer.pane === "remote" && viewer.connectionId && result.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(viewer.tabId, viewer.connectionId, result.error.message);
+      }
+      setTextViewerDialog((prev) => (prev?.path === viewer.path ? { ...prev, status: "error", error: result.error.message } : prev));
+      return;
+    }
+    setTextViewerDialog((prev) =>
+      prev?.path === viewer.path
+        ? {
+            ...prev,
+            content: `${prev.content}${result.data.content}`,
+            byteOffset: 0,
+            nextByteOffset: result.data.nextByteOffset,
+            size: result.data.size,
+            truncated: result.data.truncated,
+            status: "ready",
+            error: ""
+          }
+        : prev
+    );
+  }
+
   async function compressLocalSelection(tabId: string): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     const targetPath = tab?.localPane.selectedFullPaths[0];
@@ -6065,6 +6163,12 @@ export function App(props: AppProps = {}) {
                           Decompress
                         </button>
                         <button type="button" className="context-item" onClick={async () => {
+                          await openTextViewerSelection(contextMenu.tabId, "local");
+                          setContextMenu(null);
+                        }}>
+                          View Text...
+                        </button>
+                        <button type="button" className="context-item" onClick={async () => {
                           await generateLocalMd5Selection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
@@ -6248,6 +6352,12 @@ export function App(props: AppProps = {}) {
                           setContextMenu(null);
                         }}>
                           Decompress
+                        </button>
+                        <button type="button" className="context-item" onClick={async () => {
+                          await openTextViewerSelection(contextMenu.tabId, "remote");
+                          setContextMenu(null);
+                        }}>
+                          View Text...
                         </button>
                         <button type="button" className="context-item" onClick={async () => {
                           await generateRemoteMd5Selection(contextMenu.tabId);
@@ -6490,6 +6600,46 @@ export function App(props: AppProps = {}) {
                 onClick={() => void submitRemoteCopyMoveDialog()}
               >
                 {remoteCopyMoveDialog.busy ? "Queueing..." : remoteCopyMoveDialog.operation === "copy" ? "Copy" : "Move"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {textViewerDialog ? (
+        <div
+          className="delete-confirm-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setTextViewerDialog(null);
+          }}
+        >
+          <div className="text-viewer-dialog" role="dialog" aria-modal="true" aria-labelledby="text-viewer-title">
+            <div className="text-viewer-head">
+              <div>
+                <h3 id="text-viewer-title">View Text</h3>
+                <p>{textViewerDialog.title}</p>
+              </div>
+              <button type="button" className="toolbar-button" onClick={() => setTextViewerDialog(null)}>
+                Close
+              </button>
+            </div>
+            {textViewerDialog.error ? <div className="error-banner">{textViewerDialog.error}</div> : null}
+            <pre className="text-viewer-content" aria-label="Text file content">
+              {textViewerDialog.content || (textViewerDialog.status === "loading" ? "Loading..." : "")}
+            </pre>
+            <div className="text-viewer-foot">
+              <span>
+                {textViewerDialog.status === "loading"
+                  ? "Loading..."
+                  : `${formatSize(textViewerDialog.nextByteOffset)} loaded${textViewerDialog.size ? ` of ${formatSize(textViewerDialog.size)}` : ""}`}
+              </span>
+              <button
+                type="button"
+                className="toolbar-button"
+                disabled={!textViewerDialog.truncated || textViewerDialog.status === "loading"}
+                onClick={() => void loadMoreTextViewer()}
+              >
+                Load More
               </button>
             </div>
           </div>

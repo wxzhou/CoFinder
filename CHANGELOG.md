@@ -9,6 +9,7 @@
 ## Unreleased / v1.9.4 development
 
 - Starting the content-inspection checkpoint for `Search Contents...` and `View Text...` under `File Operation`.
+- Added local and remote `View Text...` as a read-only in-app text viewer with bounded chunk loading and binary-looking file rejection.
 
 ## v1.9.3 development
 
