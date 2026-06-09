@@ -908,7 +908,7 @@
 }
 
 .cfv12-root .v12m-lname {
-  gap: 6px;
+  gap: 1px;
   padding-left: calc((var(--outline-depth, 0) * 13px));
 }
 
@@ -916,7 +916,7 @@
 .cfv12-root .v12m-disclosure-spacer {
   width: 9px;
   height: 20px;
-  margin: 0 -2px 0 -3px;
+  margin: 0 -2px 0 2px;
   flex: 0 0 9px;
 }
 
@@ -927,7 +927,7 @@
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: color-mix(in srgb, var(--m-fg) 84%, transparent);
+  color: #7a7b7c;
   padding: 0;
 }
 
@@ -944,7 +944,7 @@
 .cfv12-root .v12m-disclosure-svg path {
   fill: none;
   stroke: currentColor;
-  stroke-width: 2;
+  stroke-width: 1.5;
   stroke-linecap: round;
   stroke-linejoin: round;
 }
