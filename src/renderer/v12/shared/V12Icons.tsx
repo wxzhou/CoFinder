@@ -187,7 +187,21 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     case "home":
       return (
         <svg {...s}>
-          <path d="M3.7 9.7L10 3.6l6.3 6.1h-2.1v4.7c0 .72-.58 1.3-1.3 1.3h-1.3v-3.2c0-.88-.72-1.6-1.6-1.6s-1.6.72-1.6 1.6v3.2H7.1c-.72 0-1.3-.58-1.3-1.3V9.7H3.7" />
+          <path d="
+M3.7 9.7
+L10 3.6
+L16.3 9.7
+H13.7
+V15.7
+H11.2
+V11.5
+H8.8
+V15.7
+H6.3
+V9.7
+H3.7
+Z
+"/>
         </svg>
       );
     case "arrow-clockwise":
@@ -199,16 +213,16 @@ export function V12TbIcon(props: { name: string }): ReactElement {
     case "arrow-up-tray":
       return (
         <svg {...s}>
-          <path d="M10 12V4.9" />
-          <path d="M6.9 8L10 4.9 13.1 8" />
+          <path d="M10 13V5.9" />
+          <path d="M6.9 9L10 5.9 13.1 9" />
           <path d="M4.9 13.5v1.8c0 .45.36.8.8.8h8.6c.44 0 .8-.35.8-.8v-1.8" />
         </svg>
       );
     case "arrow-down-tray":
       return (
         <svg {...s}>
-          <path d="M10 4.4v7.6" />
-          <path d="M6.9 8.9L10 12l3.1-3.1" />
+          <path d="M10 5.4v7.6" />
+          <path d="M6.9 9.9L10 13l3.1-3.1" />
           <path d="M4.9 13.5v1.8c0 .45.36.8.8.8h8.6c.44 0 .8-.35.8-.8v-1.8" />
         </svg>
       );
