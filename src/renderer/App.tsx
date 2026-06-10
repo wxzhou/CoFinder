@@ -2975,6 +2975,7 @@ export function App(props: AppProps = {}) {
 
   async function handleTransferDrop(targetPane: ActivePane, targetPath: string, event: ReactDragEvent<HTMLElement>): Promise<void> {
     event.preventDefault();
+    event.stopPropagation();
     const payload = parseTransferDrag(event);
     const finderPaths = finderDropPaths(event);
     finishTransferDrag();

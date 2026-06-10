@@ -23,6 +23,7 @@
 - Pruned stale remote selections and expanded-list cache entries after move jobs so context-menu Move To cannot reuse already-moved paths.
 - Fixed remote Copy To / Move To for broken symlinks by validating link paths without following missing link targets.
 - Drag-and-drop upload/download now works when dropping cross-pane items onto file rows as well as pane background or folder rows; file-row drops target the pane's current folder.
+- Fixed List view drag-and-drop transfer on blank space below rows by making the full file-list scroll area a drop target.
 
 ## v1.9.8 development
 

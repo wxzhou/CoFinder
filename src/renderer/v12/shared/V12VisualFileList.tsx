@@ -177,6 +177,9 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
         if (target?.closest("[data-pane-row],.v12m-list,.v12m-list-head,.v12m-column-menu")) return;
         props.onBackgroundContextMenu?.(event);
       }}
+      onDragOver={props.onBackgroundDragOver}
+      onDrop={props.onBackgroundDrop}
+      onDragLeave={props.onDragLeave}
     >
       <div
         className="v12m-list-head"
