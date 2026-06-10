@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flattenOutlineRows, hiddenDescendantPaths, type OutlineState } from "../src/renderer/v12/outlineRows";
+import { flattenOutlineRows, hiddenDescendantPaths, isSameOrDescendantPath, pruneOutlinePath, type OutlineState } from "../src/renderer/v12/outlineRows";
 import type { FileEntry } from "../src/shared/types/models";
 
 const entry = (fullPath: string, type: FileEntry["type"] = "file"): FileEntry => ({
@@ -72,5 +72,35 @@ describe("outline rows", () => {
       "/root/folder/child/deep.txt"
     ]);
   });
-});
 
+  it("matches moved paths without matching same-prefix siblings", () => {
+    expect(isSameOrDescendantPath("/root/folder", "/root/folder")).toBe(true);
+    expect(isSameOrDescendantPath("/root/folder/child.txt", "/root/folder")).toBe(true);
+    expect(isSameOrDescendantPath("/root/folder2/child.txt", "/root/folder")).toBe(false);
+  });
+
+  it("prunes moved folders from expanded outline caches", () => {
+    const outline: OutlineState<FileEntry> = {
+      "/root/folder": {
+        expanded: true,
+        status: "ready",
+        entries: [entry("/root/folder/child", "directory"), entry("/root/folder/a.txt")]
+      },
+      "/root/folder/child": {
+        expanded: true,
+        status: "ready",
+        entries: [entry("/root/folder/child/deep.txt")]
+      },
+      "/root/folder2": {
+        expanded: true,
+        status: "ready",
+        entries: [entry("/root/folder2/keep.txt")]
+      }
+    };
+
+    const pruned = pruneOutlinePath(outline, "/root/folder");
+
+    expect(Object.keys(pruned).sort()).toEqual(["/root/folder2"]);
+    expect(pruned["/root/folder2"].entries.map((item) => item.fullPath)).toEqual(["/root/folder2/keep.txt"]);
+  });
+});

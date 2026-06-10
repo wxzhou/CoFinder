@@ -20,6 +20,7 @@
 - Tightened list disclosure spacing with rounded Finder-like chevrons, kept expanded child indentation stable while selected, and added Finder-like rounded alternating row backgrounds in list view.
 - Kept expanded list folders open across manual refresh, removed hover whitening from alternating list rows, and hid clean remote-edit watcher sessions from the bottom panel.
 - Added remote-pane drag-to-move: dragging selected remote items onto a remote folder now queues visible Remote move jobs, with internal drag state retained when Chromium hides custom drag data during hover.
+- Pruned stale remote selections and expanded-list cache entries after move jobs so context-menu Move To cannot reuse already-moved paths.
 
 ## v1.9.8 development
 

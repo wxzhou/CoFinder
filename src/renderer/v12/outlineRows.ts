@@ -56,3 +56,24 @@ export function hiddenDescendantPaths<T extends FileEntry>(parentPath: string, o
   return hidden;
 }
 
+export function isSameOrDescendantPath(candidatePath: string, parentPath: string): boolean {
+  const normalizedParent = parentPath.replace(/\/+$/, "") || "/";
+  const normalizedCandidate = candidatePath.replace(/\/+$/, "") || "/";
+  if (normalizedParent === "/") return normalizedCandidate.startsWith("/");
+  return normalizedCandidate === normalizedParent || normalizedCandidate.startsWith(`${normalizedParent}/`);
+}
+
+export function pruneOutlinePath<T extends FileEntry>(outline: OutlineState<T>, removedPath: string): OutlineState<T> {
+  let changed = false;
+  const nextOutline: OutlineState<T> = {};
+  for (const [path, node] of Object.entries(outline)) {
+    if (isSameOrDescendantPath(path, removedPath)) {
+      changed = true;
+      continue;
+    }
+    const entries = node.entries.filter((entry) => !isSameOrDescendantPath(entry.fullPath, removedPath));
+    if (entries.length !== node.entries.length) changed = true;
+    nextOutline[path] = entries.length === node.entries.length ? node : { ...node, entries };
+  }
+  return changed ? nextOutline : outline;
+}

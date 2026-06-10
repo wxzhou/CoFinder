@@ -33,7 +33,7 @@ import {
 } from "./v12/shared";
 import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
-import { flattenOutlineRows, hiddenDescendantPaths, type OutlineRow, type OutlineState } from "./v12/outlineRows";
+import { flattenOutlineRows, hiddenDescendantPaths, isSameOrDescendantPath, pruneOutlinePath, type OutlineRow, type OutlineState } from "./v12/outlineRows";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
 import {
   addRecentPath,
@@ -1885,12 +1885,41 @@ export function App(props: AppProps = {}) {
     if (task.pane === "remote") {
       const connectionId = task.connectionId;
       if (!connectionId || tab.remotePane.connectionId !== connectionId) return;
+      if (task.kind === "remoteMove") {
+        pruneCompletedRemoteMove(task.tabId, task.source);
+      }
       await listRemotePath(connectionId, tab.remotePane.currentPath, "replace", task.tabId);
       return;
     }
     if (task.pane === "local") {
       await navigateLocal(task.tabId, tab.localPane.currentPath, "replace");
     }
+  }
+
+  function pruneCompletedRemoteMove(tabId: string, sourcePath: string): void {
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        const selectedFullPaths = tab.remotePane.selectedFullPaths.filter((path) => !isSameOrDescendantPath(path, sourcePath));
+        return {
+          ...tab,
+          remotePane: {
+            ...tab.remotePane,
+            selectedFullPaths,
+            selectionAnchorFullPath:
+              tab.remotePane.selectionAnchorFullPath && isSameOrDescendantPath(tab.remotePane.selectionAnchorFullPath, sourcePath)
+                ? selectedFullPaths[0] ?? null
+                : tab.remotePane.selectionAnchorFullPath
+          }
+        };
+      })
+    );
+    setV12RemoteOutlineByTab((prev) => {
+      const outline = prev[tabId];
+      if (!outline) return prev;
+      const nextOutline = pruneOutlinePath(outline, sourcePath);
+      return nextOutline === outline ? prev : { ...prev, [tabId]: nextOutline };
+    });
   }
 
   function summarizeQueue(): string {
@@ -3981,12 +4010,23 @@ export function App(props: AppProps = {}) {
   function openRemoteCopyMoveDialog(tabId: string, operation: "copy" | "move"): void {
     const tab = tabs.find((item) => item.id === tabId);
     if (!tab?.remotePane.connectionId || tab.remotePane.selectedFullPaths.length === 0) return;
+    const visibleRemotePaths = new Set((tabId === activeTab.id ? remoteCurrentViewEntries : tab.remotePane.entries).map((entry) => entry.fullPath));
+    const sources = tab.remotePane.selectedFullPaths.filter((path) => visibleRemotePaths.has(path));
+    if (sources.length === 0) {
+      clearRemoteSelection(tabId);
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "Selection is stale. Refresh and select the item again." } } : item
+        )
+      );
+      return;
+    }
     const defaultDestination = `${tab.remotePane.currentPath.replace(/\/+$/, "") || "/"}/`;
     setRemoteCopyMoveDialog({
       tabId,
       connectionId: tab.remotePane.connectionId,
       operation,
-      sources: [...tab.remotePane.selectedFullPaths],
+      sources,
       destinationPath: defaultDestination,
       conflictPolicy: "fail",
       error: "",
