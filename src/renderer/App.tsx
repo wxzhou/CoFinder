@@ -1199,6 +1199,7 @@ export function App(props: AppProps = {}) {
     mode: "push" | "replace" | "back" | "forward" = "push"
   ): Promise<boolean> {
     const previousPath = tabs.find((tab) => tab.id === tabId)?.localPane.currentPath ?? "";
+    const outlineBeforeRefresh = v12LocalOutlineByTab[tabId] ?? {};
     const response = await window.cofinder.local.listDirectory({ path: targetPath });
     if (!response.ok) {
       setTabs((prev) =>
@@ -1236,12 +1237,16 @@ export function App(props: AppProps = {}) {
         };
       })
     );
-    setV12LocalOutlineByTab((prev) => {
-      if (!prev[tabId]) return prev;
-      const next = { ...prev };
-      delete next[tabId];
-      return next;
-    });
+    if (mode === "replace" && previousPath === response.data.path) {
+      void refreshExpandedLocalOutline(tabId, response.data.path, outlineBeforeRefresh);
+    } else {
+      setV12LocalOutlineByTab((prev) => {
+        if (!prev[tabId]) return prev;
+        const next = { ...prev };
+        delete next[tabId];
+        return next;
+      });
+    }
     setV12LocalColumnsByTab((prev) => {
       if (!prev[tabId]) return prev;
       const next = { ...prev };
@@ -1250,6 +1255,34 @@ export function App(props: AppProps = {}) {
     });
     rememberLocalRecent(response.data.path);
     return true;
+  }
+
+  async function refreshExpandedLocalOutline(
+    tabId: string,
+    rootPath: string,
+    outline: OutlineState<LocalFileEntry>
+  ): Promise<void> {
+    const expandedPaths = Object.entries(outline)
+      .filter(([, node]) => node.expanded)
+      .map(([path]) => path);
+    for (const path of expandedPaths) {
+      if (tabsRef.current.find((tab) => tab.id === tabId)?.localPane.currentPath !== rootPath) return;
+      const result = await window.cofinder.local.listDirectory({ path });
+      if (tabsRef.current.find((tab) => tab.id === tabId)?.localPane.currentPath !== rootPath) return;
+      setV12LocalOutlineByTab((prev) => {
+        const current = prev[tabId]?.[path];
+        if (!current?.expanded) return prev;
+        return {
+          ...prev,
+          [tabId]: {
+            ...(prev[tabId] ?? {}),
+            [path]: result.ok
+              ? { ...current, status: "ready", entries: result.data.entries, error: "" }
+              : { ...current, status: "error", error: result.error.message }
+          }
+        };
+      });
+    }
   }
 
   const showV12FavoriteHint = useCallback((message: string) => {
@@ -2494,6 +2527,7 @@ export function App(props: AppProps = {}) {
     tabId: string = activeTabId
   ): Promise<boolean> {
     const previousPath = tabsRef.current.find((tab) => tab.id === tabId)?.remotePane.currentPath ?? "";
+    const outlineBeforeRefresh = v12RemoteOutlineByTab[tabId] ?? {};
     let effectiveConnectionId = connectionId;
     let reconnected = false;
     if (!appSettings.remote.autoReconnectAfterSleep) {
@@ -2581,12 +2615,16 @@ export function App(props: AppProps = {}) {
       })
     );
     const profileId = tabsRef.current.find((tab) => tab.id === tabId)?.remotePane.activeProfileId;
-    setV12RemoteOutlineByTab((prev) => {
-      if (!prev[tabId]) return prev;
-      const next = { ...prev };
-      delete next[tabId];
-      return next;
-    });
+    if (mode === "replace" && previousPath === payload.path) {
+      void refreshExpandedRemoteOutline(tabId, effectiveConnectionId, payload.path, outlineBeforeRefresh);
+    } else {
+      setV12RemoteOutlineByTab((prev) => {
+        if (!prev[tabId]) return prev;
+        const next = { ...prev };
+        delete next[tabId];
+        return next;
+      });
+    }
     setV12RemoteColumnsByTab((prev) => {
       if (!prev[tabId]) return prev;
       const next = { ...prev };
@@ -2595,6 +2633,37 @@ export function App(props: AppProps = {}) {
     });
     rememberRemoteRecent(profileId, payload.path);
     return true;
+  }
+
+  async function refreshExpandedRemoteOutline(
+    tabId: string,
+    connectionId: string,
+    rootPath: string,
+    outline: OutlineState<RemoteFileEntry>
+  ): Promise<void> {
+    const expandedPaths = Object.entries(outline)
+      .filter(([, node]) => node.expanded)
+      .map(([path]) => path);
+    for (const path of expandedPaths) {
+      const currentTab = tabsRef.current.find((tab) => tab.id === tabId);
+      if (currentTab?.remotePane.currentPath !== rootPath || currentTab.remotePane.connectionId !== connectionId) return;
+      const result = await window.cofinder.remote.listDirectory({ connectionId, path });
+      const latestTab = tabsRef.current.find((tab) => tab.id === tabId);
+      if (latestTab?.remotePane.currentPath !== rootPath || latestTab.remotePane.connectionId !== connectionId) return;
+      setV12RemoteOutlineByTab((prev) => {
+        const current = prev[tabId]?.[path];
+        if (!current?.expanded) return prev;
+        return {
+          ...prev,
+          [tabId]: {
+            ...(prev[tabId] ?? {}),
+            [path]: result.ok
+              ? { ...current, status: "ready", entries: result.data.entries, error: "" }
+              : { ...current, status: "error", error: result.error.message }
+          }
+        };
+      });
+    }
   }
 
   function markRemoteDisconnected(tabId: string, connectionId: string, message: string): void {
@@ -4584,7 +4653,7 @@ export function App(props: AppProps = {}) {
     />
   );
 
-  const visibleRemoteEditSessions = remoteEditSessions.filter((session) => session.state !== "uploaded");
+  const visibleRemoteEditSessions = remoteEditSessions.filter((session) => session.state !== "uploaded" && session.state !== "clean");
   const remoteEditStatusPanel =
     visibleRemoteEditSessions.length > 0 ? (
       <section className="remote-edit-panel" aria-label="Remote edit sessions">

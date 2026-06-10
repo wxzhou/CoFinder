@@ -18,6 +18,7 @@
 - Reduced `View Text` first-page latency by using one bounded local/SFTP chunk read for both text sniffing and initial content instead of doing a separate sniff read.
 - Reworked Gallery view toward Finder's layout with a main preview area, bottom item strip, right metadata panel, and bounded sniffed image previews.
 - Tightened list disclosure spacing with rounded Finder-like chevrons, kept expanded child indentation stable while selected, and added Finder-like rounded alternating row backgrounds in list view.
+- Kept expanded list folders open across manual refresh, removed hover whitening from alternating list rows, and hid clean remote-edit watcher sessions from the bottom panel.
 
 ## v1.9.8 development
 

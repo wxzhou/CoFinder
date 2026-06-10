@@ -845,10 +845,6 @@
   background: transparent;
 }
 
-.cfv12-root .v12m-list .v12m-lrow:hover:not(.sel-active):not(.sel-inactive)::before {
-  background: var(--m-row-hover);
-}
-
 .cfv12-root .v12m-lrow.sel-run-start {
   border-top-left-radius: 7px;
   border-top-right-radius: 7px;
