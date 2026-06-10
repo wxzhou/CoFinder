@@ -24,6 +24,7 @@ declare module "ssh2-sftp-client" {
     on(eventType: "close" | "end" | "error", callback: (error?: Error) => void): void;
     list(path: string): Promise<SftpListItem[]>;
     stat(path: string): Promise<{ type: string; size?: number; modifyTime?: number }>;
+    lstat(path: string): Promise<{ type: string; size?: number; modifyTime?: number }>;
     realPath(path: string): Promise<string>;
     get(path: string, localPath?: string): Promise<Buffer | unknown>;
     fastGet(path: string, localPath: string): Promise<unknown>;

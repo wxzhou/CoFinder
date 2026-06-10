@@ -47,6 +47,7 @@ type RemoteCommandClient = {
 };
 type RemoteCopyMoveClient = {
   stat: (path: string) => Promise<RemoteStatItem>;
+  lstat?: (path: string) => Promise<RemoteStatItem>;
   client?: {
     exec?: (command: string, callback: (error: Error | undefined, stream: unknown) => void) => void;
   };
@@ -361,7 +362,7 @@ export class RemoteFileService {
     }
     const client = connection.client as unknown as RemoteCopyMoveClient;
     try {
-      await client.stat(normalizedSource);
+      await statRemotePathNoFollow(client, normalizedSource);
       const destination = await this.resolveCopyMoveTarget(client, normalizedSource, normalizedDestinationInput, {
         conflictPolicy: options?.conflictPolicy ?? "fail",
         forceDestinationDirectory: !!options?.forceDestinationDirectory
@@ -408,7 +409,7 @@ export class RemoteFileService {
     }
     let targetPath = treatAsDirectory ? posixPath.join(destinationInput, posixPath.basename(sourcePath)) : destinationInput;
     try {
-      await client.stat(targetPath);
+      await statRemotePathNoFollow(client, targetPath);
       if (options.conflictPolicy !== "rename") {
         throw new RemoteServiceError("REMOTE_COPY_FAILED", "Remote destination already exists.");
       }
@@ -1600,6 +1601,14 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string)
   return Promise.race([promise, timeoutPromise]).finally(() => {
     if (timeout) clearTimeout(timeout);
   });
+}
+
+async function statRemotePathNoFollow(
+  client: { stat: (path: string) => Promise<RemoteStatItem>; lstat?: (path: string) => Promise<RemoteStatItem> },
+  remotePath: string
+): Promise<RemoteStatItem> {
+  if (typeof client.lstat === "function") return client.lstat(remotePath);
+  return client.stat(remotePath);
 }
 
 function resolveRemoteType(stat: RemoteStatItem): "file" | "directory" | "symlink" | "unknown" {

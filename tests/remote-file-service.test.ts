@@ -211,6 +211,34 @@ describe("RemoteFileService path/list behavior", () => {
     expect(exec.mock.calls[0][0]).toContain("mv -- '/src/file.txt' '/archive/file.txt'");
   });
 
+  it("moves broken remote symlinks without following the link target", async () => {
+    const stat = vi.fn(async (target: string) => {
+      if (target === "/archive") return { type: "d", size: 0 };
+      throw new Error("No such file");
+    });
+    const lstat = vi.fn(async (target: string) => {
+      if (target === "/src/source_link") return { type: "l", size: 10 };
+      throw new Error("No such file");
+    });
+    const exec = vi.fn((_command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => stream.emit("close", 0));
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: { stat, lstat, client: { exec } }
+      })
+    } as any);
+
+    await expect(service.movePath("c1", "/src/source_link", "/archive")).resolves.toBe("/archive/source_link");
+    expect(lstat).toHaveBeenCalledWith("/src/source_link");
+    expect(exec.mock.calls[0][0]).toContain("mv -- '/src/source_link' '/archive/source_link'");
+  });
+
   it("fails remote copy when the target exists unless rename is requested", async () => {
     const stat = vi.fn(async (target: string) => {
       if (target === "/src/file.txt" || target === "/dst/file.txt") return { type: "-", size: 1 };
