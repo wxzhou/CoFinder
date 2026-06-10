@@ -53,6 +53,7 @@ import {
   type MarqueeRowRect,
   type SelectionState
 } from "./selection";
+import { shouldCommitInlineRenameFromPaneBackground } from "./inlineRenameInteraction";
 import { resolveRowTransferDropTarget } from "./transferDropIntent";
 import type { LocalFavoriteListItem } from "../shared/localFavorites";
 import type { RemoteEditSession } from "../shared/remoteEdit";
@@ -3080,7 +3081,19 @@ export function App(props: AppProps = {}) {
   function beginMarqueeSelection(pane: ActivePane, event: ReactMouseEvent<HTMLElement>): void {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement | null;
-    if (target?.closest("[data-pane-row],button,input,textarea,select")) return;
+    const targetIsInteractive = Boolean(target?.closest("[data-pane-row],button,input,textarea,select"));
+    if (targetIsInteractive) return;
+    if (
+      shouldCommitInlineRenameFromPaneBackground({
+        hasInlineRename: Boolean(inlineRename),
+        mouseButton: event.button,
+        targetIsInteractive
+      })
+    ) {
+      event.preventDefault();
+      void submitInlineRename();
+      return;
+    }
     const tab = tabs.find((item) => item.id === activeTab.id);
     if (!tab) return;
     const baseSelection =
