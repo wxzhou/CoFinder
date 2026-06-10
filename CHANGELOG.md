@@ -19,6 +19,7 @@
 - Reworked Gallery view toward Finder's layout with a main preview area, bottom item strip, right metadata panel, and bounded sniffed image previews.
 - Tightened list disclosure spacing with rounded Finder-like chevrons, kept expanded child indentation stable while selected, and added Finder-like rounded alternating row backgrounds in list view.
 - Kept expanded list folders open across manual refresh, removed hover whitening from alternating list rows, and hid clean remote-edit watcher sessions from the bottom panel.
+- Added remote-pane drag-to-move: dragging selected remote items onto a remote folder now queues visible Remote move jobs.
 
 ## v1.9.8 development
 

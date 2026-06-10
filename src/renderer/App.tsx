@@ -716,7 +716,7 @@ export function App(props: AppProps = {}) {
     const previous = jobRefreshStatusRef.current;
     for (const task of transferTasks) {
       const prior = previous.get(task.id);
-      if (prior !== task.status && task.status === "success" && (task.kind === "delete" || task.kind === "gzip")) {
+      if (prior !== task.status && task.status === "success" && (task.kind === "delete" || task.kind === "gzip" || task.kind === "remoteMove")) {
         void refreshCompletedJobOrigin(task);
       }
     }
@@ -2858,7 +2858,7 @@ export function App(props: AppProps = {}) {
       updatePaneSelection(activeTab.id, pane, { selectedFullPaths: [entry.fullPath], selectionAnchorFullPath: entry.fullPath });
     }
     const payload: TransferDragPayload = { kind: "cofinder-transfer", pane, tabId: activeTab.id, paths };
-    event.dataTransfer.effectAllowed = "copy";
+    event.dataTransfer.effectAllowed = pane === "remote" ? "copyMove" : "copy";
     event.dataTransfer.setData(COFINDER_TRANSFER_MIME, JSON.stringify(payload));
     event.dataTransfer.setData("text/plain", paths.join("\n"));
   }
@@ -2901,16 +2901,27 @@ export function App(props: AppProps = {}) {
     return !!localPane.currentPath && payload?.pane === "remote" && payload.tabId === activeTab.id;
   }
 
+  function canMoveRemoteSelectionToDirectory(payload: TransferDragPayload | null, targetPath: string): boolean {
+    if (!remotePane.connectionId || payload?.pane !== "remote" || payload.tabId !== activeTab.id) return false;
+    const destination = targetPath.replace(/\/+$/, "") || "/";
+    return payload.paths.length > 0 && payload.paths.every((source) => {
+      const normalizedSource = source.replace(/\/+$/, "") || "/";
+      return normalizedSource !== "/" && normalizedSource !== destination && !destination.startsWith(`${normalizedSource}/`);
+    });
+  }
+
   function handleTransferDragOver(
     targetPane: ActivePane,
     targetPath: string,
     event: ReactDragEvent<HTMLElement>,
     options?: { requireDirectory?: boolean; entryType?: string }
   ): void {
+    const payload = parseTransferDrag(event);
+    const sameRemoteMove = targetPane === "remote" && options?.requireDirectory && canMoveRemoteSelectionToDirectory(payload, targetPath);
     const rowValid = !options?.requireDirectory || options.entryType === "directory";
-    const valid = rowValid && canDropOnPane(targetPane, event);
+    const valid = rowValid && (sameRemoteMove || canDropOnPane(targetPane, event));
     event.preventDefault();
-    event.dataTransfer.dropEffect = valid ? "copy" : "none";
+    event.dataTransfer.dropEffect = valid ? (sameRemoteMove ? "move" : "copy") : "none";
     setDropTarget({ pane: targetPane, path: targetPath, valid });
   }
 
@@ -2955,13 +2966,48 @@ export function App(props: AppProps = {}) {
     event: ReactDragEvent<HTMLElement>
   ): Promise<void> {
     event.stopPropagation();
+    const payload = parseTransferDrag(event);
     if (entry.type !== "directory") {
       event.preventDefault();
       setDropTarget(null);
       setPaneError(activeTab.id, targetPane, "Drop onto a folder or empty pane area.");
       return;
     }
+    if (targetPane === "remote" && canMoveRemoteSelectionToDirectory(payload, entry.fullPath)) {
+      event.preventDefault();
+      setDropTarget(null);
+      await enqueueRemoteMoveToDirectory(activeTab.id, payload!.paths, entry.fullPath);
+      return;
+    }
     await handleTransferDrop(targetPane, entry.fullPath, event);
+  }
+
+  async function enqueueRemoteMoveToDirectory(tabId: string, sources: string[], destinationDirectory: string): Promise<void> {
+    const tab = tabsRef.current.find((item) => item.id === tabId);
+    if (!tab?.remotePane.connectionId) return;
+    const destinationPath = `${destinationDirectory.replace(/\/+$/, "") || "/"}/`;
+    const result = await window.cofinder.transfer.enqueueRemoteMove({
+      tabId,
+      connectionId: tab.remotePane.connectionId,
+      sources,
+      destinationPath,
+      conflictPolicy: "fail"
+    });
+    if (!result.ok) {
+      if (result.error.code === "REMOTE_DISCONNECTED") {
+        markRemoteDisconnected(tabId, tab.remotePane.connectionId, result.error.message);
+      }
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: result.error.message } } : item
+        )
+      );
+      return;
+    }
+    setTabs((prev) =>
+      prev.map((item) => (item.id === tabId ? { ...item, remotePane: { ...item.remotePane, error: "" } } : item))
+    );
+    setQueuePanelState((prev) => (prev === "hidden" ? "expanded" : prev));
   }
 
   function handleTransferDragLeave(event: ReactDragEvent<HTMLElement>): void {
