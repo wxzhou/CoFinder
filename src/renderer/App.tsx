@@ -466,6 +466,7 @@ export function App(props: AppProps = {}) {
   const lastPlainClickRef = useRef<PlainClickRecord | null>(null);
   const [activePane, setActivePane] = useState<ActivePane>("local");
   const [dropTarget, setDropTarget] = useState<DropTargetState | null>(null);
+  const activeTransferDragRef = useRef<TransferDragPayload | null>(null);
   const [marquee, setMarquee] = useState<MarqueeState | null>(null);
   const [localHomePath, setLocalHomePath] = useState<string>("");
   const [v12PaneRatio, setV12PaneRatio] = useState(() => {
@@ -2858,6 +2859,8 @@ export function App(props: AppProps = {}) {
       updatePaneSelection(activeTab.id, pane, { selectedFullPaths: [entry.fullPath], selectionAnchorFullPath: entry.fullPath });
     }
     const payload: TransferDragPayload = { kind: "cofinder-transfer", pane, tabId: activeTab.id, paths };
+    activeTransferDragRef.current = payload;
+    event.currentTarget.addEventListener("dragend", finishTransferDrag, { once: true });
     event.dataTransfer.effectAllowed = pane === "remote" ? "copyMove" : "copy";
     event.dataTransfer.setData(COFINDER_TRANSFER_MIME, JSON.stringify(payload));
     event.dataTransfer.setData("text/plain", paths.join("\n"));
@@ -2865,7 +2868,7 @@ export function App(props: AppProps = {}) {
 
   function parseTransferDrag(event: ReactDragEvent<HTMLElement>): TransferDragPayload | null {
     const raw = event.dataTransfer.getData(COFINDER_TRANSFER_MIME);
-    if (!raw) return null;
+    if (!raw) return activeTransferDragRef.current;
     try {
       const payload = JSON.parse(raw) as Partial<TransferDragPayload>;
       if (
@@ -2878,9 +2881,14 @@ export function App(props: AppProps = {}) {
         return payload as TransferDragPayload;
       }
     } catch {
-      return null;
+      return activeTransferDragRef.current;
     }
-    return null;
+    return activeTransferDragRef.current;
+  }
+
+  function finishTransferDrag(): void {
+    activeTransferDragRef.current = null;
+    setDropTarget(null);
   }
 
   function finderDropPaths(event: ReactDragEvent<HTMLElement>): string[] {
@@ -2929,7 +2937,7 @@ export function App(props: AppProps = {}) {
     event.preventDefault();
     const payload = parseTransferDrag(event);
     const finderPaths = finderDropPaths(event);
-    setDropTarget(null);
+    finishTransferDrag();
 
     if (targetPane === "remote") {
       if (payload?.pane === "local" && payload.tabId === activeTab.id) {
@@ -2969,13 +2977,13 @@ export function App(props: AppProps = {}) {
     const payload = parseTransferDrag(event);
     if (entry.type !== "directory") {
       event.preventDefault();
-      setDropTarget(null);
+      finishTransferDrag();
       setPaneError(activeTab.id, targetPane, "Drop onto a folder or empty pane area.");
       return;
     }
     if (targetPane === "remote" && canMoveRemoteSelectionToDirectory(payload, entry.fullPath)) {
       event.preventDefault();
-      setDropTarget(null);
+      finishTransferDrag();
       await enqueueRemoteMoveToDirectory(activeTab.id, payload!.paths, entry.fullPath);
       return;
     }
