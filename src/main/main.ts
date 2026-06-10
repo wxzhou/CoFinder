@@ -92,11 +92,19 @@ function installApplicationMenu(): void {
   const sendPaneViewMode = (pane: "local" | "remote", viewMode: "list" | "icon" | "column" | "gallery") => {
     BrowserWindow.getFocusedWindow()?.webContents.send("system:setPaneViewMode", { pane, viewMode });
   };
+  const togglePaneGroupByType = (pane: "local" | "remote") => {
+    BrowserWindow.getFocusedWindow()?.webContents.send("system:togglePaneGroupByType", { pane });
+  };
   const viewModeMenu = (pane: "local" | "remote"): Electron.MenuItemConstructorOptions[] => [
     { label: "List", click: () => sendPaneViewMode(pane, "list") },
     { label: "Icon", click: () => sendPaneViewMode(pane, "icon") },
     { label: "Column", click: () => sendPaneViewMode(pane, "column") },
-    { label: "Gallery", click: () => sendPaneViewMode(pane, "gallery") }
+    { label: "Gallery", click: () => sendPaneViewMode(pane, "gallery") },
+    { type: "separator" },
+    {
+      label: "Group by Type",
+      click: () => togglePaneGroupByType(pane)
+    }
   ];
   const template: Electron.MenuItemConstructorOptions[] = [
     {

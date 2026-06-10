@@ -33,6 +33,7 @@ import {
 } from "./v12/shared";
 import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
+import { flattenFileTypeGroups, groupOutlineRowsByFileType } from "./v12/fileTypeGroups";
 import { flattenOutlineRows, hiddenDescendantPaths, isSameOrDescendantPath, pruneOutlinePath, type OutlineRow, type OutlineState } from "./v12/outlineRows";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
 import {
@@ -99,6 +100,7 @@ type LocalPaneState = {
   sortDirection: SortDirection;
   history: HistoryState;
   viewMode: PaneViewMode;
+  groupByType: boolean;
 };
 type RemotePaneState = {
   connectionStatus: RemoteConnectionStatus;
@@ -122,6 +124,7 @@ type RemotePaneState = {
   error: string;
   isListing: boolean;
   viewMode: PaneViewMode;
+  groupByType: boolean;
 };
 
 type ContextMenuState = {
@@ -363,7 +366,9 @@ const DEFAULT_RENDERER_SETTINGS: AppSettings = {
     sidebarWidth: 260,
     showListDisclosureControls: true,
     defaultLocalViewMode: "list",
-    defaultRemoteViewMode: "list"
+    defaultRemoteViewMode: "list",
+    groupLocalByType: false,
+    groupRemoteByType: false
   }
 };
 
@@ -540,8 +545,16 @@ export function App(props: AppProps = {}) {
       setTabs((prev) =>
         prev.map((tab) => ({
           ...tab,
-          localPane: { ...tab.localPane, viewMode: settings.appearance.defaultLocalViewMode },
-          remotePane: { ...tab.remotePane, viewMode: settings.appearance.defaultRemoteViewMode }
+          localPane: {
+            ...tab.localPane,
+            viewMode: settings.appearance.defaultLocalViewMode,
+            groupByType: settings.appearance.groupLocalByType
+          },
+          remotePane: {
+            ...tab.remotePane,
+            viewMode: settings.appearance.defaultRemoteViewMode,
+            groupByType: settings.appearance.groupRemoteByType
+          }
         }))
       );
       setV12LocalInspectorReveal(false);
@@ -757,6 +770,19 @@ export function App(props: AppProps = {}) {
         void setPaneViewMode(activeTab.id, payload.pane, payload.viewMode);
       }),
     [activeTab.id]
+  );
+
+  useEffect(
+    () =>
+      window.cofinder.system.onTogglePaneGroupByType((payload) => {
+        if (payload.pane !== "local" && payload.pane !== "remote") return;
+        const next =
+          payload.pane === "local"
+            ? !tabs.find((tab) => tab.id === activeTab.id)?.localPane.groupByType
+            : !tabs.find((tab) => tab.id === activeTab.id)?.remotePane.groupByType;
+        void setPaneGroupByType(activeTab.id, payload.pane, next);
+      }),
+    [activeTab.id, tabs]
   );
 
   useEffect(() => {
@@ -1107,6 +1133,27 @@ export function App(props: AppProps = {}) {
     );
     const appearancePatch =
       pane === "local" ? { defaultLocalViewMode: viewMode } : { defaultRemoteViewMode: viewMode };
+    const res = await window.cofinder.settings.set({ appearance: appearancePatch });
+    if (res.ok) {
+      setAppSettings(res.data);
+      setPreferences((prev) => ({ ...prev, draft: res.data }));
+      return;
+    }
+    setQueueError(res.error.message);
+  }
+
+  async function setPaneGroupByType(tabId: string, pane: ActivePane, groupByType: boolean): Promise<void> {
+    setActivePane(pane);
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== tabId) return tab;
+        return pane === "local"
+          ? { ...tab, localPane: { ...tab.localPane, groupByType } }
+          : { ...tab, remotePane: { ...tab.remotePane, groupByType } };
+      })
+    );
+    const appearancePatch =
+      pane === "local" ? { groupLocalByType: groupByType } : { groupRemoteByType: groupByType };
     const res = await window.cofinder.settings.set({ appearance: appearancePatch });
     if (res.ok) {
       setAppSettings(res.data);
@@ -1529,24 +1576,74 @@ export function App(props: AppProps = {}) {
     }
     return columns;
   }, [activeRemoteColumns, remotePane.currentPath, remotePane.filterText, remotePane.isListing, remotePane.sortDirection, remotePane.sortKey, sortAndFilterFileEntries, sortedRemoteEntries]);
+  const localGroupedVisibleEntries = useMemo<OutlineRow<LocalFileEntry>[]>(
+    () => groupOutlineRowsByFileType(localVisibleEntries).flatMap((group) => group.entries),
+    [localVisibleEntries]
+  );
+  const remoteGroupedVisibleEntries = useMemo<OutlineRow<RemoteFileEntry>[]>(
+    () => groupOutlineRowsByFileType(remoteVisibleEntries).flatMap((group) => group.entries),
+    [remoteVisibleEntries]
+  );
+  const localGroupedSortedEntries = useMemo<OutlineRow<LocalFileEntry>[]>(
+    () => flattenFileTypeGroups(sortedEntries).map((entry) => ({ ...entry, outlineDepth: 0 })),
+    [sortedEntries]
+  );
+  const remoteGroupedSortedEntries = useMemo<OutlineRow<RemoteFileEntry>[]>(
+    () => flattenFileTypeGroups(sortedRemoteEntries).map((entry) => ({ ...entry, outlineDepth: 0 })),
+    [sortedRemoteEntries]
+  );
+  const localGroupedColumnEntries = useMemo<OutlineRow<LocalFileEntry>[]>(
+    () =>
+      localColumnViewColumns.flatMap((column) =>
+        flattenFileTypeGroups(column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+      ),
+    [localColumnViewColumns]
+  );
+  const remoteGroupedColumnEntries = useMemo<OutlineRow<RemoteFileEntry>[]>(
+    () =>
+      remoteColumnViewColumns.flatMap((column) =>
+        flattenFileTypeGroups(column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+      ),
+    [remoteColumnViewColumns]
+  );
   useEffect(() => {
     localVisibleEntriesRef.current =
       localPane.viewMode === "list"
-        ? localVisibleEntries
+        ? localPane.groupByType
+          ? localGroupedVisibleEntries
+          : localVisibleEntries
         : localPane.viewMode === "column"
-          ? localColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
-          : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+          ? localPane.groupByType
+            ? localGroupedColumnEntries
+            : localColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+          : localPane.groupByType && localPane.viewMode === "icon"
+            ? localGroupedSortedEntries
+            : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
     remoteVisibleEntriesRef.current =
       remotePane.viewMode === "list"
-        ? remoteVisibleEntries
+        ? remotePane.groupByType
+          ? remoteGroupedVisibleEntries
+          : remoteVisibleEntries
         : remotePane.viewMode === "column"
-          ? remoteColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
-          : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
+          ? remotePane.groupByType
+            ? remoteGroupedColumnEntries
+            : remoteColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+          : remotePane.groupByType && remotePane.viewMode === "icon"
+            ? remoteGroupedSortedEntries
+            : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 }));
   }, [
     localColumnViewColumns,
+    localGroupedColumnEntries,
+    localGroupedSortedEntries,
+    localGroupedVisibleEntries,
+    localPane.groupByType,
     localPane.viewMode,
     localVisibleEntries,
     remoteColumnViewColumns,
+    remoteGroupedColumnEntries,
+    remoteGroupedSortedEntries,
+    remoteGroupedVisibleEntries,
+    remotePane.groupByType,
     remotePane.viewMode,
     remoteVisibleEntries,
     sortedEntries,
@@ -1556,20 +1653,50 @@ export function App(props: AppProps = {}) {
   const localCurrentViewEntries = useMemo<OutlineRow<LocalFileEntry>[]>(
     () =>
       localPane.viewMode === "list"
-        ? localVisibleEntries
+        ? localPane.groupByType
+          ? localGroupedVisibleEntries
+          : localVisibleEntries
         : localPane.viewMode === "column"
-          ? localColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
-          : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 })),
-    [localColumnViewColumns, localPane.viewMode, localVisibleEntries, sortedEntries]
+          ? localPane.groupByType
+            ? localGroupedColumnEntries
+            : localColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+          : localPane.groupByType && localPane.viewMode === "icon"
+            ? localGroupedSortedEntries
+            : sortedEntries.map((entry) => ({ ...entry, outlineDepth: 0 })),
+    [
+      localColumnViewColumns,
+      localGroupedColumnEntries,
+      localGroupedSortedEntries,
+      localGroupedVisibleEntries,
+      localPane.groupByType,
+      localPane.viewMode,
+      localVisibleEntries,
+      sortedEntries
+    ]
   );
   const remoteCurrentViewEntries = useMemo<OutlineRow<RemoteFileEntry>[]>(
     () =>
       remotePane.viewMode === "list"
-        ? remoteVisibleEntries
+        ? remotePane.groupByType
+          ? remoteGroupedVisibleEntries
+          : remoteVisibleEntries
         : remotePane.viewMode === "column"
-          ? remoteColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
-          : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 })),
-    [remoteColumnViewColumns, remotePane.viewMode, remoteVisibleEntries, sortedRemoteEntries]
+          ? remotePane.groupByType
+            ? remoteGroupedColumnEntries
+            : remoteColumnViewColumns.flatMap((column) => column.entries).map((entry) => ({ ...entry, outlineDepth: 0 }))
+          : remotePane.groupByType && remotePane.viewMode === "icon"
+            ? remoteGroupedSortedEntries
+            : sortedRemoteEntries.map((entry) => ({ ...entry, outlineDepth: 0 })),
+    [
+      remoteColumnViewColumns,
+      remoteGroupedColumnEntries,
+      remoteGroupedSortedEntries,
+      remoteGroupedVisibleEntries,
+      remotePane.groupByType,
+      remotePane.viewMode,
+      remoteVisibleEntries,
+      sortedRemoteEntries
+    ]
   );
 
   const selectedEntries = localCurrentViewEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
@@ -4485,7 +4612,11 @@ export function App(props: AppProps = {}) {
         return {
           ...item,
           title: `Tab ${getTabNumber(item.id, prev)}`,
-          remotePane: { ...createRemotePaneState(), viewMode: appSettings.appearance.defaultRemoteViewMode }
+          remotePane: {
+            ...createRemotePaneState(),
+            viewMode: appSettings.appearance.defaultRemoteViewMode,
+            groupByType: appSettings.appearance.groupRemoteByType
+          }
         };
       })
     );
@@ -4499,8 +4630,16 @@ export function App(props: AppProps = {}) {
         ...prev,
         {
           ...tab,
-          localPane: { ...tab.localPane, viewMode: appSettings.appearance.defaultLocalViewMode },
-          remotePane: { ...tab.remotePane, viewMode: appSettings.appearance.defaultRemoteViewMode }
+          localPane: {
+            ...tab.localPane,
+            viewMode: appSettings.appearance.defaultLocalViewMode,
+            groupByType: appSettings.appearance.groupLocalByType
+          },
+          remotePane: {
+            ...tab.remotePane,
+            viewMode: appSettings.appearance.defaultRemoteViewMode,
+            groupByType: appSettings.appearance.groupRemoteByType
+          }
         }
       ];
     });
@@ -4530,8 +4669,16 @@ export function App(props: AppProps = {}) {
         return [
           {
             ...tab,
-            localPane: { ...tab.localPane, viewMode: appSettings.appearance.defaultLocalViewMode },
-            remotePane: { ...tab.remotePane, viewMode: appSettings.appearance.defaultRemoteViewMode }
+            localPane: {
+              ...tab.localPane,
+              viewMode: appSettings.appearance.defaultLocalViewMode,
+              groupByType: appSettings.appearance.groupLocalByType
+            },
+            remotePane: {
+              ...tab.remotePane,
+              viewMode: appSettings.appearance.defaultRemoteViewMode,
+              groupByType: appSettings.appearance.groupRemoteByType
+            }
           }
         ];
       }
@@ -5216,6 +5363,20 @@ export function App(props: AppProps = {}) {
     </div>
   );
 
+  const renderGroupByTypeToggle = (pane: ActivePane, groupByType: boolean, disabled = false) => (
+    <button
+      type="button"
+      className={`toolbar-button v12m-icon-button v12m-group-type-button${groupByType ? " is-active" : ""}`}
+      title="Group by type"
+      aria-label="Group by type"
+      aria-pressed={groupByType}
+      disabled={disabled}
+      onClick={() => void setPaneGroupByType(activeTab.id, pane, !groupByType)}
+    >
+      <V12TbIcon name="group-by-type" />
+    </button>
+  );
+
   const localPaneToolbar =
     uiShell === "v12" ? (
       <V12PaneToolbar
@@ -5322,6 +5483,7 @@ export function App(props: AppProps = {}) {
         ]}
       >
         {renderViewModeToggle("local", localPane.viewMode)}
+        {renderGroupByTypeToggle("local", localPane.groupByType)}
         <input
           className="pane-filter-input"
           value={localPane.filterText}
@@ -5499,6 +5661,7 @@ export function App(props: AppProps = {}) {
         ]}
       >
         {renderViewModeToggle("remote", remotePane.viewMode, !remotePane.connectionId)}
+        {renderGroupByTypeToggle("remote", remotePane.groupByType, !remotePane.connectionId)}
         <input
           className="pane-filter-input"
           value={remotePane.filterText}
@@ -5757,6 +5920,7 @@ export function App(props: AppProps = {}) {
                     pane="local"
                     isPaneActive={activePane === "local"}
                     columns={localColumnViewColumns}
+                    groupByType={localPane.groupByType}
                     selectedFullPaths={localPane.selectedFullPaths}
                     selectedColumnPaths={activeLocalColumns.selectedPaths}
                     onItemClick={(entry, columnIndex, event) => {
@@ -5792,6 +5956,7 @@ export function App(props: AppProps = {}) {
                     pane="local"
                     isPaneActive={activePane === "local"}
                     entries={localCurrentViewEntries}
+                    groupByType={localPane.groupByType}
                     selectedFullPaths={localPane.selectedFullPaths}
                     emptyMessage={localPane.error ? "Local folder could not be loaded." : "This local folder is empty."}
                     onItemClick={(entry, event) => handleLocalPrimaryEntryClick(entry, event)}
@@ -5824,6 +5989,7 @@ export function App(props: AppProps = {}) {
                     pane="local"
                     isPaneActive={activePane === "local"}
                     entries={localVisibleEntries}
+                    groupByType={localPane.groupByType}
                     emptyMessage={localPane.error ? "Local folder could not be loaded." : "This local folder is empty."}
                     sortKey={localPane.sortKey}
                     sortDirection={localPane.sortDirection}
@@ -6268,6 +6434,7 @@ export function App(props: AppProps = {}) {
                       pane="remote"
                       isPaneActive={activePane === "remote"}
                       columns={remoteColumnViewColumns}
+                      groupByType={remotePane.groupByType}
                       selectedFullPaths={remotePane.selectedFullPaths}
                       selectedColumnPaths={activeRemoteColumns.selectedPaths}
                       onItemClick={(entry, columnIndex, event) => {
@@ -6303,6 +6470,7 @@ export function App(props: AppProps = {}) {
                       pane="remote"
                       isPaneActive={activePane === "remote"}
                       entries={remoteCurrentViewEntries}
+                      groupByType={remotePane.groupByType}
                       selectedFullPaths={remotePane.selectedFullPaths}
                       emptyMessage={
                         remotePane.isListing
@@ -6341,6 +6509,7 @@ export function App(props: AppProps = {}) {
                       pane="remote"
                       isPaneActive={activePane === "remote"}
                       entries={remoteVisibleEntries}
+                      groupByType={remotePane.groupByType}
                       emptyMessage={
                         remotePane.isListing
                           ? "Loading remote folder..."
@@ -7150,6 +7319,32 @@ export function App(props: AppProps = {}) {
                         <option value="column">Column</option>
                         <option value="gallery">Gallery</option>
                       </select>
+                    </label>
+                    <label className="preferences-check">
+                      <input
+                        type="checkbox"
+                        checked={preferences.draft.appearance.groupLocalByType}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: { ...p.draft, appearance: { ...p.draft.appearance, groupLocalByType: e.target.checked } }
+                          }))
+                        }
+                      />
+                      Group local files by type by default
+                    </label>
+                    <label className="preferences-check">
+                      <input
+                        type="checkbox"
+                        checked={preferences.draft.appearance.groupRemoteByType}
+                        onChange={(e) =>
+                          setPreferences((p) => ({
+                            ...p,
+                            draft: { ...p.draft, appearance: { ...p.draft.appearance, groupRemoteByType: e.target.checked } }
+                          }))
+                        }
+                      />
+                      Group remote files by type by default
                     </label>
                     <label className="preferences-check">
                       <input
@@ -8106,7 +8301,8 @@ function createLocalPaneState(): LocalPaneState {
     sortKey: "name",
     sortDirection: "asc",
     history: { backStack: [], forwardStack: [] },
-    viewMode: "list"
+    viewMode: "list",
+    groupByType: false
   };
 }
 
@@ -8131,7 +8327,8 @@ function createRemotePaneState(): RemotePaneState {
     history: { backStack: [], forwardStack: [] },
     error: "",
     isListing: false,
-    viewMode: "list"
+    viewMode: "list",
+    groupByType: false
   };
 }
 

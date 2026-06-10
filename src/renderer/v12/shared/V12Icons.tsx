@@ -316,6 +316,17 @@ Z
           <circle cx="7.2" cy="8" r="0.9" />
         </svg>
       );
+    case "group-by-type":
+      return (
+        <svg {...s}>
+          <path d="M5 4.8h10" />
+          <path d="M5 10h10" />
+          <path d="M5 15.2h10" />
+          <circle cx="3.7" cy="4.8" r="0.55" fill="currentColor" stroke="none" />
+          <circle cx="3.7" cy="10" r="0.55" fill="currentColor" stroke="none" />
+          <circle cx="3.7" cy="15.2" r="0.55" fill="currentColor" stroke="none" />
+        </svg>
+      );
     case "clock":
       return (
         <svg {...s}>

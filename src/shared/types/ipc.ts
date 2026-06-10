@@ -282,6 +282,8 @@ export type AppSettings = {
     showListDisclosureControls: boolean;
     defaultLocalViewMode: PaneViewMode;
     defaultRemoteViewMode: PaneViewMode;
+    groupLocalByType: boolean;
+    groupRemoteByType: boolean;
   };
 };
 
@@ -486,6 +488,7 @@ export interface IpcApi {
     checkForUpdates: () => Promise<IpcResponse<{ available: false; message: string }>>;
     onOpenPreferences: (handler: () => void) => () => void;
     onSetPaneViewMode: (handler: (payload: { pane: "local" | "remote"; viewMode: PaneViewMode }) => void) => () => void;
+    onTogglePaneGroupByType: (handler: (payload: { pane: "local" | "remote" }) => void) => () => void;
     onSystemResume: (handler: () => void) => () => void;
   };
 }

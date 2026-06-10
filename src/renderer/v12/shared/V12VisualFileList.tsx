@@ -1,5 +1,6 @@
 import { useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
 import type { FileEntry, SortDirection, SortKey } from "../../../shared/types/models";
+import { groupOutlineRowsByFileType } from "../fileTypeGroups";
 import { V12Icon, V12TbIcon } from "./V12Icons";
 
 /** Alias for callers that only need the shared list shape (extends IPC file entries). */
@@ -17,6 +18,7 @@ export type V12VisualFileListProps<T extends FileEntry> = {
   pane: "local" | "remote";
   isPaneActive: boolean;
   entries: T[];
+  groupByType?: boolean;
   sortKey: SortKey;
   sortDirection: SortDirection;
   selectedFullPaths: string[];
@@ -73,6 +75,9 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
   const visibleColumns = props.columns.filter((column) => column.visible || column.required);
   const gridTemplateColumns = visibleColumns.map((column) => `${column.width}px`).join(" ");
   const gridStyle: CSSProperties = { gridTemplateColumns, minWidth: "100%", width: "max-content" };
+  const visibleGroups = props.groupByType
+    ? groupOutlineRowsByFileType(props.entries)
+    : [{ id: "all", label: "", entries: props.entries }];
   const startResize = (column: V12FileColumn, event: MouseEvent<HTMLSpanElement>) => {
     event.preventDefault();
     event.stopPropagation();
@@ -241,47 +246,56 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
         onDragLeave={props.onDragLeave}
       >
         {props.entries.length === 0 ? <div className="v12m-list-empty">{props.emptyMessage ?? "This folder is empty."}</div> : null}
-        {props.entries.map((entry, index) => {
-          const selected = props.selectedFullPaths.includes(entry.fullPath);
-          const sel = rowSelClass(selected, props.isPaneActive);
-          const previousSelected = index > 0 ? props.selectedFullPaths.includes(props.entries[index - 1].fullPath) : false;
-          const nextSelected = index < props.entries.length - 1 ? props.selectedFullPaths.includes(props.entries[index + 1].fullPath) : false;
-          const selectedRunClass = selected
-            ? `${previousSelected ? "" : " sel-run-start"}${nextSelected ? "" : " sel-run-end"}`
-            : "";
-          return (
-            <div
-              key={entry.fullPath}
-              role="listitem"
-              draggable={props.inlineRename?.sourcePath !== entry.fullPath}
-              data-pane-row="true"
-              data-marquee-pane={props.pane}
-              data-full-path={entry.fullPath}
-              className={`v12m-lrow ${sel}${selectedRunClass} ${props.getRowClassName?.(entry) ?? ""}`.trim()}
-              style={gridStyle}
-              onDragStart={(e) => props.onRowDragStart?.(entry, e)}
-              onDragOver={(e) => props.onRowDragOver?.(entry, e)}
-              onDrop={(e) => props.onRowDrop?.(entry, e)}
-              onDragEnd={(e) => props.onRowDragEnd?.(e)}
-              onClick={(e) => {
-                const target = e.target as HTMLElement | null;
-                if (target?.closest(".v12m-lname")) {
-                  props.onRowClick(entry, e);
-                  return;
-                }
-                props.onRowDetailClick?.(entry, e);
-              }}
-              onContextMenu={(e) => props.onRowContextMenu(entry, e)}
-              onDoubleClick={() => props.onRowDoubleClick(entry)}
-            >
-              {visibleColumns.map((column) => (
-                <span key={column.key} className={column.key === "name" ? "v12m-namecell" : `v12m-lcell v12m-lcell--${column.key}`}>
-                  {cellValue(entry, column.key)}
-                </span>
-              ))}
-            </div>
-          );
-        })}
+        {visibleGroups.map((group) => (
+          <div className="v12m-file-type-group" key={group.id}>
+            {props.groupByType ? (
+              <div className="v12m-file-type-heading" style={gridStyle}>
+                <span>{group.label}</span>
+              </div>
+            ) : null}
+            {group.entries.map((entry, index) => {
+              const selected = props.selectedFullPaths.includes(entry.fullPath);
+              const sel = rowSelClass(selected, props.isPaneActive);
+              const previousSelected = index > 0 ? props.selectedFullPaths.includes(group.entries[index - 1].fullPath) : false;
+              const nextSelected = index < group.entries.length - 1 ? props.selectedFullPaths.includes(group.entries[index + 1].fullPath) : false;
+              const selectedRunClass = selected
+                ? `${previousSelected ? "" : " sel-run-start"}${nextSelected ? "" : " sel-run-end"}`
+                : "";
+              return (
+                <div
+                  key={entry.fullPath}
+                  role="listitem"
+                  draggable={props.inlineRename?.sourcePath !== entry.fullPath}
+                  data-pane-row="true"
+                  data-marquee-pane={props.pane}
+                  data-full-path={entry.fullPath}
+                  className={`v12m-lrow ${sel}${selectedRunClass} ${props.getRowClassName?.(entry) ?? ""}`.trim()}
+                  style={gridStyle}
+                  onDragStart={(e) => props.onRowDragStart?.(entry, e)}
+                  onDragOver={(e) => props.onRowDragOver?.(entry, e)}
+                  onDrop={(e) => props.onRowDrop?.(entry, e)}
+                  onDragEnd={(e) => props.onRowDragEnd?.(e)}
+                  onClick={(e) => {
+                    const target = e.target as HTMLElement | null;
+                    if (target?.closest(".v12m-lname")) {
+                      props.onRowClick(entry, e);
+                      return;
+                    }
+                    props.onRowDetailClick?.(entry, e);
+                  }}
+                  onContextMenu={(e) => props.onRowContextMenu(entry, e)}
+                  onDoubleClick={() => props.onRowDoubleClick(entry)}
+                >
+                  {visibleColumns.map((column) => (
+                    <span key={column.key} className={column.key === "name" ? "v12m-namecell" : `v12m-lcell v12m-lcell--${column.key}`}>
+                      {cellValue(entry, column.key)}
+                    </span>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        ))}
       </div>
     </div>
   );

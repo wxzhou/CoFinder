@@ -35,7 +35,9 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     sidebarWidth: 260,
     showListDisclosureControls: true,
     defaultLocalViewMode: "list",
-    defaultRemoteViewMode: "list"
+    defaultRemoteViewMode: "list",
+    groupLocalByType: false,
+    groupRemoteByType: false
   }
 };
 
@@ -120,7 +122,9 @@ export function normalizeSettingsPatch(raw: unknown, base: AppSettings = DEFAULT
       sidebarWidth: numberInRange(appearance.sidebarWidth, base.appearance.sidebarWidth, 180, 420),
       showListDisclosureControls: bool(appearance.showListDisclosureControls, base.appearance.showListDisclosureControls),
       defaultLocalViewMode: viewMode(appearance.defaultLocalViewMode, base.appearance.defaultLocalViewMode),
-      defaultRemoteViewMode: viewMode(appearance.defaultRemoteViewMode, base.appearance.defaultRemoteViewMode)
+      defaultRemoteViewMode: viewMode(appearance.defaultRemoteViewMode, base.appearance.defaultRemoteViewMode),
+      groupLocalByType: bool(appearance.groupLocalByType, base.appearance.groupLocalByType),
+      groupRemoteByType: bool(appearance.groupRemoteByType, base.appearance.groupRemoteByType)
     }
   };
 }

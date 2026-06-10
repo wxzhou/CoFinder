@@ -845,6 +845,23 @@
   background: transparent;
 }
 
+.cfv12-root .v12m-file-type-heading {
+  height: 22px;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 10px 3px;
+  color: color-mix(in srgb, var(--m-fg, #1f2937) 56%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border-subtle, #d1d5db) 55%, transparent);
+  user-select: none;
+}
+
+.cfv12-root .v12m-file-type-group:first-of-type .v12m-file-type-heading {
+  margin-top: 2px;
+}
+
 .cfv12-root .v12m-lrow.sel-run-start {
   border-top-left-radius: 7px;
   border-top-right-radius: 7px;
@@ -987,6 +1004,11 @@
   height: 16px;
 }
 
+.cfv12-root .v12m-group-type-button.is-active {
+  color: var(--m-accent);
+  background: color-mix(in srgb, var(--m-accent) 13%, transparent);
+}
+
 .cfv12-root .v12m-icon-grid-scroll {
   flex: 1;
   min-height: 0;
@@ -1000,6 +1022,15 @@
   grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
   gap: 8px;
   align-content: start;
+}
+
+.cfv12-root .v12m-icon-type-group + .v12m-icon-type-group {
+  margin-top: 10px;
+}
+
+.cfv12-root .v12m-icon-type-heading {
+  margin-bottom: 8px;
+  padding-left: 2px;
 }
 
 .cfv12-root .v12m-icon-item {
@@ -1107,6 +1138,12 @@
 
 .cfv12-root .v12m-column-hint.is-error {
   color: #c9342b;
+}
+
+.cfv12-root .v12m-column-type-heading {
+  height: 20px;
+  padding: 0 8px 2px;
+  margin: 2px 4px 1px;
 }
 
 .cfv12-root .v12m-column-item {

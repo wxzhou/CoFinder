@@ -26,7 +26,15 @@ describe("SettingsService", () => {
       },
       transfer: { defaultConflictPolicy: "rename", queueAutoHideDelayMs: 2500, compressionConcurrency: 3 },
       remote: { autoRefreshEnabled: true, autoRefreshIntervalSeconds: 30, autoReconnectAfterSleep: false },
-      appearance: { rowDensity: "compact", defaultPaneRatio: 0.7, sidebarWidth: 320, defaultLocalViewMode: "icon", defaultRemoteViewMode: "icon" }
+      appearance: {
+        rowDensity: "compact",
+        defaultPaneRatio: 0.7,
+        sidebarWidth: 320,
+        defaultLocalViewMode: "icon",
+        defaultRemoteViewMode: "icon",
+        groupLocalByType: true,
+        groupRemoteByType: true
+      }
     });
 
     expect(saved.general.showHiddenFiles).toBe(true);
@@ -44,6 +52,8 @@ describe("SettingsService", () => {
     expect(saved.appearance.sidebarWidth).toBe(320);
     expect(saved.appearance.defaultLocalViewMode).toBe("icon");
     expect(saved.appearance.defaultRemoteViewMode).toBe("icon");
+    expect(saved.appearance.groupLocalByType).toBe(true);
+    expect(saved.appearance.groupRemoteByType).toBe(true);
     await expect(service.get()).resolves.toEqual(saved);
   });
 
@@ -59,7 +69,15 @@ describe("SettingsService", () => {
       },
       transfer: { defaultConflictPolicy: "cancel", queueAutoHideDelayMs: -1, compressionConcurrency: 99 },
       remote: { autoRefreshEnabled: "yes", autoRefreshIntervalSeconds: 1, autoReconnectAfterSleep: "no" },
-      appearance: { rowDensity: "huge", defaultPaneRatio: 1, sidebarWidth: 999, defaultLocalViewMode: "coverflow", defaultRemoteViewMode: 42 }
+      appearance: {
+        rowDensity: "huge",
+        defaultPaneRatio: 1,
+        sidebarWidth: 999,
+        defaultLocalViewMode: "coverflow",
+        defaultRemoteViewMode: 42,
+        groupLocalByType: "yes",
+        groupRemoteByType: 1
+      }
     });
 
     expect(settings.schemaVersion).toBe(2);
@@ -80,6 +98,8 @@ describe("SettingsService", () => {
     expect(settings.appearance.sidebarWidth).toBe(420);
     expect(settings.appearance.defaultLocalViewMode).toBe("list");
     expect(settings.appearance.defaultRemoteViewMode).toBe("list");
+    expect(settings.appearance.groupLocalByType).toBe(false);
+    expect(settings.appearance.groupRemoteByType).toBe(false);
   });
 
   it("migrates v1 settings into the v2 onboarding field", () => {

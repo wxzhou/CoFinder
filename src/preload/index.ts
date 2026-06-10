@@ -130,6 +130,11 @@ const api: IpcApi = {
       ipcRenderer.on("system:setPaneViewMode", wrapped);
       return () => ipcRenderer.off("system:setPaneViewMode", wrapped);
     },
+    onTogglePaneGroupByType: (handler) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => handler(payload as Parameters<typeof handler>[0]);
+      ipcRenderer.on("system:togglePaneGroupByType", wrapped);
+      return () => ipcRenderer.off("system:togglePaneGroupByType", wrapped);
+    },
     onSystemResume: (handler) => {
       const wrapped = () => handler();
       ipcRenderer.on("system:resume", wrapped);

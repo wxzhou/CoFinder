@@ -159,6 +159,14 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Transfers:** drag a local gallery item to the remote pane and a remote gallery item to the local pane; confirm upload/download Jobs are queued.
 - **Guardrails:** select a large remote image/file and confirm Gallery shows a clear limit/unsupported message rather than silently downloading/opening it; use existing Open/Edit actions when an explicit local-copy workflow is desired.
 
+## V2.10 M8 / v1.9.9 view polish and grouping
+
+- **Group by Type toolbar:** in local and remote panes, toggle Group by Type from the pane toolbar. Confirm List, Icon, and Column views show Finder-like type sections while Gallery remains ungrouped.
+- **Group labels:** use a fixture with folders, `a.txt`, `b.TXT`, `image.jpg`, `image.jpeg`, `.bashrc`, and `README`; confirm groups are `Folders`, extension groups such as `JPG`/`JPEG`/`TXT`, and `Other` for extensionless/dot-only names.
+- **Pane independence:** enable grouping in the local pane and leave remote ungrouped, then reverse. Confirm each pane keeps its own grouping state and selection/copy order follows the visible grouped order.
+- **Menu-bar controls:** use View -> Local View -> Group by Type and View -> Remote View -> Group by Type; confirm they toggle the matching pane without affecting the other pane.
+- **Appearance defaults:** set Preferences -> Appearance group-by-type defaults for local and remote, save, create a new tab or relaunch, and confirm panes initialize with the saved grouping defaults.
+
 ## V2.0 stable personal release
 
 - **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.

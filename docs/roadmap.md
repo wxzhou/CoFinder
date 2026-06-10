@@ -47,7 +47,7 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.10 M5 | v1.9.6 | Complete on feature branch |
 | V2.10 M6 | v1.9.7 | Complete on feature branch |
 | V2.10 M7 | v1.9.8 | Complete on feature branch |
-| V2.10 M8 | v1.9.9 | In progress on feature branch |
+| V2.10 M8 | v1.9.9 | In progress on feature branch; includes Group by Type |
 
 ## Shipped phases (summary)
 
@@ -103,7 +103,7 @@ Themes align with **`docs/dev/V1.3_PLAN.md`** … **`docs/dev/V2.0_PLAN.md`**. S
 | V2.10 M5 | v1.9.6 | View-mode foundation and icon view — complete on feature branch |
 | V2.10 M6 | v1.9.7 | Column view — complete on feature branch |
 | V2.10 M7 | v1.9.8 | Gallery view — complete on feature branch |
-| V2.10 M8 | v1.9.9 | Post-view-mode optimization and debug — in progress on feature branch |
+| V2.10 M8 | v1.9.9 | Post-view-mode optimization, debug, and Group by Type — in progress on feature branch |
 
 ## Latest Completed Phase
 
@@ -276,7 +276,7 @@ Recommended order:
 6. **v1.9.6:** view-mode foundation plus icon view. Local and remote panes can choose view modes independently.
 7. **v1.9.7:** column view, after the shared view-mode state and pane-independent rendering are proven.
 8. **v1.9.8:** gallery view, after preview caching and large-file guardrails are reused safely.
-9. **v1.9.9:** post-view-mode optimization and debug. Focus on submenu hover intent, toolbar/menu view controls, always-on list disclosure controls, modal close consistency, list indentation stability, View Text latency review, and Finder-like Gallery layout corrections.
+9. **v1.9.9:** post-view-mode optimization and debug. Focus on submenu hover intent, toolbar/menu view controls, always-on list disclosure controls, modal close consistency, list indentation stability, View Text latency review, Finder-like Gallery layout corrections, and per-pane Group by Type for List/Icon/Column views.
 
 See **`docs/dev/V2.10_HARD_FEATURES_PLAN.md`** and the current **`CHANGELOG.md`** unreleased section.
 
