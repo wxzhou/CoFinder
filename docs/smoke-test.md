@@ -37,7 +37,8 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Local multi-select / directory drag:** select multiple local items including a folder, drag them to the remote pane, and confirm one queued upload task per selected source.
 - **Remote → local drag download:** select one remote file, drag it to empty space in the local pane, release, resolve any conflict prompt, and confirm a queued download appears.
 - **Directory row drop target:** drag a local file onto a remote folder row and confirm the upload target is that folder; repeat remote file onto a local folder row for download.
-- **Invalid row drop:** drag onto a file row and confirm forbidden/invalid feedback appears and no task is queued.
+- **File row drop target:** drag a local file onto a remote file row and confirm upload targets the current remote folder, not the row file; repeat remote file onto a local file row for download into the current local folder.
+- **Invalid same-pane row drop:** drag a remote item onto a remote file row and confirm forbidden/invalid feedback appears and no Relocate task is queued.
 - **Finder → remote upload:** drag a file or folder from Finder into the connected remote pane and confirm upload uses the same conflict dialog and queue path.
 - **Finder non-goal:** drag from Finder into the local pane and confirm it does not enqueue a transfer.
 - **Marquee replace:** drag from empty pane background across several rows and confirm the selection becomes exactly the intersected rows.

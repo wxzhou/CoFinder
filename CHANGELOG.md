@@ -22,6 +22,7 @@
 - Added remote-pane drag-to-move: dragging selected remote items onto a remote folder now queues visible Remote move jobs, with internal drag state retained when Chromium hides custom drag data during hover.
 - Pruned stale remote selections and expanded-list cache entries after move jobs so context-menu Move To cannot reuse already-moved paths.
 - Fixed remote Copy To / Move To for broken symlinks by validating link paths without following missing link targets.
+- Drag-and-drop upload/download now works when dropping cross-pane items onto file rows as well as pane background or folder rows; file-row drops target the pane's current folder.
 
 ## v1.9.8 development
 

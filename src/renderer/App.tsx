@@ -53,6 +53,7 @@ import {
   type MarqueeRowRect,
   type SelectionState
 } from "./selection";
+import { resolveRowTransferDropTarget } from "./transferDropIntent";
 import type { LocalFavoriteListItem } from "../shared/localFavorites";
 import type { RemoteEditSession } from "../shared/remoteEdit";
 import { isSourceLikePath } from "../shared/sourceFileTypes";
@@ -2955,8 +2956,18 @@ export function App(props: AppProps = {}) {
   ): void {
     const payload = parseTransferDrag(event);
     const sameRemoteMove = targetPane === "remote" && options?.requireDirectory && canMoveRemoteSelectionToDirectory(payload, targetPath);
-    const rowValid = !options?.requireDirectory || options.entryType === "directory";
-    const valid = rowValid && (sameRemoteMove || canDropOnPane(targetPane, event));
+    const rowTransferTarget = options?.requireDirectory
+      ? resolveRowTransferDropTarget({
+          targetPane,
+          activeTabId: activeTab.id,
+          payload,
+          hasFinderFiles: hasFinderFiles(event),
+          entryType: options.entryType ?? "",
+          entryPath: targetPath,
+          currentPath: targetPane === "local" ? localPane.currentPath : remotePane.currentPath
+        })
+      : targetPath;
+    const valid = sameRemoteMove || (rowTransferTarget !== null && canDropOnPane(targetPane, event));
     event.preventDefault();
     event.dataTransfer.dropEffect = valid ? (sameRemoteMove ? "move" : "copy") : "none";
     setDropTarget({ pane: targetPane, path: targetPath, valid });
@@ -3004,19 +3015,28 @@ export function App(props: AppProps = {}) {
   ): Promise<void> {
     event.stopPropagation();
     const payload = parseTransferDrag(event);
-    if (entry.type !== "directory") {
-      event.preventDefault();
-      finishTransferDrag();
-      setPaneError(activeTab.id, targetPane, "Drop onto a folder or empty pane area.");
-      return;
-    }
     if (targetPane === "remote" && canMoveRemoteSelectionToDirectory(payload, entry.fullPath)) {
       event.preventDefault();
       finishTransferDrag();
       await enqueueRemoteMoveToDirectory(activeTab.id, payload!.paths, entry.fullPath);
       return;
     }
-    await handleTransferDrop(targetPane, entry.fullPath, event);
+    const transferTarget = resolveRowTransferDropTarget({
+      targetPane,
+      activeTabId: activeTab.id,
+      payload,
+      hasFinderFiles: hasFinderFiles(event),
+      entryType: entry.type,
+      entryPath: entry.fullPath,
+      currentPath: targetPane === "local" ? localPane.currentPath : remotePane.currentPath
+    });
+    if (transferTarget) {
+      await handleTransferDrop(targetPane, transferTarget, event);
+      return;
+    }
+    event.preventDefault();
+    finishTransferDrag();
+    setPaneError(activeTab.id, targetPane, "Drop onto the other pane to transfer, or onto a remote folder to move.");
   }
 
   async function enqueueRemoteMoveToDirectory(tabId: string, sources: string[], destinationDirectory: string): Promise<void> {
