@@ -6,7 +6,12 @@
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
 - **Latest release: v1.9.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
-## Unreleased / v1.9.9 development
+## Unreleased / v1.9.10 development
+
+- Starting the content-viewer, typed-icons, and batch-rename checkpoint.
+- Planned changes include replacing modal `View Text...` / `Search Contents...` with a modeless tabbed content viewer, adding file-type-aware icons across pane views, and adding safe preview-based batch rename for local and remote selections.
+
+## v1.9.9 development
 
 - Starting the post-view-mode optimization and debug checkpoint.
 - Planned fixes include context submenu hover intent, compact toolbar layout, menu-bar view-mode controls, always-on list disclosure controls, modal close-button consistency, list indentation stability, View Text latency review, and Finder-like Gallery layout corrections.
