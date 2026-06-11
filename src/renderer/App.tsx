@@ -43,6 +43,14 @@ import {
   type RecentPath
 } from "./navigationEfficiency";
 import {
+  buildBatchRenamePreview,
+  DEFAULT_BATCH_RENAME_OPTIONS,
+  validateBatchRenamePlan,
+  type BatchRenameEntry,
+  type BatchRenameOptions,
+  type BatchRenamePreviewItem
+} from "./batchRenameModel";
+import {
   applyKeyboardRowSelection,
   applyMarqueeSelection,
   applyRowSelection,
@@ -192,6 +200,17 @@ type RemoteCopyMoveDialogState = {
   sources: string[];
   destinationPath: string;
   conflictPolicy: "fail" | "rename";
+  error: string;
+  busy: boolean;
+};
+
+type BatchRenameDialogState = {
+  pane: ActivePane;
+  tabId: string;
+  connectionId?: string;
+  entries: BatchRenameEntry[];
+  visibleEntries: BatchRenameEntry[];
+  options: BatchRenameOptions;
   error: string;
   busy: boolean;
 };
@@ -459,6 +478,7 @@ export function App(props: AppProps = {}) {
   const [chmodDialog, setChmodDialog] = useState<ChmodDialogState | null>(null);
   const [timestampDialog, setTimestampDialog] = useState<TimestampDialogState | null>(null);
   const [remoteCopyMoveDialog, setRemoteCopyMoveDialog] = useState<RemoteCopyMoveDialogState | null>(null);
+  const [batchRenameDialog, setBatchRenameDialog] = useState<BatchRenameDialogState | null>(null);
   const [textViewerDialog, setTextViewerDialog] = useState<TextViewerDialogState | null>(null);
   const [textSearchDialog, setTextSearchDialog] = useState<TextSearchDialogState | null>(null);
   const timestampInputRefs = useRef<Record<TimestampPartKey, HTMLInputElement | null>>({
@@ -1705,6 +1725,14 @@ export function App(props: AppProps = {}) {
   const remoteSelectedEntries = remoteCurrentViewEntries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
   const remoteTotalSize = remoteCurrentViewEntries.reduce((acc, item) => acc + item.size, 0);
+  const batchRenamePreview = useMemo<BatchRenamePreviewItem[]>(
+    () => (batchRenameDialog ? buildBatchRenamePreview(batchRenameDialog.entries, batchRenameDialog.options) : []),
+    [batchRenameDialog]
+  );
+  const batchRenameValidationErrors = useMemo(
+    () => (batchRenameDialog ? validateBatchRenamePlan(batchRenamePreview, batchRenameDialog.visibleEntries) : []),
+    [batchRenameDialog, batchRenamePreview]
+  );
 
   const localGallerySelectedPath =
     localPane.viewMode === "gallery" && localPane.selectedFullPaths.length === 1 ? localPane.selectedFullPaths[0] : "";
@@ -3675,6 +3703,127 @@ export function App(props: AppProps = {}) {
     if (!text) return;
     const result = await window.cofinder.system.copyText({ text });
     if (!result.ok) setQueueError(result.error.message);
+  }
+
+  function selectedBatchRenameEntries(tabId: string, pane: ActivePane): { selected: BatchRenameEntry[]; visible: BatchRenameEntry[] } | null {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return null;
+    const entries = pane === "local"
+      ? tab.id === activeTab.id ? localCurrentViewEntries : tab.localPane.entries
+      : tab.id === activeTab.id ? remoteCurrentViewEntries : tab.remotePane.entries;
+    const selectedPaths = pane === "local" ? tab.localPane.selectedFullPaths : tab.remotePane.selectedFullPaths;
+    const selectedSet = new Set(selectedPaths);
+    const visible = entries.map((entry) => ({ fullPath: entry.fullPath, name: entry.name }));
+    const selected = visible.filter((entry) => selectedSet.has(entry.fullPath));
+    return { selected, visible };
+  }
+
+  function openBatchRenameDialog(tabId: string, pane: ActivePane): void {
+    const tab = tabs.find((item) => item.id === tabId);
+    if (!tab) return;
+    if (pane === "remote" && !tab.remotePane.connectionId) return;
+    const selection = selectedBatchRenameEntries(tabId, pane);
+    if (!selection || selection.selected.length < 2) return;
+    setBatchRenameDialog({
+      pane,
+      tabId,
+      connectionId: pane === "remote" ? tab.remotePane.connectionId ?? undefined : undefined,
+      entries: selection.selected,
+      visibleEntries: selection.visible,
+      options: DEFAULT_BATCH_RENAME_OPTIONS,
+      error: "",
+      busy: false
+    });
+  }
+
+  async function submitBatchRenameDialog(): Promise<void> {
+    if (!batchRenameDialog || batchRenameDialog.busy) return;
+    const dialog = batchRenameDialog;
+    const preview = buildBatchRenamePreview(dialog.entries, dialog.options);
+    const errors = validateBatchRenamePlan(preview, dialog.visibleEntries);
+    const changes = preview.filter((item) => item.changed);
+    if (errors.length > 0) {
+      setBatchRenameDialog((prev) => (prev ? { ...prev, error: errors.join(" ") } : prev));
+      return;
+    }
+    if (changes.length === 0) {
+      setBatchRenameDialog((prev) => (prev ? { ...prev, error: "No names would change." } : prev));
+      return;
+    }
+
+    setBatchRenameDialog((prev) => (prev ? { ...prev, error: "", busy: true } : prev));
+    const renamedPaths: string[] = [];
+    const failures: string[] = [];
+    for (const item of changes) {
+      if (dialog.pane === "local") {
+        const result = await window.cofinder.local.rename({ path: item.fullPath, newName: item.newName });
+        if (result.ok) renamedPaths.push(result.data.newPath);
+        else failures.push(`${item.originalName}: ${result.error.message}`);
+      } else if (dialog.connectionId) {
+        const result = await window.cofinder.remote.rename({
+          connectionId: dialog.connectionId,
+          path: item.fullPath,
+          newName: item.newName
+        });
+        if (result.ok) {
+          renamedPaths.push(result.data.newPath);
+        } else {
+          if (result.error.code === "REMOTE_DISCONNECTED") markRemoteDisconnected(dialog.tabId, dialog.connectionId, result.error.message);
+          failures.push(`${item.originalName}: ${result.error.message}`);
+        }
+      }
+    }
+
+    const tab = tabs.find((item) => item.id === dialog.tabId);
+    if (dialog.pane === "local") {
+      if (tab) await navigateLocal(dialog.tabId, tab.localPane.currentPath, "replace");
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === dialog.tabId
+            ? {
+                ...item,
+                localPane: {
+                  ...item.localPane,
+                  selectedFullPaths: renamedPaths,
+                  selectionAnchorFullPath: renamedPaths[0] ?? null,
+                  error: failures[0] ?? ""
+                }
+              }
+            : item
+        )
+      );
+    } else if (dialog.connectionId) {
+      if (tab?.remotePane.connectionId) await listRemotePath(tab.remotePane.connectionId, tab.remotePane.currentPath, "replace", dialog.tabId);
+      setTabs((prev) =>
+        prev.map((item) =>
+          item.id === dialog.tabId
+            ? {
+                ...item,
+                remotePane: {
+                  ...item.remotePane,
+                  selectedFullPaths: renamedPaths,
+                  selectionAnchorFullPath: renamedPaths[0] ?? null,
+                  error: failures[0] ?? ""
+                }
+              }
+            : item
+        )
+      );
+    }
+
+    if (failures.length > 0) {
+      setBatchRenameDialog((prev) =>
+        prev
+          ? {
+              ...prev,
+              busy: false,
+              error: `Renamed ${renamedPaths.length} item(s); ${failures.length} failed. ${failures.slice(0, 3).join(" ")}`
+            }
+          : prev
+      );
+      return;
+    }
+    setBatchRenameDialog(null);
   }
 
   async function copyCurrentPath(pane: ActivePane = activePane): Promise<void> {
@@ -6830,6 +6979,7 @@ export function App(props: AppProps = {}) {
   const contextSingleEntry = contextSelectedEntries.length === 1 ? contextSelectedEntries[0] : undefined;
   const contextHasSelection = contextSelectedPaths.length > 0;
   const contextSingleSelection = contextSelectedPaths.length === 1;
+  const contextMultiSelection = contextSelectedPaths.length > 1;
   const contextSingleFile = contextSingleEntry?.type === "file";
   const contextMenuStyle = contextMenuPosition ?? (contextMenu ? { x: contextMenu.x, y: contextMenu.y } : null);
   const preferenceTabs: Array<{ id: PreferenceTab; label: string }> = [
@@ -7434,6 +7584,14 @@ export function App(props: AppProps = {}) {
                       <span className="context-shortcut">F2</span>
                     </button>
                   ) : null}
+                  {contextMultiSelection ? (
+                    <button type="button" className="context-item" onClick={() => {
+                      openBatchRenameDialog(contextMenu.tabId, "local");
+                      setContextMenu(null);
+                    }}>
+                      Batch Rename...
+                    </button>
+                  ) : null}
                   <button type="button" className="context-item" onClick={() => {
                     openDeleteConfirm(contextMenu.tabId, "local");
                     setContextMenu(null);
@@ -7610,6 +7768,14 @@ export function App(props: AppProps = {}) {
                     }}>
                       Rename
                       <span className="context-shortcut">F2</span>
+                    </button>
+                  ) : null}
+                  {contextMultiSelection ? (
+                    <button type="button" className="context-item" onClick={() => {
+                      openBatchRenameDialog(contextMenu.tabId, "remote");
+                      setContextMenu(null);
+                    }}>
+                      Batch Rename...
                     </button>
                   ) : null}
                   <button type="button" className="context-item" onClick={() => {
@@ -8036,6 +8202,209 @@ export function App(props: AppProps = {}) {
                 onClick={() => void loadMoreTextViewer()}
               >
                 Load More
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {batchRenameDialog ? (
+        <div
+          className="delete-confirm-overlay"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget && !batchRenameDialog.busy) setBatchRenameDialog(null);
+          }}
+        >
+          <div className="delete-confirm-dialog batch-rename-dialog" role="dialog" aria-modal="true" aria-labelledby="batch-rename-title">
+            <h3 id="batch-rename-title">Batch Rename</h3>
+            <p>
+              Rename {batchRenameDialog.entries.length} {batchRenameDialog.pane === "local" ? "local" : "remote"} items.
+            </p>
+            <div className="batch-rename-modes" role="group" aria-label="Batch rename mode">
+              {[
+                { mode: "replace" as const, label: "Replace Text" },
+                { mode: "add" as const, label: "Add Text" },
+                { mode: "format" as const, label: "Format" }
+              ].map((item) => (
+                <label key={item.mode}>
+                  <input
+                    type="radio"
+                    name="batch-rename-mode"
+                    checked={batchRenameDialog.options.mode === item.mode}
+                    disabled={batchRenameDialog.busy}
+                    onChange={() =>
+                      setBatchRenameDialog((prev) =>
+                        prev ? { ...prev, options: { ...prev.options, mode: item.mode }, error: "" } : prev
+                      )
+                    }
+                  />
+                  {item.label}
+                </label>
+              ))}
+            </div>
+            <label className="preferences-check batch-rename-extension-check">
+              <input
+                type="checkbox"
+                checked={batchRenameDialog.options.applyToExtension}
+                disabled={batchRenameDialog.busy}
+                onChange={(event) =>
+                  setBatchRenameDialog((prev) =>
+                    prev ? { ...prev, options: { ...prev.options, applyToExtension: event.target.checked }, error: "" } : prev
+                  )
+                }
+              />
+              Apply changes to file extensions
+            </label>
+            {batchRenameDialog.options.mode === "replace" ? (
+              <div className="batch-rename-grid">
+                <label>
+                  Find
+                  <input
+                    autoFocus
+                    value={batchRenameDialog.options.findText}
+                    disabled={batchRenameDialog.busy}
+                    onChange={(event) =>
+                      setBatchRenameDialog((prev) =>
+                        prev ? { ...prev, options: { ...prev.options, findText: event.target.value }, error: "" } : prev
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Replace with
+                  <input
+                    value={batchRenameDialog.options.replaceText}
+                    disabled={batchRenameDialog.busy}
+                    onChange={(event) =>
+                      setBatchRenameDialog((prev) =>
+                        prev ? { ...prev, options: { ...prev.options, replaceText: event.target.value }, error: "" } : prev
+                      )
+                    }
+                  />
+                </label>
+              </div>
+            ) : null}
+            {batchRenameDialog.options.mode === "add" ? (
+              <div className="batch-rename-grid">
+                <label>
+                  Text
+                  <input
+                    autoFocus
+                    value={batchRenameDialog.options.addText}
+                    disabled={batchRenameDialog.busy}
+                    onChange={(event) =>
+                      setBatchRenameDialog((prev) =>
+                        prev ? { ...prev, options: { ...prev.options, addText: event.target.value }, error: "" } : prev
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Position
+                  <select
+                    value={batchRenameDialog.options.addPosition}
+                    disabled={batchRenameDialog.busy}
+                    onChange={(event) =>
+                      setBatchRenameDialog((prev) =>
+                        prev
+                          ? { ...prev, options: { ...prev.options, addPosition: event.target.value as "before" | "after" }, error: "" }
+                          : prev
+                      )
+                    }
+                  >
+                    <option value="before">Before name</option>
+                    <option value="after">After name</option>
+                  </select>
+                </label>
+              </div>
+            ) : null}
+            {batchRenameDialog.options.mode === "format" ? (
+              <div className="batch-rename-grid is-format">
+                <label>
+                  Base name
+                  <input
+                    autoFocus
+                    value={batchRenameDialog.options.formatBaseName}
+                    disabled={batchRenameDialog.busy}
+                    onChange={(event) =>
+                      setBatchRenameDialog((prev) =>
+                        prev ? { ...prev, options: { ...prev.options, formatBaseName: event.target.value }, error: "" } : prev
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Start
+                  <input
+                    type="number"
+                    value={batchRenameDialog.options.formatStartNumber}
+                    disabled={batchRenameDialog.busy}
+                    onChange={(event) =>
+                      setBatchRenameDialog((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              options: { ...prev.options, formatStartNumber: Math.max(0, Math.trunc(Number(event.target.value) || 0)) },
+                              error: ""
+                            }
+                          : prev
+                      )
+                    }
+                  />
+                </label>
+                <label>
+                  Padding
+                  <input
+                    type="number"
+                    min={0}
+                    max={8}
+                    value={batchRenameDialog.options.formatPadding}
+                    disabled={batchRenameDialog.busy}
+                    onChange={(event) =>
+                      setBatchRenameDialog((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              options: { ...prev.options, formatPadding: Math.max(0, Math.min(8, Math.trunc(Number(event.target.value) || 0))) },
+                              error: ""
+                            }
+                          : prev
+                      )
+                    }
+                  />
+                </label>
+              </div>
+            ) : null}
+            {(batchRenameDialog.error || batchRenameValidationErrors.length > 0) ? (
+              <div className="error-banner">{batchRenameDialog.error || batchRenameValidationErrors.join(" ")}</div>
+            ) : null}
+            <div className="batch-rename-preview" role="table" aria-label="Batch rename preview">
+              <div className="batch-rename-preview-row is-head" role="row">
+                <span role="columnheader">Original</span>
+                <span role="columnheader">New Name</span>
+              </div>
+              {batchRenamePreview.map((item) => (
+                <div key={item.fullPath} className={`batch-rename-preview-row${item.changed ? "" : " is-unchanged"}`} role="row">
+                  <span role="cell">{item.originalName}</span>
+                  <span role="cell">{item.newName || "(empty)"}</span>
+                </div>
+              ))}
+            </div>
+            <div className="delete-confirm-actions">
+              <button type="button" className="toolbar-button" disabled={batchRenameDialog.busy} onClick={() => setBatchRenameDialog(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="toolbar-button is-active"
+                disabled={
+                  batchRenameDialog.busy ||
+                  batchRenameValidationErrors.length > 0 ||
+                  batchRenamePreview.every((item) => !item.changed)
+                }
+                onClick={() => void submitBatchRenameDialog()}
+              >
+                {batchRenameDialog.busy ? "Renaming..." : "Rename"}
               </button>
             </div>
           </div>

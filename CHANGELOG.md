@@ -12,6 +12,7 @@
 - Planned changes include replacing modal `View Text...` / `Search Contents...` with a modeless tabbed content viewer, adding file-type-aware icons across pane views, and adding safe preview-based batch rename for local and remote selections.
 - Replaced `View Text...` and `Search Contents...` modal entry points with a modeless tabbed content viewer window, including less-like keyboard shortcuts, visible navigation/search buttons, line-number toggling, and search-result `View` actions that open around the matching line with highlights.
 - Added file-type-aware V12 file icons across List, Icon, Column, and Gallery views, using extension-based labels for common text, code, document, image, archive, data, and executable files.
+- Added local and remote multi-selection `Batch Rename...` with live preview, extension protection by default, Replace Text / Add Text / Format modes, duplicate/collision validation, and partial-failure reporting.
 
 ## v1.9.9 development
 
