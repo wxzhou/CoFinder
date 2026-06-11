@@ -27,6 +27,7 @@
 - Fixed inline rename in List view so clicking blank space below rows submits/exits rename instead of leaving the editor open.
 - Added per-pane Group by Type for List/Icon/Column views, with toolbar buttons, menu-bar View entries, Appearance defaults, Finder-like group headings, case-insensitive extension grouping, `Folders` first, and extensionless files under `Other`.
 - Fixed Inspector directory-size loading for folders selected from expanded disclosure rows; Inspector now uses the authoritative `getInfo` type and still runs recursive directory-size details for nested visible folders.
+- Fixed remote Jobs state after disconnect: pending/running remote upload, download, delete, compression, MD5, and relocate jobs now fail with a remote-disconnected status instead of later reporting success.
 
 ## v1.9.8 development
 

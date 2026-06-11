@@ -479,6 +479,34 @@ export class TransferQueueService {
     this.emit();
   }
 
+  failRemoteConnectionTasks(
+    connectionId: string,
+    message = "Remote connection has been disconnected."
+  ): { failed: number } {
+    const normalizedConnectionId = connectionId.trim();
+    if (!normalizedConnectionId) return { failed: 0 };
+    let failed = 0;
+    for (const task of this.tasks) {
+      if (!taskUsesRemoteConnection(task, normalizedConnectionId)) continue;
+      if (task.status !== "pending" && task.status !== "running") continue;
+      task.status = "failed";
+      task.finishedAt = this.deps.now();
+      task.error = message;
+      task.errorCode = "remote_disconnected";
+      task.progressText = message;
+      this.failRunningTaskItem(task);
+      this.appendLog(task, message);
+      const context = this.running.get(task.id);
+      context?.child?.kill("SIGTERM");
+      failed += 1;
+    }
+    if (failed > 0) {
+      this.emit();
+      void this.pump();
+    }
+    return { failed };
+  }
+
   private makeTask(input: Omit<TransferTask, "id" | "status" | "rawLog" | "createdAt">): TransferTask {
     return {
       id: randomUUID(),
@@ -556,6 +584,11 @@ export class TransferQueueService {
         }
       });
       child.on("error", (error) => {
+        if (task.status !== "running") {
+          this.emit();
+          resolve();
+          return;
+        }
         task.status = "failed";
         task.finishedAt = this.deps.now();
         task.error = (error as NodeJS.ErrnoException).code === "ENOENT"
@@ -567,6 +600,11 @@ export class TransferQueueService {
         resolve();
       });
       child.on("close", (code, signal) => {
+        if (task.status !== "running" && task.status !== "stopped") {
+          this.emit();
+          resolve();
+          return;
+        }
         task.finishedAt = this.deps.now();
         if (task.status === "stopped") {
           this.appendLog(task, `Stopped by signal ${signal ?? "SIGTERM"}.`);
@@ -865,6 +903,12 @@ function laneForTask(task: TransferTask): JobLane {
   if (task.kind === "delete") return "delete";
   if (task.kind === "gzip" || task.kind === "decompress" || task.kind === "md5") return "compression";
   return "remoteMutation";
+}
+
+function taskUsesRemoteConnection(task: TransferTask, connectionId: string): boolean {
+  if (task.connectionId !== connectionId) return false;
+  if (task.kind === "upload" || task.kind === "download" || task.kind === "remoteCopy" || task.kind === "remoteMove") return true;
+  return task.pane === "remote";
 }
 
 function locksForTask(task: TransferTask): PathLock[] {

@@ -11,6 +11,13 @@ export type ManagedConnection = {
 
 export class ConnectionManager {
   private readonly connections = new Map<string, ManagedConnection>();
+  private readonly closeListeners = new Set<(connectionId: string) => void>();
+  private readonly notifiedClosedConnectionIds = new Set<string>();
+
+  onConnectionClosed(listener: (connectionId: string) => void): () => void {
+    this.closeListeners.add(listener);
+    return () => this.closeListeners.delete(listener);
+  }
 
   async createConnection(config: ConnectionConfig): Promise<ManagedConnection> {
     const client = new SftpClient();
@@ -33,6 +40,7 @@ export class ConnectionManager {
     };
     const forgetConnection = () => {
       this.connections.delete(id);
+      this.notifyConnectionClosed(id);
     };
     client.on("close", forgetConnection);
     client.on("end", forgetConnection);
@@ -49,6 +57,7 @@ export class ConnectionManager {
     const connection = this.connections.get(connectionId);
     if (!connection) return;
     this.connections.delete(connectionId);
+    this.notifyConnectionClosed(connectionId);
     await connection.client.end();
   }
 
@@ -59,5 +68,11 @@ export class ConnectionManager {
 
   has(connectionId: string): boolean {
     return this.connections.has(connectionId);
+  }
+
+  private notifyConnectionClosed(connectionId: string): void {
+    if (this.notifiedClosedConnectionIds.has(connectionId)) return;
+    this.notifiedClosedConnectionIds.add(connectionId);
+    for (const listener of this.closeListeners) listener(connectionId);
   }
 }

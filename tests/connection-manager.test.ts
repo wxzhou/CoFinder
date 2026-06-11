@@ -59,6 +59,37 @@ describe("ConnectionManager", () => {
     expect(manager.has(connection.id)).toBe(false);
   });
 
+  it("notifies listeners when a connection is closed by the client", async () => {
+    const { ConnectionManager } = await import("../src/main/services/ConnectionManager");
+    const manager = new ConnectionManager();
+    const listener = vi.fn();
+    manager.onConnectionClosed(listener);
+    const connection = await manager.createConnection({ host: "example.com", port: 22, username: "alice" });
+    const closeHandler = onMock.mock.calls.find(([event]) => event === "close")?.[1] as (() => void) | undefined;
+
+    closeHandler?.();
+
+    expect(listener).toHaveBeenCalledWith(connection.id);
+  });
+
+  it("notifies listeners once when disconnect is followed by a client close event", async () => {
+    const { ConnectionManager } = await import("../src/main/services/ConnectionManager");
+    const manager = new ConnectionManager();
+    const listener = vi.fn();
+    manager.onConnectionClosed(listener);
+    const connection = await manager.createConnection({ host: "example.com", port: 22, username: "alice" });
+    const closeHandler = onMock.mock.calls.find(([event]) => event === "close")?.[1] as (() => void) | undefined;
+
+    await manager.disconnect(connection.id);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(connection.id);
+
+    closeHandler?.();
+
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(connection.id);
+  });
+
   it("falls back to root when SFTP realPath returns an empty home", async () => {
     realPathMock.mockResolvedValue("");
     const { ConnectionManager } = await import("../src/main/services/ConnectionManager");

@@ -607,6 +607,47 @@ describe("TransferQueueService state machine", () => {
     expect(service.list().map((task) => task.status)).toEqual(["stopped", "stopped"]);
   });
 
+  it("fails pending and running remote jobs when their connection disconnects", async () => {
+    let finishDelete!: (value: number) => void;
+    const remoteDelete = vi.fn(() => new Promise<number>((resolve) => { finishDelete = resolve; }));
+    const { service } = createService({ remoteDelete });
+
+    await service.enqueueDelete({ tabId: "tab-a", pane: "remote", connectionId: "c1", paths: ["/remote/a"] });
+    await service.enqueueDelete({ tabId: "tab-a", pane: "remote", connectionId: "c1", paths: ["/remote/b"] });
+    await vi.waitFor(() => {
+      expect(remoteDelete).toHaveBeenCalledTimes(1);
+      expect(service.list().map((task) => task.status)).toEqual(["running", "pending"]);
+    });
+
+    const result = service.failRemoteConnectionTasks("c1");
+
+    expect(result).toEqual({ failed: 2 });
+    expect(service.list().map((task) => task.status)).toEqual(["failed", "failed"]);
+    expect(service.list().map((task) => task.errorCode)).toEqual(["remote_disconnected", "remote_disconnected"]);
+    finishDelete(1);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(service.list().map((task) => task.status)).toEqual(["failed", "failed"]);
+  });
+
+  it("keeps disconnected transfer jobs failed after the child process closes", async () => {
+    const p1 = new FakeProc();
+    const { service, spawnProcess } = createService({ procs: [p1] });
+
+    await service.enqueueUpload({ ...baseUpload, connectionId: "c1" });
+    await vi.waitFor(() => {
+      expect(spawnProcess).toHaveBeenCalledTimes(1);
+      expect(service.list()[0].status).toBe("running");
+    });
+
+    service.failRemoteConnectionTasks("c1");
+    p1.emit("close", null, "SIGTERM");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const task = service.list()[0];
+    expect(task.status).toBe("failed");
+    expect(task.errorCode).toBe("remote_disconnected");
+  });
+
   it("falls back to SFTP download when rsync exits with SSH code 255", async () => {
     const p1 = new FakeProc();
     const remoteDownloadFallback = vi.fn(async () => undefined);

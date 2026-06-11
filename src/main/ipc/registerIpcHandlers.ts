@@ -75,6 +75,9 @@ const transferQueueService = new TransferQueueService({
   remoteUploadFallback: (connectionId, localPath, remotePath) => remoteFileService.uploadPathToRemote(connectionId, localPath, remotePath),
   remoteDownloadFallback: (connectionId, remotePath, localPath) => remoteFileService.downloadPathToLocal(connectionId, remotePath, localPath)
 });
+connectionManager.onConnectionClosed((connectionId) => {
+  transferQueueService.failRemoteConnectionTasks(connectionId);
+});
 const userData = app.getPath("userData");
 const mainLogFilePath = path.join(userData, "main.log");
 const settingsService = new SettingsService(defaultSettingsPath(userData));
@@ -360,6 +363,7 @@ export function registerIpcHandlers(): void {
     try {
       const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:disconnect request.");
       const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      transferQueueService.failRemoteConnectionTasks(connectionId);
       await remoteFileService.disconnect(connectionId);
       await remotePreviewService.clearForConnection(connectionId);
       return ok({ disconnected: true as const });
