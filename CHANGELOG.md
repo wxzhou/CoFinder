@@ -26,6 +26,7 @@
 - Fixed List view drag-and-drop transfer on blank space below rows by making the full file-list scroll area a drop target.
 - Fixed inline rename in List view so clicking blank space below rows submits/exits rename instead of leaving the editor open.
 - Added per-pane Group by Type for List/Icon/Column views, with toolbar buttons, menu-bar View entries, Appearance defaults, Finder-like group headings, case-insensitive extension grouping, `Folders` first, and extensionless files under `Other`.
+- Fixed Inspector directory-size loading for folders selected from expanded disclosure rows; Inspector now uses the authoritative `getInfo` type and still runs recursive directory-size details for nested visible folders.
 
 ## v1.9.8 development
 

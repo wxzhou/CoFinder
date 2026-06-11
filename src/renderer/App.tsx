@@ -56,6 +56,7 @@ import {
 } from "./selection";
 import { shouldCommitInlineRenameFromPaneBackground } from "./inlineRenameInteraction";
 import { resolveRowTransferDropTarget } from "./transferDropIntent";
+import { pathInfoNeedsDirectoryDetails } from "./v12/v12InspectorSummary";
 import type { LocalFavoriteListItem } from "../shared/localFavorites";
 import type { RemoteEditSession } from "../shared/remoteEdit";
 import { isSourceLikePath } from "../shared/sourceFileTypes";
@@ -1860,8 +1861,6 @@ export function App(props: AppProps = {}) {
     const token = ++v12LocalInspTokenRef.current;
     setV12LocalInsp({ status: "loading", info: null, error: "" });
     void (async () => {
-      const selectedEntry = localPane.entries.find((entry) => entry.fullPath === path);
-      const isDirectory = selectedEntry?.type === "directory";
       const r = await window.cofinder.local.getInfo({ path, includeDirectorySize: false });
       if (token !== v12LocalInspTokenRef.current) return;
       if (!r.ok) {
@@ -1869,6 +1868,7 @@ export function App(props: AppProps = {}) {
         return;
       }
       const base = r.data.info;
+      const isDirectory = pathInfoNeedsDirectoryDetails(base);
       setV12LocalInsp({ status: "ready", info: base, error: "", detailsLoading: isDirectory });
       if (!isDirectory) return;
       const detailed = await window.cofinder.local.getInfo({ path, includeDirectorySize: true });
@@ -1879,7 +1879,7 @@ export function App(props: AppProps = {}) {
       }
       setV12LocalInsp({ status: "ready", info: detailed.data.info, error: "", detailsLoading: false });
     })();
-  }, [uiShell, remoteConnected, activeTab.id, localPane.selectedFullPaths, localPane.entries, v12LocalInspectorReveal]);
+  }, [uiShell, remoteConnected, activeTab.id, localPane.selectedFullPaths, v12LocalInspectorReveal]);
 
   useEffect(() => {
     if (uiShell !== "v12") return;
@@ -1900,8 +1900,6 @@ export function App(props: AppProps = {}) {
     let unsubscribeSize: (() => void) | null = null;
     let sizeJobId: string | null = null;
     void (async () => {
-      const selectedEntry = remotePane.entries.find((entry) => entry.fullPath === path);
-      const isDirectory = selectedEntry?.type === "directory";
       const r = await window.cofinder.remote.getInfo({ connectionId: conn, path, includeDirectorySize: false });
       if (token !== v12RemoteInspTokenRef.current) return;
       if (!r.ok) {
@@ -1909,6 +1907,7 @@ export function App(props: AppProps = {}) {
         return;
       }
       const base = r.data.info;
+      const isDirectory = pathInfoNeedsDirectoryDetails(base);
       setV12RemoteInsp({ status: "ready", info: base, error: "", detailsLoading: isDirectory });
       if (!isDirectory) return;
       unsubscribeSize = window.cofinder.remote.onDirectorySizeUpdate((payload) => {
@@ -1944,7 +1943,7 @@ export function App(props: AppProps = {}) {
       unsubscribeSize?.();
       if (job) void window.cofinder.remote.directorySizeCancel({ jobId: job });
     };
-  }, [uiShell, remotePane.connectionId, remotePane.selectedFullPaths, remotePane.entries, activeTab.id, v12RemoteInspectorReveal]);
+  }, [uiShell, remotePane.connectionId, remotePane.selectedFullPaths, activeTab.id, v12RemoteInspectorReveal]);
 
   async function handleRowDoubleClick(tabId: string, entry: LocalFileEntry): Promise<void> {
     if (uiShell === "v12") {

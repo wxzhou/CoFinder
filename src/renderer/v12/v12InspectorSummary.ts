@@ -13,6 +13,10 @@ export function pathInfoKindLabel(type: PathInfo["type"]): string {
   }
 }
 
+export function pathInfoNeedsDirectoryDetails(info: Pick<PathInfo, "type">): boolean {
+  return info.type === "directory";
+}
+
 export function entriesMatchingPaths<T extends { fullPath: string }>(paths: string[], entries: T[]): T[] {
   const set = new Set(paths);
   return entries.filter((e) => set.has(e.fullPath));

@@ -3,7 +3,8 @@ import {
   entriesMatchingPaths,
   multiSelectionFileBytes,
   multiSelectionPreviewNames,
-  pathInfoKindLabel
+  pathInfoKindLabel,
+  pathInfoNeedsDirectoryDetails
 } from "../src/renderer/v12/v12InspectorSummary";
 import { inspectorColumnVisible } from "../src/renderer/v12/v12InspectorVisibility";
 
@@ -34,6 +35,12 @@ describe("v12InspectorSummary", () => {
     expect(pathInfoKindLabel("file")).toBe("Document");
     expect(pathInfoKindLabel("symlink")).toBe("Symbolic link");
     expect(pathInfoKindLabel("unknown")).toBe("Item");
+  });
+
+  it("uses path info type as the authoritative signal for directory detail loading", () => {
+    expect(pathInfoNeedsDirectoryDetails({ type: "directory" })).toBe(true);
+    expect(pathInfoNeedsDirectoryDetails({ type: "file" })).toBe(false);
+    expect(pathInfoNeedsDirectoryDetails({ type: "symlink" })).toBe(false);
   });
 
   it("aggregates file bytes for multi-select", () => {
