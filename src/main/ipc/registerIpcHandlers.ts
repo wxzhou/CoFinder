@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { IPC_CHANNELS } from "./channels";
 import {
   AppError,
@@ -37,6 +38,7 @@ import { RemotePreviewService } from "../services/RemotePreviewService";
 import { RemoteEditService } from "../services/RemoteEditService";
 import { buildSshTerminalCommand } from "./sshTerminalCommand";
 import type {
+  ContentViewerOpenRequest,
   EnqueueDecompressRequest,
   EnqueueDeleteRequest,
   EnqueueDownloadRequest,
@@ -48,6 +50,7 @@ import type {
   ProfileUpsertPayload,
   RemoteConnectRequest,
   RemoteConnectResponse,
+  RemoteErrorCode,
   TransferConflict,
   TransferConflictCheckResponse,
   TransferUpdatePayload,
@@ -106,6 +109,9 @@ const credentialService = new CredentialService(credentialProvider);
 const registeredChannels: string[] = [];
 let transferOff: (() => void) | null = null;
 let isRegistered = false;
+let contentWindow: BrowserWindow | null = null;
+let contentWindowReady = false;
+const pendingContentRequests: ContentViewerOpenRequest[] = [];
 const remoteSizeJobs = new Map<string, AbortController>();
 
 function registerChannel<TArgs extends unknown[], TResult>(
@@ -269,6 +275,22 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  registerChannel(IPC_CHANNELS.local.readTextWindow, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:readTextWindow request.");
+      const targetPath = validateLocalPathInput(body.path, "LOCAL_INVALID_INPUT");
+      const targetLine = requiredFiniteNumber(body.targetLine, "targetLine", "LOCAL_INVALID_INPUT");
+      const data = await localFileService.readTextWindow(targetPath, {
+        targetLine,
+        contextBefore: optionalFiniteNumber(body.contextBefore),
+        contextAfter: optionalFiniteNumber(body.contextAfter)
+      });
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "LOCAL_CONTENT_FAILED", "Failed to read local text window.");
+    }
+  });
+
   registerChannel(IPC_CHANNELS.local.readPreview, async (_event, request: unknown) => {
     try {
       const body = asRecord(request, "LOCAL_INVALID_INPUT", "Invalid local:readPreview request.");
@@ -426,6 +448,23 @@ export function registerIpcHandlers(): void {
       return ok(data);
     } catch (error) {
       return toIpcError(error, "REMOTE_CONTENT_FAILED", "Failed to read remote text file.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.remote.readTextWindow, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid remote:readTextWindow request.");
+      const connectionId = requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT");
+      const targetPath = normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+      const targetLine = requiredFiniteNumber(body.targetLine, "targetLine", "REMOTE_INVALID_INPUT");
+      const data = await remoteFileService.readTextWindow(connectionId, targetPath, {
+        targetLine,
+        contextBefore: optionalFiniteNumber(body.contextBefore),
+        contextAfter: optionalFiniteNumber(body.contextAfter)
+      });
+      return ok(data);
+    } catch (error) {
+      return toIpcError(error, "REMOTE_CONTENT_FAILED", "Failed to read remote text window.");
     }
   });
 
@@ -741,6 +780,17 @@ export function registerIpcHandlers(): void {
       return ok({ closed: true as const });
     } catch (error) {
       return toIpcError(error, "REMOTE_PREVIEW_FAILED", "Failed to close remote edit session.");
+    }
+  });
+
+  registerChannel(IPC_CHANNELS.content.openWindow, async (_event, request: unknown) => {
+    try {
+      const body = asRecord(request, "REMOTE_INVALID_INPUT", "Invalid content:openWindow request.");
+      const data = parseContentOpenRequest(body);
+      await openContentWindow(data);
+      return ok({ opened: true as const });
+    } catch (error) {
+      return toIpcError(error, "REMOTE_UNKNOWN_ERROR", "Failed to open content viewer.");
     }
   });
 
@@ -1219,6 +1269,61 @@ function sendRemoteDirectorySizeUpdate(payload: RemoteDirectorySizeUpdatePayload
   }
 }
 
+async function openContentWindow(request: ContentViewerOpenRequest): Promise<void> {
+  pendingContentRequests.push(request);
+  if (!contentWindow || contentWindow.isDestroyed()) {
+    contentWindowReady = false;
+    contentWindow = createContentWindow();
+  }
+  if (contentWindow.isMinimized()) contentWindow.restore();
+  contentWindow.show();
+  contentWindow.focus();
+  flushContentRequests();
+}
+
+function createContentWindow(): BrowserWindow {
+  const preloadPath = path.join(app.getAppPath(), "dist-electron/preload/index.js");
+  const win = new BrowserWindow({
+    width: 980,
+    height: 720,
+    minWidth: 640,
+    minHeight: 420,
+    show: false,
+    title: "CoFinder Content",
+    webPreferences: {
+      preload: preloadPath,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  win.on("closed", () => {
+    if (contentWindow === win) {
+      contentWindow = null;
+      contentWindowReady = false;
+    }
+  });
+  win.webContents.once("did-finish-load", () => {
+    contentWindowReady = true;
+    flushContentRequests();
+  });
+  if (!app.isPackaged) {
+    void win.loadURL("http://localhost:5173/?mode=content");
+  } else {
+    const url = `${pathToFileURL(path.join(app.getAppPath(), "dist/index.html")).href}?mode=content`;
+    void win.loadURL(url);
+  }
+  return win;
+}
+
+function flushContentRequests(): void {
+  if (!contentWindow || contentWindow.isDestroyed() || !contentWindowReady) return;
+  while (pendingContentRequests.length > 0) {
+    const next = pendingContentRequests.shift();
+    if (next) contentWindow.webContents.send(IPC_CHANNELS.content.openRequest, next);
+  }
+}
+
 async function runDetached(command: string, args: string[]): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { detached: true, stdio: "ignore" });
@@ -1240,6 +1345,10 @@ export async function shutdownMainProcessResources(): Promise<void> {
   }
   registeredChannels.length = 0;
   isRegistered = false;
+  pendingContentRequests.length = 0;
+  contentWindowReady = false;
+  if (contentWindow && !contentWindow.isDestroyed()) contentWindow.destroy();
+  contentWindow = null;
   await transferQueueService.shutdown();
   await remotePreviewService.clearAll();
   remoteEditService.closeAll();
@@ -1492,12 +1601,51 @@ function parseRemoteCopyMoveRequest(body: Record<string, unknown>): EnqueueRemot
   };
 }
 
+function parseContentOpenRequest(body: Record<string, unknown>): ContentViewerOpenRequest {
+  const kind = body.kind === "search" ? "search" : body.kind === "text" ? "text" : null;
+  if (!kind) throw new AppError("REMOTE_INVALID_INPUT", "Content viewer request kind must be text or search.");
+  const pane = body.pane === "remote" ? "remote" : body.pane === "local" ? "local" : null;
+  if (!pane) throw new AppError("REMOTE_INVALID_INPUT", "Content viewer pane must be local or remote.");
+  const targetPath = pane === "remote"
+    ? normalizeRemotePathInput(body.path, "REMOTE_INVALID_INPUT", "path")
+    : validateLocalPathInput(body.path, "REMOTE_INVALID_INPUT", "path");
+  const base: {
+    pane: "local" | "remote";
+    path: string;
+    connectionId?: string;
+    title?: string;
+  } = {
+    pane,
+    path: targetPath,
+    connectionId: pane === "remote" ? requiredId(body.connectionId, "connectionId", "REMOTE_INVALID_INPUT") : undefined,
+    title: optionalString(body.title)
+  };
+  if (kind === "text") {
+    return {
+      ...base,
+      kind: "text",
+      initialLine: optionalFiniteNumber(body.initialLine),
+      highlightQuery: optionalString(body.highlightQuery)
+    };
+  }
+  return {
+    ...base,
+    kind: "search",
+    query: optionalString(body.query)
+  };
+}
+
 function optionalBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
 function optionalFiniteNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function requiredFiniteNumber(value: unknown, field: string, code: RemoteErrorCode): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) throw new AppError(code, `${field} must be a finite number.`);
+  return value;
 }
 
 function parseConflictPolicy(value: unknown): EnqueueUploadRequest["conflictPolicy"] {

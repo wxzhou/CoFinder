@@ -10,6 +10,7 @@
 
 - Starting the content-viewer, typed-icons, and batch-rename checkpoint.
 - Planned changes include replacing modal `View Text...` / `Search Contents...` with a modeless tabbed content viewer, adding file-type-aware icons across pane views, and adding safe preview-based batch rename for local and remote selections.
+- Replaced `View Text...` and `Search Contents...` modal entry points with a modeless tabbed content viewer window, including less-like keyboard shortcuts, visible navigation/search buttons, line-number toggling, and search-result `View` actions that open around the matching line with highlights.
 
 ## v1.9.9 development
 

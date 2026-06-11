@@ -111,11 +111,12 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 
 - **Search local contents:** right-click a local text file or folder -> File Operation -> `Search Contents...`, search for a known literal string, and confirm matching path/line/preview rows appear.
 - **Search remote contents:** repeat on a disposable remote text file or small folder and confirm results show without downloading the searched file into an edit session.
-- **Search result View:** click `View` on a search result and confirm the read-only `View Text` dialog opens for that result path.
+- **Search result View:** click `View` on a search result and confirm the modeless content viewer opens/focuses a text tab around the matching line and highlights the query.
 - **Search cap:** search a fixture with more than 200 matches and confirm the result count is capped/truncated rather than flooding the UI.
-- **View local text:** right-click a local text file -> File Operation -> `View Text...`; confirm the in-app read-only viewer opens and `Load More` is disabled for small files.
-- **View remote text:** connect to a disposable remote test root, create/select a text file, use File Operation -> `View Text...`, and confirm the viewer opens without creating a remote edit session or local editable copy.
-- **Large text chunking:** open a text file larger than 256 KiB and confirm the viewer initially loads the first chunk, shows loaded/total size, and can append more with `Load More`.
+- **View local text:** right-click a local text file -> File Operation -> `View Text...`; confirm a movable/resizable modeless content viewer window opens and the main CoFinder window remains usable.
+- **View remote text:** connect to a disposable remote test root, create/select a text file, use File Operation -> `View Text...`, and confirm the content viewer opens without creating a remote edit session or local editable copy.
+- **Content viewer controls:** confirm the visible buttons for line numbers, Find, previous/next match, previous/next page, top, and bottom work; spot-check `/`, `n`, `Shift+n`, `Space`, `b`, `g`, and `G` shortcuts.
+- **Large text chunking:** open a text file larger than 256 KiB and confirm the viewer initially loads a bounded first chunk; open a search result deep in a large file and confirm it loads around the target line instead of from the file head.
 - **Binary rejection:** select a binary-looking local and remote file and confirm `View Text...` shows a clear unsupported-text error instead of opening unreadable bytes.
 
 ## V2.10 M4 / v1.9.5 expandable list rows

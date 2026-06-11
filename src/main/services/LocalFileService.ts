@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import { createReadStream, createWriteStream } from "node:fs";
 import { createHash } from "node:crypto";
+import { createInterface } from "node:readline";
 import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
@@ -9,7 +10,7 @@ import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
 import { shell } from "electron";
 import type { LocalFileEntry } from "../../shared/types/models";
-import type { FilePreviewReadResponse, LocalListDirectoryResponse, LocalErrorCode, PathInfo, TextContentReadResponse, TextSearchResponse } from "../../shared/types/ipc";
+import type { FilePreviewReadResponse, LocalListDirectoryResponse, LocalErrorCode, PathInfo, TextContentReadResponse, TextLineWindowReadResponse, TextSearchResponse } from "../../shared/types/ipc";
 import { parseTimestampInput } from "../../shared/timestampInput";
 import { normalizeLocalPath } from "../utils/pathSafety";
 import { modeToRwx } from "./permissionDisplay";
@@ -282,6 +283,50 @@ export class LocalFileService {
     }
   }
 
+  async readTextWindow(
+    targetPath: string,
+    options: { targetLine: number; contextBefore?: number; contextAfter?: number }
+  ): Promise<TextLineWindowReadResponse> {
+    const normalizedPath = normalizeLocalPath(targetPath);
+    const targetLine = normalizeLineNumber(options.targetLine);
+    const contextBefore = normalizeLineContext(options.contextBefore);
+    const contextAfter = normalizeLineContext(options.contextAfter);
+    const startLine = Math.max(1, targetLine - contextBefore);
+    const endLine = targetLine + contextAfter;
+    try {
+      const stats = await fs.lstat(normalizedPath);
+      if (!stats.isFile()) throw new LocalFileServiceError("CONTENT_FAILED", "View Text supports files only.");
+      const lines: string[] = [];
+      let currentLine = 0;
+      let truncatedAfter = false;
+      const reader = createInterface({
+        input: createReadStream(normalizedPath, { encoding: "utf8" }),
+        crlfDelay: Infinity
+      });
+      for await (const line of reader) {
+        currentLine += 1;
+        if (currentLine < startLine) continue;
+        if (currentLine > endLine) {
+          truncatedAfter = true;
+          reader.close();
+          break;
+        }
+        lines.push(line);
+      }
+      return {
+        path: normalizedPath,
+        content: lines.join("\n"),
+        startLine,
+        targetLine,
+        truncatedBefore: startLine > 1,
+        truncatedAfter
+      };
+    } catch (error) {
+      if (error instanceof LocalFileServiceError) throw error;
+      throw this.mapContentError(error, normalizedPath);
+    }
+  }
+
   async readPreviewFile(targetPath: string, options: { maxTextBytes?: number; maxImageBytes?: number } = {}): Promise<FilePreviewReadResponse> {
     const normalizedPath = normalizeLocalPath(targetPath);
     const maxTextBytes = normalizeTextReadLimit(options.maxTextBytes);
@@ -497,6 +542,18 @@ function normalizeSearchMatchLimit(value: unknown): number {
   const numeric = typeof value === "number" ? value : DEFAULT_TEXT_SEARCH_MATCHES;
   if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_TEXT_SEARCH_MATCHES;
   return Math.min(Math.floor(numeric), DEFAULT_TEXT_SEARCH_MATCHES);
+}
+
+function normalizeLineNumber(value: unknown): number {
+  const numeric = typeof value === "number" ? value : 1;
+  if (!Number.isFinite(numeric) || numeric <= 0) return 1;
+  return Math.floor(numeric);
+}
+
+function normalizeLineContext(value: unknown): number {
+  const numeric = typeof value === "number" ? value : 80;
+  if (!Number.isFinite(numeric) || numeric < 0) return 80;
+  return Math.min(Math.floor(numeric), 500);
 }
 
 async function readLocalFileChunk(targetPath: string, byteOffset: number, maxBytes: number): Promise<Buffer> {

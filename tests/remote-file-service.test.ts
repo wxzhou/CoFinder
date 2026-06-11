@@ -1090,6 +1090,42 @@ describe("RemoteFileService readTextFile", () => {
   });
 });
 
+describe("RemoteFileService readTextWindow", () => {
+  it("reads a line window around a target line through remote exec", async () => {
+    const exec = vi.fn((command: string, callback: (error: Error | undefined, stream: EventEmitter) => void) => {
+      const stream = new EventEmitter() as EventEmitter & { stderr?: EventEmitter };
+      stream.stderr = new EventEmitter();
+      callback(undefined, stream);
+      queueMicrotask(() => {
+        stream.emit("data", "two\nthree\nfour\n__COFINDER_TEXT_WINDOW_MORE_AFTER__\n");
+        stream.emit("close", 0);
+      });
+    });
+    const service = new RemoteFileService({
+      getConnection: () => ({
+        id: "c1",
+        homePath: "/",
+        client: {
+          stat: vi.fn().mockResolvedValue({ type: "-", size: 24, modifyTime: Date.now() }),
+          client: { exec }
+        }
+      })
+    } as any);
+
+    const result = await service.readTextWindow("c1", "/data/note.txt", { targetLine: 3, contextBefore: 1, contextAfter: 1 });
+
+    expect(result).toEqual({
+      path: "/data/note.txt",
+      content: "two\nthree\nfour",
+      startLine: 2,
+      targetLine: 3,
+      truncatedBefore: true,
+      truncatedAfter: true
+    });
+    expect(exec).toHaveBeenCalledWith(expect.stringContaining("awk"), expect.any(Function));
+  });
+});
+
 describe("RemoteFileService readPreviewFile", () => {
   it("returns image data URLs for bounded remote images", async () => {
     const remoteData = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x01]);

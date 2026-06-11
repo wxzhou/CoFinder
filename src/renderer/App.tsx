@@ -69,7 +69,6 @@ import type {
   ProfileUpsertPayload,
   RemoteConnectRequest,
   RemoteEditUpdatePayload,
-  TextContentReadResponse,
   TextSearchResponse,
   TransferConflict,
   TransferConflictPolicy,
@@ -4230,18 +4229,6 @@ export function App(props: AppProps = {}) {
     setRemoteCopyMoveDialog(null);
   }
 
-  function applyTextViewerResult(result: TextContentReadResponse): Pick<TextViewerDialogState, "content" | "byteOffset" | "nextByteOffset" | "size" | "truncated" | "status" | "error"> {
-    return {
-      content: result.content,
-      byteOffset: result.byteOffset,
-      nextByteOffset: result.nextByteOffset,
-      size: result.size,
-      truncated: result.truncated,
-      status: "ready",
-      error: ""
-    };
-  }
-
   async function openTextViewerSelection(tabId: string, pane: ActivePane): Promise<void> {
     const tab = tabs.find((item) => item.id === tabId);
     const targetPath = pane === "local" ? tab?.localPane.selectedFullPaths[0] : tab?.remotePane.selectedFullPaths[0];
@@ -4252,32 +4239,16 @@ export function App(props: AppProps = {}) {
 
   async function openTextViewerPath(tabId: string, pane: ActivePane, targetPath: string, connectionId?: string): Promise<void> {
     if (!targetPath || (pane === "remote" && !connectionId)) return;
-    const initialState: TextViewerDialogState = {
+    const result = await window.cofinder.content.openWindow({
+      kind: "text",
       pane,
-      tabId,
-      connectionId,
       path: targetPath,
-      title: basenameRemotePath(targetPath),
-      content: "",
-      byteOffset: 0,
-      nextByteOffset: 0,
-      size: 0,
-      truncated: false,
-      status: "loading",
-      error: ""
-    };
-    setTextViewerDialog(initialState);
-    const result = pane === "local"
-      ? await window.cofinder.local.readText({ path: targetPath, byteOffset: 0, maxBytes: TEXT_VIEWER_CHUNK_BYTES })
-      : await window.cofinder.remote.readText({ connectionId: connectionId!, path: targetPath, byteOffset: 0, maxBytes: TEXT_VIEWER_CHUNK_BYTES });
-    if (!result.ok) {
-      if (pane === "remote" && connectionId && result.error.code === "REMOTE_DISCONNECTED") markRemoteDisconnected(tabId, connectionId, result.error.message);
-      setTextViewerDialog((prev) =>
-        prev?.path === targetPath ? { ...prev, status: "error", error: result.error.message, size: 0, truncated: false } : prev
-      );
-      return;
+      connectionId,
+      title: basenameRemotePath(targetPath)
+    });
+    if (!result.ok && pane === "remote" && connectionId && result.error.code === "REMOTE_DISCONNECTED") {
+      markRemoteDisconnected(tabId, connectionId, result.error.message);
     }
-    setTextViewerDialog((prev) => (prev?.path === targetPath ? { ...prev, ...applyTextViewerResult(result.data) } : prev));
   }
 
   async function loadMoreTextViewer(): Promise<void> {
@@ -4320,18 +4291,12 @@ export function App(props: AppProps = {}) {
     const targetPath = pane === "local" ? tab?.localPane.selectedFullPaths[0] : tab?.remotePane.selectedFullPaths[0];
     const connectionId = pane === "remote" ? tab?.remotePane.connectionId ?? undefined : undefined;
     if (!tab || !targetPath || (pane === "remote" && !connectionId)) return;
-    setTextSearchDialog({
+    void window.cofinder.content.openWindow({
+      kind: "search",
       pane,
-      tabId,
-      connectionId,
       path: targetPath,
-      title: basenameRemotePath(targetPath),
-      query: "",
-      matches: [],
-      truncated: false,
-      tool: null,
-      status: "idle",
-      error: ""
+      connectionId,
+      title: basenameRemotePath(targetPath)
     });
   }
 

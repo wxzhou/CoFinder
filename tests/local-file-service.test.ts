@@ -132,6 +132,26 @@ describe("LocalFileService readTextFile", () => {
   });
 });
 
+describe("LocalFileService readTextWindow", () => {
+  it("reads a line window around a target line", async () => {
+    const service = new LocalFileService();
+    const dir = await makeTempDir();
+    const source = path.join(dir, "note.txt");
+    await fs.writeFile(source, "one\ntwo\nthree\nfour\nfive\n", "utf8");
+
+    const result = await service.readTextWindow(source, { targetLine: 3, contextBefore: 1, contextAfter: 1 });
+
+    expect(result).toEqual({
+      path: source,
+      content: "two\nthree\nfour",
+      startLine: 2,
+      targetLine: 3,
+      truncatedBefore: true,
+      truncatedAfter: true
+    });
+  });
+});
+
 describe("LocalFileService readPreviewFile", () => {
   it("previews local text through a bounded chunk", async () => {
     const service = new LocalFileService();

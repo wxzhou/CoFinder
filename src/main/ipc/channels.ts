@@ -12,6 +12,7 @@ export const IPC_CHANNELS = {
     touch: "local:touch",
     getInfo: "local:getInfo",
     readText: "local:readText",
+    readTextWindow: "local:readTextWindow",
     readPreview: "local:readPreview",
     searchText: "local:searchText"
   },
@@ -24,6 +25,7 @@ export const IPC_CHANNELS = {
     delete: "remote:delete",
     getInfo: "remote:getInfo",
     readText: "remote:readText",
+    readTextWindow: "remote:readTextWindow",
     readPreview: "remote:readPreview",
     searchText: "remote:searchText",
     mkdir: "remote:mkdir",
@@ -67,6 +69,10 @@ export const IPC_CHANNELS = {
     list: "transfer:list",
     clearCompleted: "transfer:clearCompleted",
     onUpdate: "transfer:onUpdate"
+  },
+  content: {
+    openWindow: "content:openWindow",
+    openRequest: "content:openRequest"
   },
   settings: {
     get: "settings:get",

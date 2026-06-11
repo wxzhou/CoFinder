@@ -3,7 +3,7 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ConnectionConfig, RemoteFileEntry } from "../../shared/types/models";
-import type { FilePreviewReadResponse, PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse, TextContentReadResponse, TextSearchResponse } from "../../shared/types/ipc";
+import type { FilePreviewReadResponse, PathInfo, RemoteConnectResponse, RemoteErrorCode, RemoteListDirectoryResponse, TextContentReadResponse, TextLineWindowReadResponse, TextSearchResponse } from "../../shared/types/ipc";
 import { timestampInputToTouchStamp } from "../../shared/timestampInput";
 import { ConnectionManager } from "./ConnectionManager";
 import { isSafeHostOrUsername, normalizeRemotePosixPath } from "../utils/pathSafety";
@@ -16,6 +16,7 @@ const TEXT_SNIFF_BYTES = 8192;
 const DEFAULT_IMAGE_PREVIEW_BYTES = 12 * 1024 * 1024;
 const DEFAULT_TEXT_SEARCH_MATCHES = 200;
 const REMOTE_SEARCH_TOOL_MARKER = "__COFINDER_SEARCH_TOOL__:";
+const REMOTE_TEXT_WINDOW_MORE_AFTER = "__COFINDER_TEXT_WINDOW_MORE_AFTER__";
 type RemoteListItem = {
   name: string;
   type: string;
@@ -605,6 +606,47 @@ export class RemoteFileService {
         nextByteOffset,
         size,
         truncated: nextByteOffset < size
+      };
+    } catch (error) {
+      if (error instanceof RemoteServiceError) throw error;
+      throw this.mapContentError(error);
+    }
+  }
+
+  async readTextWindow(
+    connectionId: string,
+    targetPath: string,
+    options: { targetLine: number; contextBefore?: number; contextAfter?: number }
+  ): Promise<TextLineWindowReadResponse> {
+    const connection = this.connectionManager.getConnection(connectionId);
+    if (!connection) throw new RemoteServiceError("REMOTE_DISCONNECTED", "Remote connection has been disconnected.");
+    const normalizedPath = this.normalizeRemotePath(targetPath);
+    const targetLine = normalizeLineNumber(options.targetLine);
+    const contextBefore = normalizeLineContext(options.contextBefore);
+    const contextAfter = normalizeLineContext(options.contextAfter);
+    const startLine = Math.max(1, targetLine - contextBefore);
+    const endLine = targetLine + contextAfter;
+    const client = connection.client as unknown as RemoteContentClient;
+    try {
+      const stat = (await client.stat(normalizedPath)) as RemoteStatItem;
+      if (resolveRemoteType(stat) !== "file") throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "View Text supports files only.");
+      const exec = client.client?.exec?.bind(client.client);
+      if (!exec) throw new RemoteServiceError("REMOTE_CONTENT_FAILED", "Remote line-window text reading is unavailable for this connection.");
+      const output = await execRemoteOutput(exec, buildRemoteReadLineWindowCommand(normalizedPath, startLine, endLine), {
+        code: "REMOTE_CONTENT_FAILED",
+        message: "Remote text window read command failed."
+      });
+      const lines = output.toString("utf8").replace(/\r\n/g, "\n").split("\n");
+      if (lines.at(-1) === "") lines.pop();
+      const truncatedAfter = lines.at(-1) === REMOTE_TEXT_WINDOW_MORE_AFTER;
+      if (truncatedAfter) lines.pop();
+      return {
+        path: normalizedPath,
+        content: lines.join("\n"),
+        startLine,
+        targetLine,
+        truncatedBefore: startLine > 1,
+        truncatedAfter
       };
     } catch (error) {
       if (error instanceof RemoteServiceError) throw error;
@@ -1338,6 +1380,18 @@ function buildRemoteReadChunkCommand(targetPath: string, byteOffset: number, max
   return `LC_ALL=C dd if=${shellQuote(targetPath)} bs=1 skip=${byteOffset} count=${maxBytes} 2>/dev/null`;
 }
 
+function buildRemoteReadLineWindowCommand(targetPath: string, startLine: number, endLine: number): string {
+  const target = shellQuote(targetPath);
+  const marker = shellQuote(REMOTE_TEXT_WINDOW_MORE_AFTER);
+  return [
+    "LC_ALL=C",
+    `awk -v start=${startLine} -v end=${endLine} -v marker=${marker} '`,
+    "  NR >= start && NR <= end { print }",
+    "  NR > end { print marker; exit }",
+    `' ${target}`
+  ].join(" ");
+}
+
 function buildRemoteSearchCommand(targetPath: string, query: string, maxMatches: number): string {
   const root = shellQuote(targetPath);
   const needle = shellQuote(query);
@@ -1407,6 +1461,18 @@ function normalizeSearchMatchLimit(value: unknown): number {
   const numeric = typeof value === "number" ? value : DEFAULT_TEXT_SEARCH_MATCHES;
   if (!Number.isFinite(numeric) || numeric <= 0) return DEFAULT_TEXT_SEARCH_MATCHES;
   return Math.min(Math.floor(numeric), DEFAULT_TEXT_SEARCH_MATCHES);
+}
+
+function normalizeLineNumber(value: unknown): number {
+  const numeric = typeof value === "number" ? value : 1;
+  if (!Number.isFinite(numeric) || numeric <= 0) return 1;
+  return Math.floor(numeric);
+}
+
+function normalizeLineContext(value: unknown): number {
+  const numeric = typeof value === "number" ? value : 80;
+  if (!Number.isFinite(numeric) || numeric < 0) return 80;
+  return Math.min(Math.floor(numeric), 500);
 }
 
 function parseRemoteSearchOutput(output: string, maxMatches: number): { matches: TextSearchResponse["matches"]; truncated: boolean; tool: "rg" | "grep" } {

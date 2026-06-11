@@ -15,6 +15,7 @@ const api: IpcApi = {
     touch: (request) => ipcRenderer.invoke("local:touch", request),
     getInfo: (request) => ipcRenderer.invoke("local:getInfo", request),
     readText: (request) => ipcRenderer.invoke("local:readText", request),
+    readTextWindow: (request) => ipcRenderer.invoke("local:readTextWindow", request),
     readPreview: (request) => ipcRenderer.invoke("local:readPreview", request),
     searchText: (request) => ipcRenderer.invoke("local:searchText", request)
   },
@@ -27,6 +28,7 @@ const api: IpcApi = {
     delete: (request) => ipcRenderer.invoke("remote:delete", request),
     getInfo: (request) => ipcRenderer.invoke("remote:getInfo", request),
     readText: (request) => ipcRenderer.invoke("remote:readText", request),
+    readTextWindow: (request) => ipcRenderer.invoke("remote:readTextWindow", request),
     readPreview: (request) => ipcRenderer.invoke("remote:readPreview", request),
     searchText: (request) => ipcRenderer.invoke("remote:searchText", request),
     mkdir: (request) => ipcRenderer.invoke("remote:mkdir", request),
@@ -83,6 +85,14 @@ const api: IpcApi = {
         handler(payload as Parameters<typeof handler>[0]);
       ipcRenderer.on("transfer:onUpdate", wrapped);
       return () => ipcRenderer.off("transfer:onUpdate", wrapped);
+    }
+  },
+  content: {
+    openWindow: (request) => ipcRenderer.invoke("content:openWindow", request),
+    onOpenRequest: (handler) => {
+      const wrapped = (_event: Electron.IpcRendererEvent, payload: unknown) => handler(payload as Parameters<typeof handler>[0]);
+      ipcRenderer.on("content:openRequest", wrapped);
+      return () => ipcRenderer.off("content:openRequest", wrapped);
     }
   },
   settings: {

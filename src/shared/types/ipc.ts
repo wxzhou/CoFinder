@@ -154,6 +154,15 @@ export type TextContentReadResponse = {
   truncated: boolean;
 };
 
+export type TextLineWindowReadResponse = {
+  path: string;
+  content: string;
+  startLine: number;
+  targetLine: number;
+  truncatedBefore: boolean;
+  truncatedAfter: boolean;
+};
+
 export type FilePreviewReadResponse = {
   path: string;
   kind: "text" | "image";
@@ -177,6 +186,25 @@ export type TextSearchResponse = {
   truncated: boolean;
   tool: "rg" | "grep";
 };
+
+export type ContentViewerOpenRequest =
+  | {
+      kind: "text";
+      pane: "local" | "remote";
+      path: string;
+      connectionId?: string;
+      title?: string;
+      initialLine?: number;
+      highlightQuery?: string;
+    }
+  | {
+      kind: "search";
+      pane: "local" | "remote";
+      path: string;
+      connectionId?: string;
+      title?: string;
+      query?: string;
+    };
 
 export type EnqueueUploadRequest = {
   tabId: string;
@@ -367,6 +395,7 @@ export interface IpcApi {
     touch: (request: { path: string; timestamp?: string }) => Promise<IpcResponse<{ touched: true }>>;
     getInfo: (request: { path: string; includeDirectorySize?: boolean }) => Promise<IpcResponse<{ info: PathInfo }>>;
     readText: (request: { path: string; byteOffset?: number; maxBytes?: number }) => Promise<IpcResponse<TextContentReadResponse>>;
+    readTextWindow: (request: { path: string; targetLine: number; contextBefore?: number; contextAfter?: number }) => Promise<IpcResponse<TextLineWindowReadResponse>>;
     readPreview: (request: { path: string; maxTextBytes?: number; maxImageBytes?: number }) => Promise<IpcResponse<FilePreviewReadResponse>>;
     searchText: (request: { path: string; query: string; maxMatches?: number }) => Promise<IpcResponse<TextSearchResponse>>;
   };
@@ -387,6 +416,7 @@ export interface IpcApi {
       includeDirectorySize?: boolean;
     }) => Promise<IpcResponse<{ info: PathInfo }>>;
     readText: (request: { connectionId: string; path: string; byteOffset?: number; maxBytes?: number }) => Promise<IpcResponse<TextContentReadResponse>>;
+    readTextWindow: (request: { connectionId: string; path: string; targetLine: number; contextBefore?: number; contextAfter?: number }) => Promise<IpcResponse<TextLineWindowReadResponse>>;
     readPreview: (request: { connectionId: string; path: string; maxTextBytes?: number; maxImageBytes?: number }) => Promise<IpcResponse<FilePreviewReadResponse>>;
     searchText: (request: { connectionId: string; path: string; query: string; maxMatches?: number }) => Promise<IpcResponse<TextSearchResponse>>;
     mkdir: (request: { connectionId: string; parentPath: string; name: string }) => Promise<IpcResponse<{ created: true; path: string }>>;
@@ -427,6 +457,10 @@ export interface IpcApi {
     editCopyConflictPaths: (request: { sessionId: string }) => Promise<IpcResponse<{ copied: true; text: string }>>;
     editClose: (request: { sessionId: string; discardLocal?: boolean }) => Promise<IpcResponse<{ closed: true }>>;
     onEditUpdate: (handler: (payload: RemoteEditUpdatePayload) => void) => () => void;
+  };
+  content: {
+    openWindow: (request: ContentViewerOpenRequest) => Promise<IpcResponse<{ opened: true }>>;
+    onOpenRequest: (handler: (payload: ContentViewerOpenRequest) => void) => () => void;
   };
   transfer: {
     checkUploadConflicts: (request: EnqueueUploadRequest) => Promise<IpcResponse<TransferConflictCheckResponse>>;
