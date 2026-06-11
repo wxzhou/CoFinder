@@ -1,7 +1,8 @@
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactElement } from "react";
 import type { FileEntry } from "../../../shared/types/models";
 import { groupEntriesByFileType } from "../fileTypeGroups";
-import { V12Icon, V12TbIcon } from "./V12Icons";
+import { V12FileTypeIcon } from "./V12FileTypeIcon";
+import { V12TbIcon } from "./V12Icons";
 
 export type V12Column<T extends FileEntry> = {
   path: string;
@@ -101,7 +102,7 @@ export function V12VisualColumnView<T extends FileEntry>(props: V12VisualColumnV
                       onDragEnd={(event) => props.onItemDragEnd?.(event)}
                     >
                       <span className="v12m-column-item-icon">
-                        <V12Icon name={entry.type === "directory" ? "folder" : "doc"} size="sm" />
+                        <V12FileTypeIcon entry={entry} size="sm" />
                       </span>
                       {renaming && props.inlineRename ? (
                         <input

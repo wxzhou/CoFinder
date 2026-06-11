@@ -1,4 +1,5 @@
 export { V12DefaultSidebar, V12Icon, V12TbIcon, type V12SidebarIcon } from "./V12Icons";
+export { V12FileTypeIcon } from "./V12FileTypeIcon";
 export { V12VisualLocationStrip, type V12PathSegment } from "./V12VisualLocationStrip";
 export { V12VisualFileList, type V12FileColumn, type V12FileColumnKey, type V12VisualFileRow } from "./V12VisualFileList";
 export { V12VisualIconGrid } from "./V12VisualIconGrid";

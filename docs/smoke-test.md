@@ -168,6 +168,16 @@ The following sections were written for **V1.1 M6**; they remain the functional 
 - **Menu-bar controls:** use View -> Local View -> Group by Type and View -> Remote View -> Group by Type; confirm they toggle the matching pane without affecting the other pane.
 - **Appearance defaults:** set Preferences -> Appearance group-by-type defaults for local and remote, save, create a new tab or relaunch, and confirm panes initialize with the saved grouping defaults.
 
+## V2.10 M9 / v1.9.10 content tools and batch rename
+
+- **Typed file icons:** in List, Icon, Column, and Gallery views, confirm folders keep folder icons while files such as `.txt`, `.py`, `.pdf`, `.jpg`, `.tar.gz`, `.csv`, and extensionless files show distinct type-aware labels without changing row height or pane layout.
+- **Content viewer:** use File Operation -> `View Text...` and `Search Contents...` on local and remote text files. Confirm the modeless viewer remains usable while the main CoFinder window can still browse, navigate, and select files.
+- **Content viewer controls:** confirm visible buttons for line numbers, Find, previous/next match, previous/next page, top, and bottom work; spot-check `/`, `n`, `Shift+n`, `Space`, `b`, `g`, and `G` shortcuts.
+- **Search result positioning:** from Search Contents, click `View` on a result and confirm the viewer opens around the matching line and highlights the search text.
+- **Batch rename preview:** select multiple local files and multiple remote files in separate runs, open Batch Rename, and confirm Replace Text, Add Text, and Format modes update a two-column preview before execution.
+- **Batch rename guardrails:** confirm empty names, duplicate output names, path separators, and collisions with non-selected visible entries block execution with a clear error.
+- **Batch rename execution:** run a safe batch rename in local and remote test folders, confirm each item is renamed in preview order, and confirm partial failures are reported without rolling back already completed renames.
+
 ## V2.0 stable personal release
 
 - **Full pass:** run all applicable sections in this file against a clean test workspace before publishing or reissuing `v1.0.0` artifacts.

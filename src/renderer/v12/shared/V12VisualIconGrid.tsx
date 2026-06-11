@@ -1,7 +1,7 @@
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactElement } from "react";
 import type { FileEntry } from "../../../shared/types/models";
 import { groupEntriesByFileType } from "../fileTypeGroups";
-import { V12Icon } from "./V12Icons";
+import { V12FileTypeIcon } from "./V12FileTypeIcon";
 
 export type V12VisualIconGridProps<T extends FileEntry> = {
   pane: "local" | "remote";
@@ -89,7 +89,7 @@ export function V12VisualIconGrid<T extends FileEntry>(props: V12VisualIconGridP
                   onDragEnd={(event) => props.onItemDragEnd?.(event)}
                 >
                   <span className={`v12m-icon-item-ico ${entry.type === "directory" ? "is-dir" : "is-file"}`}>
-                    <V12Icon name={entry.type === "directory" ? "folder" : "doc"} size="lg" />
+                    <V12FileTypeIcon entry={entry} size="lg" />
                   </span>
                   {renaming && props.inlineRename ? (
                     <input

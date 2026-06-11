@@ -1758,6 +1758,107 @@ body,
   color: var(--m-sel-active-fg);
 }
 
+.cfv12-root .v12m-type-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: inherit;
+}
+
+.cfv12-root .v12m-type-icon > svg {
+  display: block;
+}
+
+.cfv12-root .v12m-type-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  min-width: 13px;
+  max-width: 24px;
+  height: 8px;
+  padding: 0 2px;
+  border-radius: 3px;
+  background: #6b7280;
+  color: #fff;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #fff 82%, transparent);
+  font-size: 5.5px;
+  font-weight: 700;
+  line-height: 8px;
+  letter-spacing: 0;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: clip;
+  white-space: nowrap;
+}
+
+.cfv12-root .v12m-type-icon.is-sm .v12m-type-badge {
+  right: -4px;
+  bottom: -2px;
+  min-width: 11px;
+  max-width: 18px;
+  height: 7px;
+  border-radius: 2.5px;
+  font-size: 4.8px;
+  line-height: 7px;
+}
+
+.cfv12-root .v12m-type-icon.is-lg .v12m-type-badge {
+  right: -4px;
+  bottom: -3px;
+  min-width: 16px;
+  max-width: 30px;
+  height: 10px;
+  border-radius: 4px;
+  font-size: 6.5px;
+  line-height: 10px;
+}
+
+.cfv12-root .v12m-type-icon.kind-text .v12m-type-badge {
+  background: #64748b;
+}
+
+.cfv12-root .v12m-type-icon.kind-code .v12m-type-badge {
+  background: #2563eb;
+}
+
+.cfv12-root .v12m-type-icon.kind-document .v12m-type-badge,
+.cfv12-root .v12m-type-icon.kind-pdf .v12m-type-badge {
+  background: #c2410c;
+}
+
+.cfv12-root .v12m-type-icon.kind-spreadsheet .v12m-type-badge {
+  background: #15803d;
+}
+
+.cfv12-root .v12m-type-icon.kind-presentation .v12m-type-badge {
+  background: #b45309;
+}
+
+.cfv12-root .v12m-type-icon.kind-image .v12m-type-badge {
+  background: #7c3aed;
+}
+
+.cfv12-root .v12m-type-icon.kind-archive .v12m-type-badge {
+  background: #be123c;
+}
+
+.cfv12-root .v12m-type-icon.kind-data .v12m-type-badge {
+  background: #0f766e;
+}
+
+.cfv12-root .v12m-type-icon.kind-executable .v12m-type-badge,
+.cfv12-root .v12m-type-icon.kind-symlink .v12m-type-badge {
+  background: #374151;
+}
+
+.cfv12-root .v12m-lrow.sel-active .v12m-type-badge,
+.cfv12-root .v12m-icon-item.sel-active .v12m-type-badge,
+.cfv12-root .v12m-column-item.sel-active .v12m-type-badge,
+.cfv12-root .v12m-gallery-item.sel-active .v12m-type-badge {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--m-sel-active-bg) 40%, #fff);
+}
+
 .cfv12-root .v12m-lname-input,
 .cfv12-root .v12m-lrow.sel-active .v12m-lname-input,
 .cfv12-root .v12m-lrow.sel-inactive .v12m-lname-input {

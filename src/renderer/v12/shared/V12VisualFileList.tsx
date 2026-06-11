@@ -1,7 +1,8 @@
 import { useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
 import type { FileEntry, SortDirection, SortKey } from "../../../shared/types/models";
 import { groupOutlineRowsByFileType } from "../fileTypeGroups";
-import { V12Icon, V12TbIcon } from "./V12Icons";
+import { V12FileTypeIcon } from "./V12FileTypeIcon";
+import { V12TbIcon } from "./V12Icons";
 
 /** Alias for callers that only need the shared list shape (extends IPC file entries). */
 export type V12VisualFileRow = FileEntry;
@@ -138,7 +139,7 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
             )
           ) : null}
           <span className={`v12m-file-ico ${isDir ? "v12m-file-ico--dir" : "v12m-file-ico--file"}`}>
-            <V12Icon name={isDir ? "folder" : "doc"} />
+            <V12FileTypeIcon entry={entry} />
           </span>
           {renaming && props.inlineRename ? (
             <input

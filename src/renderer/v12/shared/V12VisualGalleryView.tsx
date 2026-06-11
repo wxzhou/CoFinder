@@ -1,6 +1,6 @@
 import type { DragEvent, KeyboardEvent, MouseEvent, ReactElement } from "react";
 import type { FileEntry } from "../../../shared/types/models";
-import { V12Icon } from "./V12Icons";
+import { V12FileTypeIcon } from "./V12FileTypeIcon";
 
 export type V12GalleryPreview = {
   status: "idle" | "loading" | "ready" | "error";
@@ -52,7 +52,7 @@ export function V12VisualGalleryView<T extends FileEntry>(props: V12VisualGaller
     if (selected.type === "directory") {
       return (
         <div className="v12m-gallery-preview-placeholder">
-          <V12Icon name="folder" size="lg" />
+          <V12FileTypeIcon entry={selected} size="lg" />
           <span>Double-click to open this folder.</span>
         </div>
       );
@@ -86,7 +86,7 @@ export function V12VisualGalleryView<T extends FileEntry>(props: V12VisualGaller
         </span>
       );
     }
-    return <V12Icon name={entry.type === "directory" ? "folder" : "doc"} size="md" />;
+    return <V12FileTypeIcon entry={entry} size="md" />;
   };
 
   return (
@@ -114,7 +114,7 @@ export function V12VisualGalleryView<T extends FileEntry>(props: V12VisualGaller
               {props.preview.status === "ready" && props.preview.kind === "image" && props.preview.imageDataUrl ? (
                 <img src={props.preview.imageDataUrl} alt="" />
               ) : (
-                <V12Icon name={selected.type === "directory" ? "folder" : "doc"} size="lg" />
+                <V12FileTypeIcon entry={selected} size="lg" />
               )}
             </div>
             <div className="v12m-gallery-preview-title">{selected.name}</div>
