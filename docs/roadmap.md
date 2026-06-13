@@ -360,3 +360,49 @@ These remain **unsupported**, **deferred**, or **non-goals** across current plan
 Drag-and-drop transfer, marquee selection, Preferences MVP, navigation efficiency, remote operations expansion, and reliability/diagnostics work shipped together in **v1.0.0**. Intermediate development targets `v0.6.0` through `v0.10.0` were not published as standalone tags.
 
 V2.10 / v1.9.x is the current development track. `v1.9.x` builds are development checkpoints; the next public release should be cut as `v1.10.0` if the track is mostly evolutionary, or `v2.0.0` if multi-lane Jobs, remote copy/move, content tools, and multiple view modes all ship and survive hands-on use.
+
+## Future product direction after the v1.9.x hard-feature track
+
+The post-v1.9.x roadmap should separate two kinds of work:
+
+- **Near/mid-term product differentiation:** make CoFinder a personal local/remote Operations Studio for safe server inspection and repeatable file operations without requiring the user to type shell commands.
+- **Long-term professional file-transfer parity:** add mature transfer-client capabilities that are useful but not urgent for the user's current daily workflow.
+
+### Future public v2.1 target — Operations Studio
+
+The future public `v2.1` direction should focus on command discovery and operation organization rather than adding more pane-toolbar buttons. The current pane toolbars are already dense, and new server-inspection actions should not make the primary file-management surface feel crowded.
+
+Goals:
+
+- Add a **Command Palette** as the fastest entry point for both existing and new operations.
+  - It should search across file operations, view commands, server-inspection actions, Jobs actions, preferences, and saved runbooks.
+  - It should be pane-aware: actions can target the active local or remote pane, current folder, current selection, or active Jobs context.
+  - It should preserve CoFinder's safety model: destructive or write-capable commands still need preview and confirmation.
+- Add an **Operations** panel as the home for lower-frequency but powerful workflows.
+  - Suggested sections: Status, Inspect, Transform, Runbooks, and History.
+  - Status can include server/directory checks such as disk usage, current directory size, connection/session health, and recent activity.
+  - Inspect can include large-file search, empty-directory checks, log tailing, text search, permission anomalies, and broken symlink checks.
+  - Transform should surface existing actions such as compress/decompress, MD5, batch rename, copy/move, delete, chmod, touch, and timestamp changes without duplicating every command in the toolbar.
+  - Runbooks should allow saved operation presets after the core actions are stable.
+  - History should summarize recent operations, failures, retries, and copyable reports.
+- Keep the pane toolbar focused on high-frequency navigation, transfer, refresh, delete, Inspector, and view controls.
+- Prefer context menus for selected-item operations, Command Palette for quick recall, and Operations for exploratory/server-inspection workflows.
+
+AI/agent work is intentionally **not** a core requirement for this target. It may be explored separately as a research or playground track, but the serious product value should first come from well-designed deterministic operations, previews, Jobs integration, and command discovery.
+
+See **`docs/dev/FUTURE_V2.1_OPERATIONS_STUDIO_GOALS.md`**.
+
+### Future public v3.0 target — Professional transfer-client parity
+
+The future public `v3.0` direction can collect the attractive but currently non-urgent capabilities common in mature tools such as WinSCP, FileZilla, ForkLift, and Transmit.
+
+Goals:
+
+- **Sync and compare:** directory comparison, dry-run sync previews, one-way sync, mirror-style sync, conflict policies, and saved sync profiles.
+- **Protocols and cloud services:** evaluate additional protocols or providers only after SFTP/SSH workflows remain stable; keep macOS-personal scope unless there is a clear daily-use reason to broaden it.
+- **Automation:** operation presets, scheduled or manually triggered batches, import/exportable workflows, and optional script/custom-command integration with strong guardrails.
+- **Advanced transfer controls:** richer queue policy, bandwidth/concurrency profiles, transfer history, deeper retry/reporting tools, and more complete audit trails.
+
+These should remain later goals because the user has not found them urgent in years of WinSCP use. They are useful for product completeness, but they should not displace the Operations Studio work.
+
+See **`docs/dev/FUTURE_V3.0_COMPETITIVE_PARITY_GOALS.md`**.
