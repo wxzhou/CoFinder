@@ -235,9 +235,20 @@ Z
       );
     case "folder-badge-plus":
       return (
-        <svg {...s}>
-          <path d="M3.5 6.5h4l1 1h8v9h-13v-10z" />
-          <path d="M10 11v4M8 13h4" />
+        <svg
+          width={22}
+          height={22}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.1}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M3.5 7.7c0-.88.72-1.6 1.6-1.6h4.25c.45 0 .88.19 1.18.52l1.05 1.15h6.55c.88 0 1.6.72 1.6 1.6v7.05c0 .88-.72 1.6-1.6 1.6H5.1c-.88 0-1.6-.72-1.6-1.6V7.7z" />
+          <circle cx="17.4" cy="7.1" r="3.65" fill="currentColor" stroke="none" />
+          <path d="M17.4 5.2V9M15.5 7.1h3.8" stroke="#fff" strokeWidth={1.65} />
         </svg>
       );
     case "doc-badge-plus":
@@ -378,9 +389,20 @@ Z
       );
     case "sidebar-toggle":
       return (
-        <svg {...s}>
-          <rect x="4.2" y="4.2" width="11.6" height="11.6" rx="2.4" />
-          <path d="M7.6 5.5v9" />
+        <svg
+          width={21}
+          height={21}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <rect x="4" y="4.4" width="16" height="15.2" rx="3" />
+          <path d="M10.1 4.8v14.4" />
+          <path d="M6.8 8.8h1.05M6.8 12h1.05M6.8 15.2h1.05" />
         </svg>
       );
     case "gear":

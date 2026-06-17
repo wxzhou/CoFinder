@@ -14,6 +14,7 @@
 - Added file-type-aware V12 file icons across List, Icon, Column, and Gallery views, using extension-based labels for common text, code, document, image, archive, data, and executable files.
 - Added local and remote multi-selection `Batch Rename...` with live preview, extension protection by default, Replace Text / Add Text / Format modes, duplicate/collision validation, and partial-failure reporting.
 - Expanded List view folders now show an immediate spinner placeholder while child rows are loading and a light gray `(empty)` placeholder when a loaded folder has no children.
+- Updated the titlebar sidebar-toggle icon and pane toolbar New Folder icon to match the latest requested glyph direction.
 
 ## v1.9.9 development
 
