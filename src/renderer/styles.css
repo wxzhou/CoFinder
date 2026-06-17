@@ -2459,17 +2459,47 @@ body,
   min-height: 28px;
   font-size: 12px;
   text-align: left;
-  padding: 0 10px;
-  display: flex;
+  padding: 0 10px 0 8px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  gap: 8px;
+}
+
+.context-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: color-mix(in srgb, var(--text-secondary) 86%, transparent);
+}
+
+.context-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.context-icon svg * {
+  vector-effect: non-scaling-stroke;
+}
+
+.context-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .context-shortcut {
   color: var(--text-tertiary);
   font-size: 11px;
   white-space: nowrap;
+  justify-self: end;
+}
+
+.context-item.is-danger .context-icon {
+  color: #b42318;
 }
 
 .context-item:hover {

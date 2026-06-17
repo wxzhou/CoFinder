@@ -233,6 +233,58 @@ Z
           <path d="M5 13.5H4.5a1 1 0 01-1-1v-8a1 1 0 011-1H11a1 1 0 011 1V5" />
         </svg>
       );
+    case "copy-path":
+      return (
+        <svg {...s}>
+          <rect x="7" y="5" width="8" height="10" rx="1" />
+          <path d="M5 13.5H4.5a1 1 0 01-1-1v-8a1 1 0 011-1H11a1 1 0 011 1V5" />
+          <path d="M8.8 12.2h4.4" />
+        </svg>
+      );
+    case "open-file":
+      return (
+        <svg {...s}>
+          <path d="M5 3.8h6.2L15 7.6v8.6H5V3.8z" />
+          <path d="M11.2 3.8v3.8H15" />
+          <path d="M8 12.5h5M10.5 10l2.5 2.5-2.5 2.5" />
+        </svg>
+      );
+    case "eye":
+      return (
+        <svg {...s}>
+          <path d="M3.6 10s2.35-4.2 6.4-4.2 6.4 4.2 6.4 4.2-2.35 4.2-6.4 4.2S3.6 10 3.6 10z" />
+          <circle cx="10" cy="10" r="1.85" />
+        </svg>
+      );
+    case "rename":
+      return (
+        <svg {...s}>
+          <path d="M6 5.2h8M10 5.2v9.6M6 14.8h8" />
+          <path d="M4.4 7.2V5.6c0-.8.6-1.4 1.4-1.4h1.4M15.6 12.8v1.6c0 .8-.6 1.4-1.4 1.4h-1.4" />
+        </svg>
+      );
+    case "batch-rename":
+      return (
+        <svg {...s}>
+          <path d="M4 6h7M4 10h7M4 14h5" />
+          <path d="M13 5.5h3M14.5 4v3M13 12.5l3-3 1.5 1.5-3 3-2 .5.5-2z" />
+        </svg>
+      );
+    case "copy-to":
+      return (
+        <svg {...s}>
+          <rect x="4" y="5" width="7" height="9" rx="1" />
+          <path d="M8 15h6a1 1 0 001-1V7" />
+          <path d="M12 7h4M14 5l2 2-2 2" />
+        </svg>
+      );
+    case "move-to":
+      return (
+        <svg {...s}>
+          <rect x="3.8" y="5" width="6.8" height="9" rx="1" />
+          <path d="M12 7h4.2M14.2 5l2 2-2 2M10.6 13h5.6M14.2 11l2 2-2 2" />
+        </svg>
+      );
     case "folder-badge-plus":
       return (
         <svg
@@ -266,6 +318,13 @@ Z
           <path d="M10.2 11.2l-2.7.8.8-2.7 5.6-5.6a1.2 1.2 0 011.7 1.7l-5.4 5.8z" />
         </svg>
       );
+    case "finder":
+      return (
+        <svg {...s}>
+          <rect x="4.2" y="4.2" width="11.6" height="11.6" rx="2" />
+          <path d="M10 4.6v10.8M6.8 8.2h.1M13.2 8.2h.1M7 12.3c1.9 1 4.1 1 6 0" />
+        </svg>
+      );
     case "trash":
       return (
         <svg {...s}>
@@ -292,6 +351,75 @@ Z
         <svg {...s}>
           <circle cx="10" cy="10" r="6.5" fill="none" />
           <path d="M10 9v5M10 6.8v.1" />
+        </svg>
+      );
+    case "file-operation":
+      return (
+        <svg {...s}>
+          <path d="M5 4h6l3.5 3.5V16H5V4z" />
+          <path d="M11 4v3.5h3.5" />
+          <path d="M7.2 12.7l1.4 1.4 3.7-4.2" />
+        </svg>
+      );
+    case "touch":
+      return (
+        <svg {...s}>
+          <path d="M8.2 8.2V5.3a1.2 1.2 0 012.4 0v6.1" />
+          <path d="M10.6 8.1a1.15 1.15 0 012.3.15v3.3" />
+          <path d="M12.9 8.9a1.12 1.12 0 012.24.16v3.6" />
+          <path d="M8.2 11.2l-1.1-1a1.12 1.12 0 00-1.55 1.62l3.25 3.2c.72.7 1.6 1.05 2.6 1.05h1.2c1.85 0 3.35-1.5 3.35-3.35" />
+        </svg>
+      );
+    case "archive":
+      return (
+        <svg {...s}>
+          <rect x="4" y="5" width="9.5" height="3.2" rx="0.8" />
+          <rect x="5.2" y="8.4" width="9.5" height="3.2" rx="0.8" />
+          <rect x="4" y="11.8" width="9.5" height="3.2" rx="0.8" />
+          <path d="M14.6 7.4l2.4 2.4-2.4 2.4M17 9.8h-4" />
+        </svg>
+      );
+    case "decompress":
+      return (
+        <svg {...s}>
+          <rect x="6.5" y="5" width="9.5" height="3.2" rx="0.8" />
+          <rect x="5.3" y="8.4" width="9.5" height="3.2" rx="0.8" />
+          <rect x="6.5" y="11.8" width="9.5" height="3.2" rx="0.8" />
+          <path d="M5.4 7.4L3 9.8l2.4 2.4M3 9.8h4" />
+        </svg>
+      );
+    case "search":
+      return (
+        <svg {...s}>
+          <circle cx="8.8" cy="8.8" r="4.2" />
+          <path d="M12 12l4 4" />
+        </svg>
+      );
+    case "text-lines":
+      return (
+        <svg {...s}>
+          <path d="M5 5.5h10M5 8.7h10M5 11.9h7M5 15.1h9" />
+        </svg>
+      );
+    case "hash":
+      return (
+        <svg {...s}>
+          <path d="M8.2 4.5l-1 11M13.2 4.5l-1 11M5 8h11M4.5 12h11" />
+        </svg>
+      );
+    case "lock":
+      return (
+        <svg {...s}>
+          <rect x="4.5" y="8.5" width="11" height="7.5" rx="1.5" />
+          <path d="M7.2 8.5V6.8a2.8 2.8 0 015.6 0v1.7M10 11.2v2" />
+        </svg>
+      );
+    case "duplicate":
+      return (
+        <svg {...s}>
+          <path d="M7 5h6l2.5 2.5V15H7V5z" />
+          <path d="M13 5v2.5h2.5" />
+          <path d="M5 13H4.5a1 1 0 01-1-1V4.8a1 1 0 011-1H11" />
         </svg>
       );
     case "list-bullet":

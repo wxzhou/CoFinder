@@ -5,9 +5,12 @@ import {
   useMemo,
   useRef,
   useState,
+  type ButtonHTMLAttributes,
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent
+  type MouseEvent as ReactMouseEvent,
+  type ReactElement,
+  type ReactNode
 } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
@@ -412,6 +415,24 @@ export type AppUiShell = "v11" | "v12";
 export type AppProps = {
   uiShell?: AppUiShell;
 };
+
+type ContextMenuItemProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  icon: string;
+  shortcut?: string;
+  children: ReactNode;
+};
+
+function ContextMenuItem({ icon, shortcut, children, className, ...buttonProps }: ContextMenuItemProps): ReactElement {
+  return (
+    <button type="button" className={["context-item", className].filter(Boolean).join(" ")} {...buttonProps}>
+      <span className="context-icon" aria-hidden>
+        <V12TbIcon name={icon} />
+      </span>
+      <span className="context-label">{children}</span>
+      {shortcut ? <span className="context-shortcut">{shortcut}</span> : <span className="context-shortcut" aria-hidden />}
+    </button>
+  );
+}
 
 export function App(props: AppProps = {}) {
   const { uiShell = "v12" } = props;
@@ -7551,7 +7572,7 @@ export function App(props: AppProps = {}) {
               {contextMenu.scope === "row" && contextHasSelection ? (
                 <>
                   {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={async () => {
+                    <ContextMenuItem icon="open-file" onClick={async () => {
                       const target = contextTab?.localPane.selectedFullPaths[0];
                       if (target) {
                         const result = await window.cofinder.local.openPath({ path: target });
@@ -7560,102 +7581,98 @@ export function App(props: AppProps = {}) {
                       setContextMenu(null);
                     }}>
                       Open
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
                   {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={async () => {
+                    <ContextMenuItem icon="eye" onClick={async () => {
                       await quickLookSelection(contextMenu.tabId, "local");
                       setContextMenu(null);
                     }}>
                       Quick Look
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
-                  <button type="button" className="context-item" onClick={async () => {
+                  <ContextMenuItem icon="info-circle" shortcut="⌘I" onClick={async () => {
                     await openInfoDialog(contextMenu.tabId, "local");
                     setContextMenu(null);
                   }}>
                     Show Inspector
-                    <span className="context-shortcut">⌘I</span>
-                  </button>
+                  </ContextMenuItem>
                   {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={() => {
+                    <ContextMenuItem icon="rename" shortcut="F2" onClick={() => {
                       openInlineRename(contextMenu.tabId, "local");
                       setContextMenu(null);
                     }}>
                       Rename
-                      <span className="context-shortcut">F2</span>
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
                   {contextMultiSelection ? (
-                    <button type="button" className="context-item" onClick={() => {
+                    <ContextMenuItem icon="batch-rename" onClick={() => {
                       openBatchRenameDialog(contextMenu.tabId, "local");
                       setContextMenu(null);
                     }}>
                       Batch Rename...
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
-                  <button type="button" className="context-item" onClick={() => {
+                  <ContextMenuItem icon="trash" shortcut="Del" className="is-danger" onClick={() => {
                     openDeleteConfirm(contextMenu.tabId, "local");
                     setContextMenu(null);
                   }}>
                     Delete
-                    <span className="context-shortcut">Del</span>
-                  </button>
+                  </ContextMenuItem>
                   {contextSingleSelection ? (
                     <div className="context-submenu">
-                      <button type="button" className="context-item context-submenu-trigger">
+                      <ContextMenuItem icon="file-operation" shortcut="›" className="context-submenu-trigger">
                         File Operation
-                        <span className="context-shortcut">›</span>
-                      </button>
+                      </ContextMenuItem>
                       <div className="context-submenu-panel">
-                        <button type="button" className="context-item" onClick={async () => {
+                        <ContextMenuItem icon="touch" onClick={async () => {
                           await touchLocalSelection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
                           Touch
-                        </button>
-                        <button type="button" className="context-item" onClick={() => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="clock" onClick={() => {
                           openTimestampDialog(contextMenu.tabId, "local");
                           setContextMenu(null);
                         }}>
                           Change Timestamp...
-                        </button>
-                        <button type="button" className="context-item" onClick={async () => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="archive" onClick={async () => {
                           await compressLocalSelection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
                           Compress
-                        </button>
-                        <button type="button" className="context-item" onClick={async () => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="decompress" onClick={async () => {
                           await decompressLocalSelection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
                           Decompress
-                        </button>
-                        <button type="button" className="context-item" onClick={() => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="search" onClick={() => {
                           openTextSearchDialog(contextMenu.tabId, "local");
                           setContextMenu(null);
                         }}>
                           Search Contents...
-                        </button>
-                        <button type="button" className="context-item" onClick={async () => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="text-lines" onClick={async () => {
                           await openTextViewerSelection(contextMenu.tabId, "local");
                           setContextMenu(null);
                         }}>
                           View Text...
-                        </button>
-                        <button type="button" className="context-item" onClick={async () => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="hash" onClick={async () => {
                           await generateLocalMd5Selection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
                           Generate MD5
-                        </button>
+                        </ContextMenuItem>
                       </div>
                     </div>
                   ) : null}
-                  <button
-                    type="button"
-                    className="context-item"
+                  <ContextMenuItem
+                    icon="arrow-up-tray"
+                    shortcut="⌘U"
                     disabled={!contextTab?.remotePane.connectionId}
                     onClick={async () => {
                       await enqueueUpload(contextMenu.tabId);
@@ -7663,10 +7680,9 @@ export function App(props: AppProps = {}) {
                     }}
                   >
                     Upload
-                    <span className="context-shortcut">⌘U</span>
-                  </button>
+                  </ContextMenuItem>
                   {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={async () => {
+                    <ContextMenuItem icon="finder" onClick={async () => {
                       const target = contextTab?.localPane.selectedFullPaths[0];
                       if (target) {
                         const result = await window.cofinder.local.revealPath({ path: target });
@@ -7675,63 +7691,59 @@ export function App(props: AppProps = {}) {
                       setContextMenu(null);
                     }}>
                       Reveal in Finder
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
-                  <button type="button" className="context-item" onClick={async () => {
+                  <ContextMenuItem icon="copy" onClick={async () => {
                     await copySelection(contextMenu.tabId, "local", "name");
                     setContextMenu(null);
                   }}>
                     Copy Name
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="copy-path" shortcut="⌘⇧C" onClick={async () => {
                     await copySelection(contextMenu.tabId, "local", "path");
                     setContextMenu(null);
                   }}>
                     Copy Full Path
-                    <span className="context-shortcut">⌘⇧C</span>
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="arrow-clockwise" shortcut="⌘R" onClick={async () => {
                     if (contextTab) await navigateLocal(contextMenu.tabId, contextTab.localPane.currentPath, "replace");
                     setContextMenu(null);
                   }}>
                     Refresh
-                    <span className="context-shortcut">⌘R</span>
-                  </button>
+                  </ContextMenuItem>
                 </>
               ) : (
                 <>
-                  <button type="button" className="context-item" onClick={async () => {
+                  <ContextMenuItem icon="folder-badge-plus" onClick={async () => {
                     await createLocalDirectory(contextMenu.tabId);
                     setContextMenu(null);
                   }}>
                     New Folder
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="doc-badge-plus" onClick={async () => {
                     await createTextFile(contextMenu.tabId, "local");
                     setContextMenu(null);
                   }}>
                     New Text File
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="terminal" onClick={async () => {
                     await openTerminalHere(contextMenu.tabId, "local", contextMenu.terminalPath);
                     setContextMenu(null);
                   }}>
                     Open Terminal Here
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="copy-path" shortcut="⌘⌥C" onClick={async () => {
                     await copyCurrentPath("local");
                     setContextMenu(null);
                   }}>
                     Copy Current Path
-                    <span className="context-shortcut">⌘⌥C</span>
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="arrow-clockwise" shortcut="⌘R" onClick={async () => {
                     if (contextTab) await navigateLocal(contextMenu.tabId, contextTab.localPane.currentPath, "replace");
                     setContextMenu(null);
                   }}>
                     Refresh
-                    <span className="context-shortcut">⌘R</span>
-                  </button>
+                  </ContextMenuItem>
                 </>
               )}
             </>
@@ -7740,197 +7752,187 @@ export function App(props: AppProps = {}) {
               {contextMenu.scope === "row" && contextHasSelection ? (
                 <>
                   {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={async () => {
+                    <ContextMenuItem icon="open-file" shortcut="double-click" onClick={async () => {
                       await openRemoteSelection(contextMenu.tabId, "default");
                       setContextMenu(null);
                     }}>
                       Open
-                      <span className="context-shortcut">double-click</span>
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
                   {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={async () => {
+                    <ContextMenuItem icon="pencil" onClick={async () => {
                       await editRemoteSelection(contextMenu.tabId);
                       setContextMenu(null);
                     }}>
                       Edit
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
-                  <button type="button" className="context-item" onClick={async () => {
+                  <ContextMenuItem icon="info-circle" shortcut="⌘I" onClick={async () => {
                     await openInfoDialog(contextMenu.tabId, "remote");
                     setContextMenu(null);
                   }}>
                     Show Inspector
-                    <span className="context-shortcut">⌘I</span>
-                  </button>
+                  </ContextMenuItem>
                   {contextSingleSelection ? (
-                    <button type="button" className="context-item" onClick={() => {
+                    <ContextMenuItem icon="rename" shortcut="F2" onClick={() => {
                       openInlineRename(contextMenu.tabId, "remote");
                       setContextMenu(null);
                     }}>
                       Rename
-                      <span className="context-shortcut">F2</span>
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
                   {contextMultiSelection ? (
-                    <button type="button" className="context-item" onClick={() => {
+                    <ContextMenuItem icon="batch-rename" onClick={() => {
                       openBatchRenameDialog(contextMenu.tabId, "remote");
                       setContextMenu(null);
                     }}>
                       Batch Rename...
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
-                  <button type="button" className="context-item" onClick={() => {
+                  <ContextMenuItem icon="copy-to" onClick={() => {
                     openRemoteCopyMoveDialog(contextMenu.tabId, "copy");
                     setContextMenu(null);
                   }}>
                     Copy To...
-                  </button>
-                  <button type="button" className="context-item" onClick={() => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="move-to" onClick={() => {
                     openRemoteCopyMoveDialog(contextMenu.tabId, "move");
                     setContextMenu(null);
                   }}>
                     Move To...
-                  </button>
-                  <button type="button" className="context-item" onClick={() => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="trash" shortcut="Del" className="is-danger" onClick={() => {
                     openDeleteConfirm(contextMenu.tabId, "remote");
                     setContextMenu(null);
                   }}>
                     Delete
-                    <span className="context-shortcut">Del</span>
-                  </button>
-                  <button type="button" className="context-item" disabled={!contextTab?.localPane.currentPath} onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="arrow-down-tray" shortcut="⌘D" disabled={!contextTab?.localPane.currentPath} onClick={async () => {
                     await enqueueDownload(contextMenu.tabId);
                     setContextMenu(null);
                   }}>
                     Download
-                    <span className="context-shortcut">⌘D</span>
-                  </button>
+                  </ContextMenuItem>
                   {contextSingleSelection ? (
                     <div className="context-submenu">
-                      <button type="button" className="context-item context-submenu-trigger">
+                      <ContextMenuItem icon="file-operation" shortcut="›" className="context-submenu-trigger">
                         File Operation
-                        <span className="context-shortcut">›</span>
-                      </button>
+                      </ContextMenuItem>
                       <div className="context-submenu-panel">
-                        <button type="button" className="context-item" onClick={async () => {
+                        <ContextMenuItem icon="touch" onClick={async () => {
                           await touchRemoteSelection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
                           Touch
-                        </button>
-                        <button type="button" className="context-item" onClick={() => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="clock" onClick={() => {
                           openTimestampDialog(contextMenu.tabId, "remote");
                           setContextMenu(null);
                         }}>
                           Change Timestamp...
-                        </button>
-                        <button type="button" className="context-item" onClick={async () => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="archive" onClick={async () => {
                           await compressRemoteSelection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
                           Compress
-                        </button>
-                        <button type="button" className="context-item" onClick={async () => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="decompress" onClick={async () => {
                           await decompressRemoteSelection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
                           Decompress
-                        </button>
-                        <button type="button" className="context-item" onClick={() => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="search" onClick={() => {
                           openTextSearchDialog(contextMenu.tabId, "remote");
                           setContextMenu(null);
                         }}>
                           Search Contents...
-                        </button>
-                        <button type="button" className="context-item" onClick={async () => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="text-lines" onClick={async () => {
                           await openTextViewerSelection(contextMenu.tabId, "remote");
                           setContextMenu(null);
                         }}>
                           View Text...
-                        </button>
-                        <button type="button" className="context-item" onClick={async () => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="hash" onClick={async () => {
                           await generateRemoteMd5Selection(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
                           Generate MD5
-                        </button>
-                        <button type="button" className="context-item" onClick={() => {
+                        </ContextMenuItem>
+                        <ContextMenuItem icon="lock" onClick={() => {
                           openChmodDialog(contextMenu.tabId);
                           setContextMenu(null);
                         }}>
                           Change Permissions
-                        </button>
+                        </ContextMenuItem>
                       </div>
                     </div>
                   ) : null}
                   {contextSingleFile ? (
-                    <button type="button" className="context-item" onClick={async () => {
+                    <ContextMenuItem icon="duplicate" onClick={async () => {
                       await duplicateRemoteSelection(contextMenu.tabId);
                       setContextMenu(null);
                     }}>
                       Duplicate File
-                    </button>
+                    </ContextMenuItem>
                   ) : null}
-                  <button type="button" className="context-item" onClick={async () => {
+                  <ContextMenuItem icon="copy" onClick={async () => {
                     await copySelection(contextMenu.tabId, "remote", "name");
                     setContextMenu(null);
                   }}>
                     Copy Name
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="copy-path" shortcut="⌘⇧C" onClick={async () => {
                     await copySelection(contextMenu.tabId, "remote", "path");
                     setContextMenu(null);
                   }}>
                     Copy Full Path
-                    <span className="context-shortcut">⌘⇧C</span>
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="arrow-clockwise" shortcut="⌘R" onClick={async () => {
                     if (contextTab?.remotePane.connectionId) {
                       await listRemotePath(contextTab.remotePane.connectionId, contextTab.remotePane.currentPath, "replace", contextMenu.tabId);
                     }
                     setContextMenu(null);
                   }}>
                     Refresh
-                    <span className="context-shortcut">⌘R</span>
-                  </button>
+                  </ContextMenuItem>
                 </>
               ) : (
                 <>
-                  <button type="button" className="context-item" onClick={async () => {
+                  <ContextMenuItem icon="folder-badge-plus" onClick={async () => {
                     await createRemoteDirectory(contextMenu.tabId);
                     setContextMenu(null);
                   }}>
                     New Folder
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="doc-badge-plus" onClick={async () => {
                     await createTextFile(contextMenu.tabId, "remote");
                     setContextMenu(null);
                   }}>
                     New Text File
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="terminal" onClick={async () => {
                     await openTerminalHere(contextMenu.tabId, "remote", contextMenu.terminalPath);
                     setContextMenu(null);
                   }}>
                     Open SSH Terminal Here
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="copy-path" shortcut="⌘⌥C" onClick={async () => {
                     await copyCurrentPath("remote");
                     setContextMenu(null);
                   }}>
                     Copy Current Path
-                    <span className="context-shortcut">⌘⌥C</span>
-                  </button>
-                  <button type="button" className="context-item" onClick={async () => {
+                  </ContextMenuItem>
+                  <ContextMenuItem icon="arrow-clockwise" shortcut="⌘R" onClick={async () => {
                     if (contextTab?.remotePane.connectionId) {
                       await listRemotePath(contextTab.remotePane.connectionId, contextTab.remotePane.currentPath, "replace", contextMenu.tabId);
                     }
                     setContextMenu(null);
                   }}>
                     Refresh
-                    <span className="context-shortcut">⌘R</span>
-                  </button>
+                  </ContextMenuItem>
                 </>
               )}
             </>
