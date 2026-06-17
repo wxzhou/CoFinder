@@ -126,6 +126,21 @@ describe("selection helpers", () => {
     expect(stateLast.selectionAnchorFullPath).toBe("/d");
   });
 
+  it("skips outline placeholder rows during selection and copy helpers", () => {
+    const visibleRows = [
+      rows[0]!,
+      { fullPath: "cofinder:outline:loading:/a", name: "", outlinePlaceholderKind: "loading" },
+      rows[1]!
+    ];
+
+    expect(selectAllRows(visibleRows).selectedFullPaths).toEqual(["/a", "/b"]);
+    expect(applyKeyboardRowSelection(visibleRows, { selectedFullPaths: ["/a"], selectionAnchorFullPath: "/a" }, 1, { extend: false })).toEqual({
+      selectedFullPaths: ["/b"],
+      selectionAnchorFullPath: "/b"
+    });
+    expect(stringifySelection(["/a", "cofinder:outline:loading:/a", "/b"], visibleRows, "name")).toBe("a\nb");
+  });
+
   it("normalizes drag rectangle regardless of direction", () => {
     expect(normalizeDragRect(10, 40, 30, 20)).toEqual({ left: 10, top: 20, right: 30, bottom: 40 });
   });

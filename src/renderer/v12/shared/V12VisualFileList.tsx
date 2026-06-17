@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type ReactElement } from "react";
 import type { FileEntry, SortDirection, SortKey } from "../../../shared/types/models";
 import { groupOutlineRowsByFileType } from "../fileTypeGroups";
+import { isOutlinePlaceholder } from "../outlineRows";
 import { V12FileTypeIcon } from "./V12FileTypeIcon";
 import { V12TbIcon } from "./V12Icons";
 
@@ -106,6 +107,22 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
   const cellValue = (entry: T, key: V12FileColumnKey): ReactElement | string => {
     const row = entry as FileEntry & { permissions?: string; owner?: string };
     if (key === "name") {
+      if (isOutlinePlaceholder(entry)) {
+        const depth = props.outline?.enabled ? props.outline.getDepth(entry) : 0;
+        return (
+          <div
+            className={`v12m-lname v12m-outline-placeholder v12m-outline-placeholder--${entry.outlinePlaceholderKind}`}
+            style={{ "--outline-depth": depth } as CSSProperties}
+          >
+            <span className="v12m-disclosure-spacer" aria-hidden />
+            {entry.outlinePlaceholderKind === "loading" ? (
+              <span className="v12m-outline-loading-spinner" aria-label="Loading folder contents" />
+            ) : (
+              <span className="v12m-outline-empty-text">(empty)</span>
+            )}
+          </div>
+        );
+      }
       const isDir = entry.type === "directory";
       const renaming = props.inlineRename?.sourcePath === entry.fullPath;
       const outline = props.outline?.enabled ? props.outline : null;
@@ -163,6 +180,7 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
         </div>
       );
     }
+    if (isOutlinePlaceholder(entry)) return "";
     if (key === "mtime") return props.formatTime(entry.mtime);
     if (key === "size") return entry.type === "directory" ? "—" : props.formatSize(entry.size);
     if (key === "kind") return props.formatKind(entry);
@@ -255,6 +273,7 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
               </div>
             ) : null}
             {group.entries.map((entry, index) => {
+              const placeholder = isOutlinePlaceholder(entry);
               const selected = props.selectedFullPaths.includes(entry.fullPath);
               const sel = rowSelClass(selected, props.isPaneActive);
               const previousSelected = index > 0 ? props.selectedFullPaths.includes(group.entries[index - 1].fullPath) : false;
@@ -266,17 +285,28 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
                 <div
                   key={entry.fullPath}
                   role="listitem"
-                  draggable={props.inlineRename?.sourcePath !== entry.fullPath}
-                  data-pane-row="true"
-                  data-marquee-pane={props.pane}
-                  data-full-path={entry.fullPath}
-                  className={`v12m-lrow ${sel}${selectedRunClass} ${props.getRowClassName?.(entry) ?? ""}`.trim()}
+                  draggable={!placeholder && props.inlineRename?.sourcePath !== entry.fullPath}
+                  data-pane-row={placeholder ? undefined : "true"}
+                  data-marquee-pane={placeholder ? undefined : props.pane}
+                  data-full-path={placeholder ? undefined : entry.fullPath}
+                  className={`v12m-lrow${placeholder ? " v12m-lrow--outline-placeholder" : ""} ${sel}${selectedRunClass} ${
+                    placeholder ? "" : (props.getRowClassName?.(entry) ?? "")
+                  }`.trim()}
                   style={gridStyle}
-                  onDragStart={(e) => props.onRowDragStart?.(entry, e)}
-                  onDragOver={(e) => props.onRowDragOver?.(entry, e)}
-                  onDrop={(e) => props.onRowDrop?.(entry, e)}
-                  onDragEnd={(e) => props.onRowDragEnd?.(e)}
+                  onDragStart={(e) => {
+                    if (!placeholder) props.onRowDragStart?.(entry, e);
+                  }}
+                  onDragOver={(e) => {
+                    if (!placeholder) props.onRowDragOver?.(entry, e);
+                  }}
+                  onDrop={(e) => {
+                    if (!placeholder) props.onRowDrop?.(entry, e);
+                  }}
+                  onDragEnd={(e) => {
+                    if (!placeholder) props.onRowDragEnd?.(e);
+                  }}
                   onClick={(e) => {
+                    if (placeholder) return;
                     const target = e.target as HTMLElement | null;
                     if (target?.closest(".v12m-lname")) {
                       props.onRowClick(entry, e);
@@ -284,8 +314,12 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
                     }
                     props.onRowDetailClick?.(entry, e);
                   }}
-                  onContextMenu={(e) => props.onRowContextMenu(entry, e)}
-                  onDoubleClick={() => props.onRowDoubleClick(entry)}
+                  onContextMenu={(e) => {
+                    if (!placeholder) props.onRowContextMenu(entry, e);
+                  }}
+                  onDoubleClick={() => {
+                    if (!placeholder) props.onRowDoubleClick(entry);
+                  }}
                 >
                   {visibleColumns.map((column) => (
                     <span key={column.key} className={column.key === "name" ? "v12m-namecell" : `v12m-lcell v12m-lcell--${column.key}`}>

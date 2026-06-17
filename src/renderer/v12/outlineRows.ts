@@ -7,12 +7,36 @@ export type OutlineNode<T extends FileEntry> = {
   error?: string;
 };
 
+export type OutlinePlaceholderKind = "loading" | "empty";
+
 export type OutlineRow<T extends FileEntry> = T & {
   outlineDepth: number;
   outlineParentPath?: string;
+  outlinePlaceholderKind?: OutlinePlaceholderKind;
 };
 
 export type OutlineState<T extends FileEntry> = Record<string, OutlineNode<T>>;
+
+export function isOutlinePlaceholder<T extends FileEntry>(entry: FileEntry): entry is OutlineRow<T> & { outlinePlaceholderKind: OutlinePlaceholderKind } {
+  return Boolean((entry as { outlinePlaceholderKind?: OutlinePlaceholderKind }).outlinePlaceholderKind);
+}
+
+function makeOutlinePlaceholder<T extends FileEntry>(
+  parent: T,
+  kind: OutlinePlaceholderKind,
+  depth: number
+): OutlineRow<T> {
+  return {
+    name: kind === "empty" ? "(empty)" : "",
+    fullPath: `cofinder:outline:${kind}:${parent.fullPath}`,
+    type: "unknown",
+    size: 0,
+    mtime: parent.mtime,
+    outlineDepth: depth,
+    outlineParentPath: parent.fullPath,
+    outlinePlaceholderKind: kind
+  } as OutlineRow<T>;
+}
 
 export function flattenOutlineRows<T extends FileEntry>(
   entries: T[],
@@ -33,7 +57,13 @@ export function flattenOutlineRows<T extends FileEntry>(
       const node = outline[entry.fullPath];
       if (!node?.expanded) continue;
       seen.add(entry.fullPath);
-      visit(options.sortAndFilter(node.entries), depth + 1, entry.fullPath);
+      if (node.entries.length === 0) {
+        if (node.status === "loading" || node.status === "ready") {
+          output.push(makeOutlinePlaceholder(entry, node.status === "loading" ? "loading" : "empty", depth + 1));
+        }
+      } else {
+        visit(options.sortAndFilter(node.entries), depth + 1, entry.fullPath);
+      }
       seen.delete(entry.fullPath);
     }
   };

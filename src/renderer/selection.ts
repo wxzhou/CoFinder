@@ -14,11 +14,15 @@ export type RectLike = {
 
 export type MarqueeRowRect = RowLike & RectLike;
 
+function selectableRows<T extends RowLike>(rows: T[]): T[] {
+  return rows.filter((row) => !(row as { outlinePlaceholderKind?: string }).outlinePlaceholderKind);
+}
+
 export function selectAllRows<T extends RowLike>(
   rows: T[],
   anchor: "first" | "last" = "first"
 ): SelectionState {
-  const selectedFullPaths = rows.map((row) => row.fullPath);
+  const selectedFullPaths = selectableRows(rows).map((row) => row.fullPath);
   const selectionAnchorFullPath = selectedFullPaths.length
     ? anchor === "first"
       ? selectedFullPaths[0]
@@ -33,7 +37,7 @@ export function applyRowSelection<T extends RowLike>(
   clickedPath: string,
   options: { metaKey: boolean; shiftKey: boolean }
 ): SelectionState {
-  const rowPaths = rows.map((row) => row.fullPath);
+  const rowPaths = selectableRows(rows).map((row) => row.fullPath);
   if (!rowPaths.includes(clickedPath)) return current;
 
   if (options.shiftKey && current.selectionAnchorFullPath && rowPaths.includes(current.selectionAnchorFullPath)) {
@@ -89,7 +93,7 @@ export function applyKeyboardRowSelection<T extends RowLike>(
   direction: -1 | 1,
   options: { extend: boolean }
 ): SelectionState {
-  const rowPaths = rows.map((row) => row.fullPath);
+  const rowPaths = selectableRows(rows).map((row) => row.fullPath);
   if (rowPaths.length === 0) return clearSelectionState();
 
   const currentFocus = rangeFocusIndex(rowPaths, current);
@@ -134,7 +138,7 @@ export function stringifySelection(
   entries: Array<{ fullPath: string; name: string }>,
   mode: "name" | "path"
 ): string {
-  const selected = entries.filter((entry) => fullPaths.includes(entry.fullPath));
+  const selected = selectableRows(entries).filter((entry) => fullPaths.includes(entry.fullPath));
   const values = mode === "name" ? selected.map((entry) => entry.name) : selected.map((entry) => entry.fullPath);
   return values.join("\n");
 }
@@ -158,7 +162,7 @@ export function applyMarqueeSelection(
   current: SelectionState,
   options: { additive: boolean }
 ): SelectionState {
-  const hits = rows.filter((row) => rectsIntersect(row, marquee)).map((row) => row.fullPath);
+  const hits = selectableRows(rows).filter((row) => rectsIntersect(row, marquee)).map((row) => row.fullPath);
   const selectedFullPaths = options.additive ? Array.from(new Set([...current.selectedFullPaths, ...hits])) : hits;
   return {
     selectedFullPaths,

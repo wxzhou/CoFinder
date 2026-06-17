@@ -34,7 +34,7 @@ import {
 import { V12LocalFavoritesSidebar } from "./v12/V12LocalFavoritesSidebar";
 import { V12RemoteEmbeddedConnect, type V12EmbeddedRemoteConnectSubmit } from "./v12/V12RemoteEmbeddedConnect";
 import { flattenFileTypeGroups, groupOutlineRowsByFileType } from "./v12/fileTypeGroups";
-import { flattenOutlineRows, hiddenDescendantPaths, isSameOrDescendantPath, pruneOutlinePath, type OutlineRow, type OutlineState } from "./v12/outlineRows";
+import { flattenOutlineRows, hiddenDescendantPaths, isOutlinePlaceholder, isSameOrDescendantPath, pruneOutlinePath, type OutlineRow, type OutlineState } from "./v12/outlineRows";
 import { validateEmbeddedRemoteConnectInput } from "./embeddedRemoteConnect";
 import {
   addRecentPath,
@@ -1720,11 +1720,13 @@ export function App(props: AppProps = {}) {
   );
 
   const selectedEntries = localCurrentViewEntries.filter((entry) => localPane.selectedFullPaths.includes(entry.fullPath));
+  const localCountableCurrentViewEntries = localCurrentViewEntries.filter((entry) => !isOutlinePlaceholder(entry));
+  const remoteCountableCurrentViewEntries = remoteCurrentViewEntries.filter((entry) => !isOutlinePlaceholder(entry));
   const selectedSize = selectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const totalSize = localCurrentViewEntries.reduce((acc, item) => acc + item.size, 0);
+  const totalSize = localCountableCurrentViewEntries.reduce((acc, item) => acc + item.size, 0);
   const remoteSelectedEntries = remoteCurrentViewEntries.filter((entry) => remotePane.selectedFullPaths.includes(entry.fullPath));
   const remoteSelectedSize = remoteSelectedEntries.reduce((acc, item) => acc + item.size, 0);
-  const remoteTotalSize = remoteCurrentViewEntries.reduce((acc, item) => acc + item.size, 0);
+  const remoteTotalSize = remoteCountableCurrentViewEntries.reduce((acc, item) => acc + item.size, 0);
   const batchRenamePreview = useMemo<BatchRenamePreviewItem[]>(
     () => (batchRenameDialog ? buildBatchRenamePreview(batchRenameDialog.entries, batchRenameDialog.options) : []),
     [batchRenameDialog]
@@ -6165,7 +6167,7 @@ export function App(props: AppProps = {}) {
                 )}
                 <V12PaneFootStatus
                   selectedCount={selectedEntries.length}
-                  totalCount={localCurrentViewEntries.length}
+                  totalCount={localCountableCurrentViewEntries.length}
                   selectedSizeLabel={formatSize(selectedSize)}
                   totalSizeLabel={formatSize(totalSize)}
                 />
@@ -6691,7 +6693,7 @@ export function App(props: AppProps = {}) {
                   )}
                   <V12PaneFootStatus
                     selectedCount={remoteSelectedEntries.length}
-                    totalCount={remoteCurrentViewEntries.length}
+                    totalCount={remoteCountableCurrentViewEntries.length}
                     selectedSizeLabel={formatSize(remoteSelectedSize)}
                     totalSizeLabel={formatSize(remoteTotalSize)}
                   />

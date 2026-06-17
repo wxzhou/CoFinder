@@ -52,6 +52,60 @@ describe("outline rows", () => {
     expect(flattenOutlineRows(roots, outline, { sortAndFilter }).map((row) => row.fullPath)).toEqual(["/root/folder"]);
   });
 
+  it("shows a loading placeholder for newly expanded folders before children arrive", () => {
+    const roots = [entry("/root/folder", "directory")];
+    const outline: OutlineState<FileEntry> = {
+      "/root/folder": {
+        expanded: true,
+        status: "loading",
+        entries: []
+      }
+    };
+
+    const rows = flattenOutlineRows(roots, outline, { sortAndFilter });
+
+    expect(rows.map((row) => [row.name, row.outlineDepth, row.outlineParentPath ?? "", row.outlinePlaceholderKind ?? ""])).toEqual([
+      ["folder", 0, "", ""],
+      ["", 1, "/root/folder", "loading"]
+    ]);
+  });
+
+  it("shows an empty placeholder for expanded folders that loaded no children", () => {
+    const roots = [entry("/root/folder", "directory")];
+    const outline: OutlineState<FileEntry> = {
+      "/root/folder": {
+        expanded: true,
+        status: "ready",
+        entries: []
+      }
+    };
+
+    const rows = flattenOutlineRows(roots, outline, { sortAndFilter });
+
+    expect(rows.map((row) => [row.name, row.outlineDepth, row.outlineParentPath ?? "", row.outlinePlaceholderKind ?? ""])).toEqual([
+      ["folder", 0, "", ""],
+      ["(empty)", 1, "/root/folder", "empty"]
+    ]);
+  });
+
+  it("keeps cached children visible instead of replacing them with a loading placeholder", () => {
+    const roots = [entry("/root/folder", "directory")];
+    const outline: OutlineState<FileEntry> = {
+      "/root/folder": {
+        expanded: true,
+        status: "loading",
+        entries: [entry("/root/folder/cached.txt")]
+      }
+    };
+
+    const rows = flattenOutlineRows(roots, outline, { sortAndFilter });
+
+    expect(rows.map((row) => [row.fullPath, row.outlinePlaceholderKind ?? ""])).toEqual([
+      ["/root/folder", ""],
+      ["/root/folder/cached.txt", ""]
+    ]);
+  });
+
   it("collects hidden descendants when a folder collapses", () => {
     const outline: OutlineState<FileEntry> = {
       "/root/folder": {
