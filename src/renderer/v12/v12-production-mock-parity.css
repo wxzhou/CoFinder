@@ -1025,23 +1025,23 @@
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--text-secondary);
+  color: #4b4b4b;
   padding: 0;
 }
 
 .cfv12-root .v12m-view-mode-button.is-active {
-  color: var(--m-accent);
-  background: color-mix(in srgb, var(--m-accent) 13%, transparent);
+  color: #4b4b4b;
+  background: color-mix(in srgb, #000 10%, transparent);
 }
 
 .cfv12-root .v12m-view-mode-button svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .cfv12-root .v12m-group-type-button.is-active {
-  color: var(--m-accent);
-  background: color-mix(in srgb, var(--m-accent) 13%, transparent);
+  color: #4b4b4b;
+  background: color-mix(in srgb, #000 10%, transparent);
 }
 
 .cfv12-root .v12m-icon-grid-scroll {

@@ -5608,13 +5608,6 @@ export function App(props: AppProps = {}) {
             disabled: localPane.selectedFullPaths.length === 0,
             danger: true,
             onClick: () => openDeleteConfirm(activeTab.id, "local")
-          },
-          {
-            label: "Open Terminal Here",
-            title: "Open Terminal here in local current folder",
-            icon: "terminal",
-            disabled: !localPane.currentPath,
-            onClick: () => void openTerminalHere(activeTab.id, "local", localPane.currentPath)
           }
         ]}
       >
@@ -5786,13 +5779,6 @@ export function App(props: AppProps = {}) {
             disabled: remotePane.selectedFullPaths.length === 0 || !remotePane.connectionId,
             danger: true,
             onClick: () => openDeleteConfirm(activeTab.id, "remote")
-          },
-          {
-            label: "Open SSH Terminal Here",
-            title: "Open SSH Terminal here in remote current folder",
-            icon: "terminal",
-            disabled: !remotePane.connectionId,
-            onClick: () => void openTerminalHere(activeTab.id, "remote", remotePane.currentPath)
           }
         ]}
       >
@@ -7591,7 +7577,7 @@ export function App(props: AppProps = {}) {
                       Quick Look
                     </ContextMenuItem>
                   ) : null}
-                  <ContextMenuItem icon="info-circle" shortcut="⌘I" onClick={async () => {
+                  <ContextMenuItem icon="sidebar-right" shortcut="⌘I" onClick={async () => {
                     await openInfoDialog(contextMenu.tabId, "local");
                     setContextMenu(null);
                   }}>
@@ -7767,7 +7753,7 @@ export function App(props: AppProps = {}) {
                       Edit
                     </ContextMenuItem>
                   ) : null}
-                  <ContextMenuItem icon="info-circle" shortcut="⌘I" onClick={async () => {
+                  <ContextMenuItem icon="sidebar-right" shortcut="⌘I" onClick={async () => {
                     await openInfoDialog(contextMenu.tabId, "remote");
                     setContextMenu(null);
                   }}>

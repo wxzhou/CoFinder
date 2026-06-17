@@ -425,46 +425,44 @@ Z
     case "list-bullet":
       return (
         <svg width={18} height={18} viewBox="0 0 20 20" aria-hidden>
-          <path d="M6 6h9M6 10h9M6 14h9" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
-          <circle cx="4" cy="6" r="0.85" fill="currentColor" />
-          <circle cx="4" cy="10" r="0.85" fill="currentColor" />
-          <circle cx="4" cy="14" r="0.85" fill="currentColor" />
+          <path d="M7.2 5.2h8.2M7.2 10h8.2M7.2 14.8h8.2" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+          <circle cx="4.2" cy="5.2" r="1.05" fill="currentColor" />
+          <circle cx="4.2" cy="10" r="1.05" fill="currentColor" />
+          <circle cx="4.2" cy="14.8" r="1.05" fill="currentColor" />
         </svg>
       );
     case "grid-2x2":
       return (
-        <svg {...s}>
-          <rect x="4" y="4" width="4.6" height="4.6" rx="1.1" />
-          <rect x="11.4" y="4" width="4.6" height="4.6" rx="1.1" />
-          <rect x="4" y="11.4" width="4.6" height="4.6" rx="1.1" />
-          <rect x="11.4" y="11.4" width="4.6" height="4.6" rx="1.1" />
+        <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="3.2" y="3.2" width="5.2" height="5.2" rx="1.35" />
+          <rect x="11.6" y="3.2" width="5.2" height="5.2" rx="1.35" />
+          <rect x="3.2" y="11.6" width="5.2" height="5.2" rx="1.35" />
+          <rect x="11.6" y="11.6" width="5.2" height="5.2" rx="1.35" />
         </svg>
       );
     case "columns-3":
       return (
-        <svg {...s}>
-          <rect x="3.5" y="4" width="4" height="12" rx="1" />
-          <rect x="8" y="4" width="4" height="12" rx="1" />
-          <rect x="12.5" y="4" width="4" height="12" rx="1" />
+        <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="3" y="3.4" width="4.2" height="13.2" rx="1.05" />
+          <rect x="7.9" y="3.4" width="4.2" height="13.2" rx="1.05" />
+          <rect x="12.8" y="3.4" width="4.2" height="13.2" rx="1.05" />
         </svg>
       );
     case "gallery":
       return (
-        <svg {...s}>
-          <rect x="3.5" y="5" width="13" height="10" rx="1.5" />
-          <path d="M5.5 13l3-3 2 2 1.5-1.5 2.5 2.5" />
-          <circle cx="7.2" cy="8" r="0.9" />
+        <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="3" y="3.2" width="14" height="9.3" rx="1.8" />
+          <path d="M4.4 16h.2M7.2 16h.2M10 16h.2M12.8 16h.2M15.6 16h.2" strokeWidth={2.45} />
         </svg>
       );
     case "group-by-type":
       return (
-        <svg {...s}>
-          <path d="M5 4.8h10" />
-          <path d="M5 10h10" />
-          <path d="M5 15.2h10" />
-          <circle cx="3.7" cy="4.8" r="0.55" fill="currentColor" stroke="none" />
-          <circle cx="3.7" cy="10" r="0.55" fill="currentColor" stroke="none" />
-          <circle cx="3.7" cy="15.2" r="0.55" fill="currentColor" stroke="none" />
+        <svg width={18} height={18} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth={1.75} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="3.2" y="3.2" width="4.4" height="4.1" rx="0.8" />
+          <rect x="10.4" y="3.2" width="6.4" height="4.1" rx="0.8" />
+          <rect x="3.2" y="10.4" width="4.4" height="6.4" rx="0.8" />
+          <rect x="10.4" y="10.4" width="6.4" height="6.4" rx="0.8" />
+          <path d="M3.2 8.7h13.6" strokeWidth={1.15} opacity={0.9} />
         </svg>
       );
     case "clock":

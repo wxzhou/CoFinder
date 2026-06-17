@@ -612,7 +612,7 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: color-mix(in srgb, var(--text-secondary) 82%, transparent);
+  color: #4b4b4b;
 }
 
 .cfv12-root .v12m-icon-select-wrap svg {
@@ -677,7 +677,7 @@ body,
   align-items: center;
   justify-content: center;
   padding: 0;
-  color: color-mix(in srgb, var(--text-secondary) 82%, transparent);
+  color: #4b4b4b;
 }
 
 .cfv12-root .v12m-pane-actions {
@@ -698,7 +698,7 @@ body,
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   background: transparent;
-  color: rgba(55, 55, 60, 0.72);
+  color: #4b4b4b;
   padding: 0;
 }
 
@@ -720,19 +720,19 @@ body,
 }
 
 .cfv12-root .v12m-pane-action.tone-nav {
-  color: color-mix(in srgb, var(--text-secondary) 86%, transparent);
+  color: #4b4b4b;
 }
 
 .cfv12-root .v12m-pane-action.tone-transfer {
-  color: #477fb6;
+  color: #4b4b4b;
 }
 
 .cfv12-root .v12m-pane-action.tone-create {
-  color: #417f5a;
+  color: #4b4b4b;
 }
 
 .cfv12-root .v12m-pane-action.tone-edit {
-  color: #7a6a9b;
+  color: #4b4b4b;
 }
 
 .cfv12-root .v12m-pane-action.tone-danger,
@@ -1942,18 +1942,18 @@ body,
   border: 0;
   border-radius: 5px;
   background: transparent;
-  color: var(--text-secondary);
+  color: #4b4b4b;
   padding: 0;
 }
 
 .cfv12-root .v12m-view-mode-button.is-active {
-  color: var(--m-accent);
-  background: color-mix(in srgb, var(--m-accent) 13%, transparent);
+  color: #4b4b4b;
+  background: color-mix(in srgb, #000 10%, transparent);
 }
 
 .cfv12-root .v12m-view-mode-button svg {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
 }
 
 .cfv12-root .v12m-icon-grid-scroll {
@@ -2461,23 +2461,23 @@ body,
   text-align: left;
   padding: 0 10px 0 8px;
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
 .context-icon {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: color-mix(in srgb, var(--text-secondary) 86%, transparent);
+  color: #4b4b4b;
 }
 
 .context-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 19px;
+  height: 19px;
 }
 
 .context-icon svg * {

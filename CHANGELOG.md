@@ -16,6 +16,7 @@
 - Expanded List view folders now show an immediate spinner placeholder while child rows are loading and a light gray `(empty)` placeholder when a loaded folder has no children.
 - Updated the titlebar sidebar-toggle icon and pane toolbar New Folder icon to match the latest requested glyph direction.
 - Added icons to every local and remote context-menu item, including File Operation submenu commands.
+- Enlarged context-menu icons, removed terminal shortcuts from pane toolbars while keeping context-menu terminal commands, normalized non-delete toolbar icons to `#4b4b4b`, and refreshed view-mode/grouping icons toward Finder-style glyphs.
 
 ## v1.9.9 development
 
