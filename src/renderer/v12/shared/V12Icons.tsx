@@ -241,15 +241,15 @@ Z
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
-          strokeWidth={1.75}
+          strokeWidth={1.35}
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden
         >
-          <path d="M3.8 8.35c0-.86.69-1.55 1.55-1.55h3.1c.42 0 .82.17 1.11.47l1.1 1.13h7c.86 0 1.55.69 1.55 1.55v6.45c0 .86-.69 1.55-1.55 1.55H5.35c-.86 0-1.55-.69-1.55-1.55V8.35z" />
-          <path d="M3.95 10.15h11.65" />
-          <circle cx="17.15" cy="7.4" r="3.2" fill="currentColor" stroke="none" />
-          <path d="M17.15 5.65v3.5M15.4 7.4h3.5" stroke="#fff" strokeWidth={1.25} />
+          <path d="M2.95 8.5c0-.78.63-1.4 1.4-1.4h3.55c.38 0 .74.15 1 .42l1.03 1.05h8.05c.78 0 1.4.63 1.4 1.4v6.55c0 .78-.63 1.4-1.4 1.4H4.35c-.78 0-1.4-.63-1.4-1.4V8.5z" />
+          <path d="M4.65 10.05h9.8" />
+          <circle cx="17.45" cy="7.2" r="3.55" fill="currentColor" stroke="none" />
+          <path d="M17.45 5.35v3.7M15.6 7.2h3.7" stroke="#fff" strokeWidth={1.2} />
         </svg>
       );
     case "doc-badge-plus":
@@ -391,19 +391,19 @@ Z
     case "sidebar-toggle":
       return (
         <svg
-          width={21}
+          width={25}
           height={21}
-          viewBox="0 0 24 24"
+          viewBox="0 0 28 22"
           fill="none"
           stroke="currentColor"
-          strokeWidth={1.8}
+          strokeWidth={1.65}
           strokeLinecap="round"
           strokeLinejoin="round"
           aria-hidden
         >
-          <rect x="3.9" y="4.6" width="16.2" height="14.8" rx="2.75" />
-          <path d="M9.2 4.9v14.2" />
-          <path d="M6.4 8.2h.9M6.4 10.7h.9M6.4 13.2h.9" />
+          <rect x="3" y="3.5" width="22" height="15" rx="2.8" />
+          <path d="M9.15 3.9v14.2" />
+          <path d="M5.95 7.35h1.05M5.95 9.85h1.05M5.95 12.35h1.05" />
         </svg>
       );
     case "gear":
