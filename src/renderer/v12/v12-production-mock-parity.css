@@ -910,9 +910,34 @@
 .cfv12-root .v12m-lname-input,
 .cfv12-root .v12m-lrow.sel-active .v12m-lname-input,
 .cfv12-root .v12m-lrow.sel-inactive .v12m-lname-input {
-  background: #fff;
+  appearance: none;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 20px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--m-fg);
   caret-color: var(--m-fg);
+  font: inherit;
+  font-weight: 450;
+}
+
+.cfv12-root .v12m-lname-input:focus,
+.cfv12-root .v12m-lname-input:focus-visible {
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+
+.cfv12-root .v12m-lname-input::selection {
+  background: color-mix(in srgb, var(--m-accent, #0a5fff) 72%, #064c9e);
+  color: #101114;
 }
 
 .cfv12-root .v12m-lrow.sel-active .v12m-lcell,

@@ -17,6 +17,7 @@
 - Updated the titlebar sidebar-toggle icon and pane toolbar New Folder icon to match the latest requested glyph direction.
 - Added icons to every local and remote context-menu item, including File Operation submenu commands.
 - Enlarged context-menu icons, removed terminal shortcuts from pane toolbars while keeping context-menu terminal commands, normalized non-delete toolbar icons to `#4b4b4b`, and refreshed view-mode/grouping icons toward Finder-style glyphs.
+- Restyled List view inline rename to match Finder more closely: the editor now has no orange focus border, keeps the selected-row background visible, and expands across the available name column for long filenames.
 
 ## v1.9.9 development
 

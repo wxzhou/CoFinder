@@ -161,7 +161,6 @@ export function V12VisualFileList<T extends FileEntry>(props: V12VisualFileListP
           {renaming && props.inlineRename ? (
             <input
               className="v12m-lname-txt v12m-lname-input"
-              style={{ border: "1px solid rgba(10,132,255,0.35)", borderRadius: 4, padding: "0 4px" }}
               autoFocus
               value={props.inlineRename.draftName}
               onFocus={(e) => e.currentTarget.select()}
