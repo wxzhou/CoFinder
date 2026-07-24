@@ -936,7 +936,7 @@
 }
 
 .cfv12-root .v12m-lname-input::selection {
-  background: color-mix(in srgb, var(--m-accent, #0a5fff) 72%, #064c9e);
+  background: #b3d7ff;
   color: #101114;
 }
 
