@@ -18,6 +18,7 @@
 - Added icons to every local and remote context-menu item, including File Operation submenu commands.
 - Enlarged context-menu icons, removed terminal shortcuts from pane toolbars while keeping context-menu terminal commands, normalized non-delete toolbar icons to `#4b4b4b`, and refreshed view-mode/grouping icons toward Finder-style glyphs.
 - Restyled List view inline rename to match Finder more closely: the editor now has no orange focus border, keeps the selected-row background visible, and expands across the available name column for long filenames.
+- Changed remote HTML opening semantics: `Open`, double-click, and Space now use the system default browser for `.html`/`.htm`, while explicit `Edit` continues to use the configured text editor.
 
 ## v1.9.9 development
 

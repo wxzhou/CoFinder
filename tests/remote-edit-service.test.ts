@@ -132,6 +132,35 @@ describe("RemoteEditService", () => {
     await fs.rm(dir, { recursive: true, force: true });
   });
 
+  it("opens HTML files with the system default app instead of the configured text editor", async () => {
+    const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));
+    const client = {
+      stat: vi.fn(async () => ({ type: "-", size: 31, modifyTime: 1234 })),
+      fastGet: vi.fn(async (_remotePath: string, localPath: string) => {
+        await fs.writeFile(localPath, "<html><body>report</body></html>", "utf8");
+      })
+    };
+    const service = new RemoteEditService(
+      {
+        getConnection: () => ({ id: "c1", client, homePath: "/", config: {} })
+      } as any,
+      dir
+    );
+
+    const session = await service.openDefaultSession(
+      { tabId: "tab", connectionId: "c1", remotePath: "/data/report.html" },
+      { textEditor: "TextMate" }
+    );
+
+    expect(session.remotePath).toBe("/data/report.html");
+    expect(spawnMock).toHaveBeenCalledWith("open", [expect.any(String)], { stdio: "ignore" });
+    expect(spawnMock).not.toHaveBeenCalledWith("open", ["-a", "TextMate", expect.any(String)], { stdio: "ignore" });
+
+    service.closeAll();
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
   it("opens source-like executable remote files in the configured text editor without confirmation", async () => {
     const { RemoteEditService } = await import("../src/main/services/RemoteEditService");
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cofinder-edit-test-"));

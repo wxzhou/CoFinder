@@ -21,7 +21,6 @@ const SOURCE_LIKE_EXTENSIONS = new Set([
   ".hh",
   ".hpp",
   ".hxx",
-  ".html",
   ".ini",
   ".java",
   ".jl",
