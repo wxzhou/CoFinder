@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run build:electron && npm run dev:renderer",
+    "beforeDevCommand": "npm run build:main && npm run dev:renderer",
     "beforeBuildCommand": "npm run build:renderer && node scripts/build-sidecar-sea.mjs"
   },
   "app": {

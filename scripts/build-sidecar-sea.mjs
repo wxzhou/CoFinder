@@ -38,7 +38,7 @@ fs.mkdirSync(binDir, { recursive: true });
 console.log("→ bundling sidecar with esbuild");
 execSync(
   `npx esbuild src/main/sidecar/index.ts --bundle --platform=node --format=cjs ` +
-    `--outfile=${path.join(distSidecar, "sidecar.cjs")} --external:cpu-features --external:*.node`,
+    `--outfile=${path.join(distSidecar, "sidecar.cjs")} --external:cpu-features --external:*.node --external:electron`,
   { cwd: root, stdio: "inherit" }
 );
 
