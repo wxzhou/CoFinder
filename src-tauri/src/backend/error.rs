@@ -21,6 +21,7 @@ impl CoFinderError {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_detail(mut self, detail: impl Into<String>) -> Self {
         self.detail = Some(detail.into());
         self
@@ -36,6 +37,7 @@ impl CoFinderError {
 }
 
 /// Convenience constructors for common error codes.
+#[allow(dead_code)]
 impl CoFinderError {
     pub fn invalid_input(message: impl Into<String>) -> Self {
         Self::new("INVALID_INPUT", message)

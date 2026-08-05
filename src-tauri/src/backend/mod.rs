@@ -6,9 +6,11 @@
 //! the shared IPC contract: `{ ok: true, data }` or `{ ok: false, error }`.
 
 pub mod error;
+pub mod local_files;
 pub mod settings;
+pub mod util;
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use std::sync::Mutex;
 
 use error::CoFinderError;
@@ -17,6 +19,7 @@ use error::CoFinderError;
 /// be shared behind the Tauri state.
 pub struct BackendState {
     pub settings: Mutex<settings::SettingsService>,
+    pub local_files: local_files::LocalFileService,
 }
 
 impl BackendState {
@@ -25,9 +28,81 @@ impl BackendState {
     pub fn new(user_data_dir: &str) -> Self {
         Self {
             settings: Mutex::new(settings::SettingsService::new(settings::default_settings_path(user_data_dir))),
+            local_files: local_files::LocalFileService,
         }
     }
+}
 
+/// Map a local-service error code to the `LOCAL_*` prefix used by the renderer
+/// (mirrors `mapErrorCode` in `ipcUtils.ts`).
+fn map_local_error_code(code: &str) -> String {
+    match code {
+        "NOT_FOUND" => "LOCAL_NOT_FOUND".to_string(),
+        "PERMISSION_DENIED" => "LOCAL_PERMISSION_DENIED".to_string(),
+        "NOT_DIRECTORY" => "LOCAL_NOT_DIRECTORY".to_string(),
+        "OPEN_FAILED" => "LOCAL_OPEN_FAILED".to_string(),
+        "RENAME_FAILED" => "LOCAL_RENAME_FAILED".to_string(),
+        "DELETE_FAILED" => "LOCAL_DELETE_FAILED".to_string(),
+        "INFO_FAILED" => "LOCAL_INFO_FAILED".to_string(),
+        "PREVIEW_FAILED" => "SYSTEM_PREVIEW_FAILED".to_string(),
+        "UNKNOWN" => "LOCAL_UNKNOWN_ERROR".to_string(),
+        other => other.to_string(),
+    }
+}
+
+fn local_error(err: &CoFinderError) -> CoFinderError {
+    CoFinderError {
+        code: map_local_error_code(&err.code),
+        message: err.message.clone(),
+        detail: err.detail.clone(),
+    }
+}
+
+/// Parse a required string request field, trimming like `requiredString`.
+fn required_string(value: &Value, field: &str) -> Result<String, CoFinderError> {
+    match value.as_str() {
+        Some(s) => {
+            let out = s.trim();
+            if out.is_empty() {
+                Err(CoFinderError::new("LOCAL_INVALID_INPUT", format!("{field} is required.")))
+            } else {
+                Ok(out.to_string())
+            }
+        }
+        None => Err(CoFinderError::new("LOCAL_INVALID_INPUT", format!("{field} must be a string."))),
+    }
+}
+
+/// Validate a local path request field (port of `validateLocalPathInput`).
+fn validate_local_path(value: &Value) -> Result<String, CoFinderError> {
+    let raw = required_string(value, "Path")?;
+    if raw.contains('\u{0}') || raw.contains('\n') || raw.contains('\r') {
+        return Err(CoFinderError::new("LOCAL_INVALID_INPUT", "Path contains unsupported characters."));
+    }
+    Ok(util::normalize_local_path(&raw))
+}
+
+fn optional_u64(value: &Value, field: &str) -> Result<Option<u64>, CoFinderError> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_u64()
+            .map(Some)
+            .ok_or_else(|| CoFinderError::new("LOCAL_INVALID_INPUT", format!("{field} must be a number."))),
+    }
+}
+
+fn optional_i64(value: &Value, field: &str) -> Result<Option<i64>, CoFinderError> {
+    match value.get(field) {
+        None | Some(Value::Null) => Ok(None),
+        Some(v) => v
+            .as_i64()
+            .map(Some)
+            .ok_or_else(|| CoFinderError::new("LOCAL_INVALID_INPUT", format!("{field} must be a number."))),
+    }
+}
+
+impl BackendState {
     /// Try to handle a channel in Rust. Returns `Ok(Some(response))` when
     /// handled, `Ok(None)` when the channel is not implemented in Rust yet
     /// (caller should fall back to the sidecar), and `Err` for a native error
@@ -35,19 +110,75 @@ impl BackendState {
     pub fn dispatch(&self, channel: &str, request: Option<&Value>) -> Result<Option<Value>, CoFinderError> {
         let req = request.unwrap_or(&Value::Null);
         match channel {
-            "settings:get" => {
-                let svc = self.settings.lock().unwrap();
-                let data = svc.get()?;
-                Ok(Some(ok(data)))
-            }
-            "settings:set" => {
-                let svc = self.settings.lock().unwrap();
-                let data = svc.set(req)?;
-                Ok(Some(ok(data)))
-            }
-            _ => Ok(None),
+        "settings:get" => {
+            let svc = self.settings.lock().unwrap();
+            let data = svc.get()?;
+            Ok(Some(ok(data)))
         }
+        "settings:set" => {
+            let svc = self.settings.lock().unwrap();
+            let data = svc.set(req)?;
+            Ok(Some(ok(data)))
+        }
+        "local:getHomePath" => {
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
+            Ok(Some(ok(json!({ "homePath": home }))))
+        }
+        "local:listDirectory" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
+            let data = self.local_files.list_directory(&path, &home).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(data)))
+        }
+        "local:getInfo" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            let include_dir_size = req
+                .get("includeDirectorySize")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            let data = self.local_files.get_path_info(&path, include_dir_size).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(json!({ "info": data }))))
+        }
+        "local:readText" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            let byte_offset = optional_u64(req, "byteOffset")?;
+            let max_bytes = optional_u64(req, "maxBytes")?;
+            let data = self.local_files.read_text_file(&path, byte_offset, max_bytes).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(data)))
+        }
+        "local:readTextWindow" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            let target_line = match optional_i64(req, "targetLine")? {
+                Some(n) => n as u64,
+                None => 1,
+            };
+            let context_before = optional_u64(req, "contextBefore")?;
+            let context_after = optional_u64(req, "contextAfter")?;
+            let data = self
+                .local_files
+                .read_text_window(&path, target_line, context_before, context_after)
+                .map_err(|e| local_error(&e))?;
+            Ok(Some(ok(data)))
+        }
+        "local:readPreview" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            let max_text = optional_u64(req, "maxTextBytes")?;
+            let max_image = optional_u64(req, "maxImageBytes")?;
+            let data = self.local_files.read_preview_file(&path, max_text, max_image).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(data)))
+        }
+        "local:touch" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            let timestamp = match req.get("timestamp") {
+                Some(Value::String(s)) if !s.trim().is_empty() => Some(s.trim().to_string()),
+                _ => None,
+            };
+            self.local_files.touch_path(&path, timestamp.as_deref()).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(json!({ "touched": true }))))
+        }
+        _ => Ok(None),
     }
+}
 }
 
 /// Build a success response `{ ok: true, data }`.
