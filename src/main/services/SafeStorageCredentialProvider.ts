@@ -1,4 +1,4 @@
-import { safeStorage } from "electron";
+import { safeStorage } from "../sidecar/electronShim";
 import fs from "node:fs/promises";
 import type { CredentialProvider } from "./CredentialService";
 import { writePrivateUtf8File } from "../security/privateAtomicWrite";

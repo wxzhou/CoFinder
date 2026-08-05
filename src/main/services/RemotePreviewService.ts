@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { shell } from "electron";
+import { shell } from "../sidecar/electronShim";
 import type { ConnectionManager } from "./ConnectionManager";
 import type { RemoteErrorCode } from "../../shared/types/ipc";
 

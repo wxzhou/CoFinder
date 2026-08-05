@@ -8,7 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { pipeline } from "node:stream/promises";
 import { createGunzip, createGzip } from "node:zlib";
-import { shell } from "electron";
+import { shell } from "../sidecar/electronShim";
 import type { LocalFileEntry } from "../../shared/types/models";
 import type { FilePreviewReadResponse, LocalListDirectoryResponse, LocalErrorCode, PathInfo, TextContentReadResponse, TextLineWindowReadResponse, TextSearchResponse } from "../../shared/types/ipc";
 import { parseTimestampInput } from "../../shared/timestampInput";

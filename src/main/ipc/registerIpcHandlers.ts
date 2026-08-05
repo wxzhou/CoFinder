@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, ipcMain, shell } from "electron";
+import { app, BrowserWindow, clipboard, ipcMain, shell, type BrowserWindowInstance, type IpcMainInvokeEvent } from "../sidecar/electronShim";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
@@ -109,14 +109,14 @@ const credentialService = new CredentialService(credentialProvider);
 const registeredChannels: string[] = [];
 let transferOff: (() => void) | null = null;
 let isRegistered = false;
-let contentWindow: BrowserWindow | null = null;
+let contentWindow: BrowserWindowInstance | null = null;
 let contentWindowReady = false;
 const pendingContentRequests: ContentViewerOpenRequest[] = [];
 const remoteSizeJobs = new Map<string, AbortController>();
 
 function registerChannel<TArgs extends unknown[], TResult>(
   channel: string,
-  handler: (_event: Electron.IpcMainInvokeEvent, ...args: TArgs) => TResult
+  handler: (_event: IpcMainInvokeEvent, ...args: TArgs) => TResult
 ): void {
   ipcMain.handle(channel, handler);
   registeredChannels.push(channel);
@@ -1275,13 +1275,14 @@ async function openContentWindow(request: ContentViewerOpenRequest): Promise<voi
     contentWindowReady = false;
     contentWindow = createContentWindow();
   }
-  if (contentWindow.isMinimized()) contentWindow.restore();
-  contentWindow.show();
-  contentWindow.focus();
+  const win = contentWindow;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
   flushContentRequests();
 }
 
-function createContentWindow(): BrowserWindow {
+function createContentWindow(): BrowserWindowInstance {
   const preloadPath = path.join(app.getAppPath(), "dist-electron/preload/index.js");
   const win = new BrowserWindow({
     width: 980,
