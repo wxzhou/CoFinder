@@ -48,6 +48,11 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.10 M6 | v1.9.7 | Complete on feature branch |
 | V2.10 M7 | v1.9.8 | Complete on feature branch |
 | V2.10 M8 | v1.9.9 | In progress on feature branch; includes Group by Type |
+| Tauri migration spike | opencode/tauri-spike | Spike: Electron → Tauri shell + Node sidecar; installable app built; not yet merged to dev |
+
+## Tauri migration spike
+
+The `opencode/tauri-spike` branch replaces the Electron shell with Tauri (Rust) while keeping the React renderer and the existing main-process services, which run as a bundled Node sidecar. See `CHANGELOG.md` (Unreleased / Tauri migration spike) for scope. The spike is not merged to `dev`; follow-up work should decide whether to keep the sidecar long-term or progressively port services to Rust.
 
 ## Shipped phases (summary)
 

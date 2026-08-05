@@ -1,13 +1,13 @@
 # CoFinder
 
-CoFinder is a macOS-only Electron file manager inspired by WinSCP. It provides a Finder-like dual-pane interface for local and SFTP remote browsing, rsync-based transfers, remote text editing, and personal daily file-management workflows.
+CoFinder is a macOS-only Tauri file manager inspired by WinSCP. It provides a Finder-like dual-pane interface for local and SFTP remote browsing, rsync-based transfers, remote text editing, and personal daily file-management workflows. The React renderer and the Node main-process services from the original Electron build are preserved; Electron is replaced by a Tauri (Rust) shell that runs the services as a bundled Node sidecar.
 
 Current development version: **v1.9.10** (`package.json` version `1.9.10`). Latest published release: **v1.9.0**.
 
 ## Current Capabilities
 
 - Dual-pane local / remote browsing with tabs, list/icon/column/gallery views, sorting, filtering, always-on expandable list rows, breadcrumbs, history, recents, and favorites.
-- SFTP connection profiles, optional password saving through Electron `safeStorage`, and per-profile remote favorites.
+- SFTP connection profiles, optional password saving through a Keychain-backed credential service, and per-profile remote favorites.
 - Unified Jobs pane for rsync upload/download plus delete, compress/decompress, MD5, and remote copy/move work, with conflict handling, retry, progress/status, folder-upload file detail, drag-and-drop between panes, and lane-aware scheduling.
 - Local and remote file operations: rename, delete, new folder, new text file, touch, change timestamp, file/folder compression and decompression, MD5 sidecar generation, basic metadata/Inspector, and selected remote operations such as chmod and small-file duplicate.
 - Local Quick Look for local files.
@@ -42,8 +42,11 @@ Remote browsing uses SFTP password authentication. Transfers use rsync over SSH 
 
 ```bash
 npm install
-npm run dev
+npm run build:sidecar   # compiles the TypeScript services + electron shim
+npm run tauri:dev       # vite dev server + `tauri dev`
 ```
+
+The Tauri shell spawns the Node sidecar (`dist-electron/main/sidecar/index.js` in dev, a bundled SEA executable in release) and bridges the renderer to it. Build artifacts (Rust `target/`) are kept on an external flash card via `.cargo/config.toml`; run `scripts/attach-cofinder-target.sh` to mount the APFS sparse image if cargo reports a missing target dir.
 
 Default UI is the V12 production shell. Legacy classic UI is still available for comparison with `?ui=v11`, `?legacy=1`, `COFINDER_LEGACY_UI=1`, or `VITE_COFINDER_LEGACY_UI=1`.
 
@@ -65,11 +68,13 @@ npm run check:secrets
 ## Packaging
 
 ```bash
-npm run package   # unpacked macOS app bundle
-npm run dist      # dmg + zip
+npm run tauri:build      # renderer build + sidecar SEA + `tauri build`
 ```
 
-Build artifacts are generated under `release/`. For v1.9.0, expected artifact names are `CoFinder-1.9.0-arm64.dmg` and `CoFinder-1.9.0-arm64.zip`.
+Build artifacts are generated under the flash-card target dir:
+`/Volumes/CoFinderTarget/target/release/bundle/` (`CoFinder.app` and `CoFinder_1.9.10_aarch64.dmg`).
+
+The classic Electron packaging commands (`npm run package` / `npm run dist`) are retained but no longer the primary path.
 
 Local builds may be unsigned. Public distribution should state signing/notarization status honestly.
 
@@ -77,7 +82,7 @@ Local builds may be unsigned. Public distribution should state signing/notarizat
 
 - `profiles.json` stores non-sensitive profile fields.
 - `settings.json` stores non-secret UI and behavior preferences.
-- Saved passwords are stored separately through Electron `safeStorage` in `credentials.enc.json` when available.
+- Saved passwords are stored separately through a Keychain-backed credential service in `credentials.enc.json` (key in the macOS login Keychain).
 - Transfer tasks, renderer state, logs, diagnostics, and rsync args must not contain plaintext saved passwords.
 - Preferences -> Diagnostics can copy a redacted diagnostic bundle and open app log locations.
 
@@ -96,10 +101,11 @@ More detail: [docs/security.md](docs/security.md).
 
 ```text
 src/
-  main/      Electron main process and services
-  preload/   contextBridge API surface
-  renderer/  React UI
+  main/      main-process services (run as a Node sidecar under Tauri)
+  preload/   legacy Electron preload (kept for reference)
+  renderer/  React UI (window.cofinder bridge in cofinderBridge.ts)
   shared/    shared models and IPC contracts
+src-tauri/   Tauri (Rust) shell: window, menu, sidecar spawn, IPC relay
 docs/
   dev/       milestone plans and development notes
 ```
@@ -108,9 +114,11 @@ docs/
 
 - **rsync not found:** install rsync and make sure it is in `PATH`. Packaged builds add a fallback PATH including `/opt/homebrew/bin` and `/usr/local/bin`.
 - **SFTP connects but rsync cannot authenticate:** verify `ssh -o BatchMode=yes -p <port> user@host true` works in Terminal if you want the faster rsync path. Uploads and downloads fall back to SFTP when this non-interactive rsync SSH path cannot authenticate.
-- **safeStorage unavailable:** password saving is disabled, but session password input can still connect.
+- **Credential storage unavailable:** password saving is disabled, but session password input can still connect.
 - **Packaged app blank:** rebuild with the current Vite config (`base: './'`) and repackage.
-- **Main log:** `~/Library/Application Support/CoFinder/main.log`.
+- **Sidecar not running / requests time out:** confirm `node` is on `PATH` in dev, and that the packaged `cofinder-sidecar` binary exists next to the app executable (`CoFinder.app/Contents/MacOS/cofinder-sidecar`).
+- **Cargo target dir missing:** run `scripts/attach-cofinder-target.sh` to mount the build-target sparse image from the flash card.
+- **Main log:** `~/Library/Application Support/cofinder/main.log` (sidecar boot log); renderer console is visible via the View → Toggle Developer Tools menu.
 
 ## License
 

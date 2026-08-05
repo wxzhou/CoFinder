@@ -6,6 +6,17 @@
 - **Product milestone** names appear in shipped section titles as phase context; see **README.md** for milestone ↔ release mapping.
 - **Latest release: v1.9.0.** Intermediate development milestones **V1.5-V1.9** were not published as standalone semver tags; their work shipped together in **v1.0.0 / V2.0**.
 
+## Unreleased / Tauri migration spike (`opencode/tauri-spike`)
+
+- Migration spike: replaced the Electron shell with a Tauri (Rust) shell while preserving the existing React renderer and the entire main-process service layer (SFTP via `ssh2-sftp-client`, rsync transfers, Jobs lane scheduler, remote edit, credentials, settings, profiles).
+- The TypeScript main-process services now run in a bundled **Node sidecar** (built with esbuild + Node SEA into a self-contained executable) that the Rust host spawns and bridges to over a line-delimited JSON protocol; the renderer reaches services through Tauri `invoke`/`listen` via a `window.cofinder` bridge that preserves the `{ ok, data } | { ok, error }` IPC contract.
+- Native macOS dialogs now back `window.confirm` / `window.alert` (WKWebView does not implement those JS dialogs), with an `await`-based helper used at the existing confirmation call sites.
+- Native application menu (About/Preferences/File/Edit/View/Window) emits the same `system:openPreferences`, `system:setPaneViewMode`, and `system:togglePaneGroupByType` events as before.
+- Content viewer is a second Tauri webview (content window) with buffered `content:openRequest` routing; the classic `?mode=content` path is still honored.
+- Dev and packaged flows both verified: local browse, settings, profiles, favorites, transfers queue, search, gzip, touch, and input-validation channels round-trip through the sidecar; the packaged `.app`/`.dmg` boots with window + sidecar + WebKit render process.
+- Saved-password encryption moved off Electron `safeStorage` to a Keychain-backed key (login Keychain preferred, 0600 key-file fallback); previously saved Electron credentials are not decryptable and must be re-saved.
+- Build target lives on an external flash card (APFS sparse image at `/Volumes/CoFinderTarget`) via `.cargo/config.toml`; see `scripts/attach-cofinder-target.sh`.
+
 ## Unreleased / v1.9.10 development
 
 - Starting the content-viewer, typed-icons, and batch-rename checkpoint.
