@@ -6,6 +6,7 @@
 //! the shared IPC contract: `{ ok: true, data }` or `{ ok: false, error }`.
 
 pub mod error;
+pub mod favorites;
 pub mod local_files;
 pub mod profiles;
 pub mod settings;
@@ -23,17 +24,29 @@ pub struct BackendState {
     pub local_files: local_files::LocalFileService,
     pub profiles: Mutex<profiles::ProfileRepository>,
     pub credentials: profiles::CredentialService,
+    pub favorites: Mutex<favorites::LocalSidebarFavoritesRepository>,
 }
 
 impl BackendState {
     /// Create the backend with a given user-data directory (the legacy
     /// Electron userData dir is preferred for continuity).
     pub fn new(user_data_dir: &str) -> Self {
+        let home = std::env::var("HOME").unwrap_or_else(|_| "/".to_string());
+        let well_known = favorites::WellKnownPaths {
+            home: home.clone(),
+            desktop: format!("{home}/Desktop"),
+            downloads: format!("{home}/Downloads"),
+            documents: format!("{home}/Documents"),
+        };
         Self {
             settings: Mutex::new(settings::SettingsService::new(settings::default_settings_path(user_data_dir))),
             local_files: local_files::LocalFileService,
             profiles: Mutex::new(profiles::ProfileRepository::new(profiles::default_profiles_path(user_data_dir))),
             credentials: profiles::CredentialService::new(),
+            favorites: Mutex::new(favorites::LocalSidebarFavoritesRepository::new(
+                favorites::default_local_sidebar_favorites_path(user_data_dir),
+                well_known,
+            )),
         }
     }
 }
@@ -334,6 +347,45 @@ impl BackendState {
         }
         "credentials:isAvailable" => {
             Ok(Some(ok(json!({ "available": self.credentials.is_storage_available() }))))
+        }
+        "localFavorites:list" => {
+            let repo = self.favorites.lock().unwrap();
+            Ok(Some(ok(json!({ "favorites": repo.list() }))))
+        }
+        "localFavorites:add" => {
+            let repo = self.favorites.lock().unwrap();
+            let path = required_string(req.get("path").unwrap_or(&Value::Null), "path")?;
+            let favorites = repo.add_path(&path).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "favorites": favorites }))))
+        }
+        "localFavorites:remove" => {
+            let repo = self.favorites.lock().unwrap();
+            let id = profile_required_id(req, "id")?;
+            let favorites = repo.remove_by_id(&id).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "favorites": favorites }))))
+        }
+        "localFavorites:rename" => {
+            let repo = self.favorites.lock().unwrap();
+            let id = profile_required_id(req, "id")?;
+            let label = profile_required_string(req, "label")?;
+            let favorites = repo.rename_by_id(&id, &label).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "favorites": favorites }))))
+        }
+        "localFavorites:reorder" => {
+            let repo = self.favorites.lock().unwrap();
+            let id = profile_required_id(req, "id")?;
+            let direction = match req.get("direction").and_then(|v| v.as_str()) {
+                Some("up") => "up",
+                Some("down") => "down",
+                _ => return Err(CoFinderError::new("LOCAL_INVALID_INPUT", "Direction must be up or down.")),
+            };
+            let favorites = repo.reorder_by_id(&id, direction).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "favorites": favorites }))))
+        }
+        "localFavorites:resetDefaults" => {
+            let repo = self.favorites.lock().unwrap();
+            let favorites = repo.reset_default_locations().map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "favorites": favorites }))))
         }
         _ => Ok(None),
     }
