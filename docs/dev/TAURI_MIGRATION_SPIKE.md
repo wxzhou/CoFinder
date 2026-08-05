@@ -57,6 +57,6 @@ npm test && npm run typecheck && npm run check:secrets
 ## Known risks / follow-ups
 
 - Sidecar keeps the Node runtime (~90 MB SEA binary). Rust backend progress so far: settings, local file ops, profiles + Keychain credentials, local sidebar favorites, system channels, and the SFTP remote core are native; transfers, remote edit/preview/window reads, chmod/duplicate/quick-look still fall back to the sidecar. Porting the remaining channels (transfer queue, remote edit with `fs.watch`, preview caching, `exec`-based window reads) is the next step; once complete the sidecar can be removed and the app shrinks to ~10 MB.
-- The `russh`/`russh-sftp` port keeps a tokio runtime for blocking dispatch; host-key verification accepts any key (parity with the old `ssh2-sftp-client`).
+- The `russh`/`russh-sftp` port keeps a tokio runtime for blocking dispatch; host-key verification accepts any key (parity with the old `ssh2-sftp-client`). Public-key auth (`authType: privateKey` + `privateKeyPath`) is supported and live-verified against sge (10.0.32.10) and EP9 (10.0.42.9) read-only.
 - `main.ts` (legacy Electron bootstrap) and `preload/index.ts` remain for reference; cleanup can follow once the spike is accepted.
 - SFTP/rsync remote flows reuse proven service code but were not exercised against a live server in this spike.
