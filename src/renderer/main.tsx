@@ -4,7 +4,19 @@ import { App } from "./App";
 import { ContentViewerApp } from "./ContentViewerApp";
 import { V12UiMockup } from "./mockups/V12UiMockup";
 import { getRendererUiMode } from "./uiMode";
+import { cofinder } from "./cofinderBridge";
 import "./styles.css";
+
+// Install the Tauri bridge as `window.cofinder` before the app renders.
+// `window.cofinder` is typed via vite-env.d.ts (Window.cofinder: IpcApi).
+declare global {
+  interface Window {
+    cofinder: typeof cofinder;
+  }
+}
+if (!window.cofinder) {
+  (window as unknown as { cofinder: typeof cofinder }).cofinder = cofinder;
+}
 
 const uiMode = getRendererUiMode({
   search: window.location.search,
@@ -12,7 +24,7 @@ const uiMode = getRendererUiMode({
   viteLegacyUi: import.meta.env.VITE_COFINDER_LEGACY_UI === "1"
 });
 const searchParams = new URLSearchParams(window.location.search);
-const isContentWindow = searchParams.get("mode") === "content";
+const isContentWindow = searchParams.get("mode") === "content" || window.__COFINDER_CONTENT__ === true;
 
 const root = (
   <React.StrictMode>

@@ -14,6 +14,7 @@ import {
 } from "react";
 import { TabBar } from "./components/TabBar";
 import { SiteManagerModal } from "./components/SiteManagerModal";
+import { confirmDialog, alertDialog } from "./nativeDialogs";
 import { AppShellV12 } from "./v12/AppShellV12";
 import { V12PaneToolbar, V12ToolbarIconSelect } from "./v12/V12PaneToolbar";
 import { V12TransferDrawer } from "./v12/V12TransferDrawer";
@@ -1072,7 +1073,7 @@ export function App(props: AppProps = {}) {
 
   async function forceUploadRemoteEdit(sessionId: string): Promise<void> {
     const session = remoteEditSessions.find((item) => item.id === sessionId);
-    if (session && !window.confirm(`Upload local edits to ${session.remotePath} and overwrite the current remote file?`)) return;
+    if (session && !(await confirmDialog(`Upload local edits to ${session.remotePath} and overwrite the current remote file?`))) return;
     const res = await window.cofinder.remote.editForceUpload({ sessionId });
     if (!res.ok) {
       setQueueError(res.error.message);
@@ -1100,7 +1101,7 @@ export function App(props: AppProps = {}) {
   async function stopRemoteEditMonitoring(sessionId: string): Promise<void> {
     const session = remoteEditSessions.find((item) => item.id === sessionId);
     const risky = session?.state === "dirty" || session?.state === "failed" || session?.state === "conflict";
-    if (risky && !window.confirm(`Stop monitoring ${session.remotePath}? The local edit copy will be kept but no longer uploaded.`)) return;
+    if (risky && !(await confirmDialog(`Stop monitoring ${session.remotePath}? The local edit copy will be kept but no longer uploaded.`))) return;
     const res = await window.cofinder.remote.editClose({ sessionId, discardLocal: false });
     if (!res.ok) {
       setQueueError(res.error.message);
@@ -1111,7 +1112,7 @@ export function App(props: AppProps = {}) {
 
   async function discardRemoteEditCopy(sessionId: string): Promise<void> {
     const session = remoteEditSessions.find((item) => item.id === sessionId);
-    if (session && !window.confirm(`Discard the local edit copy for ${session.remotePath}?`)) return;
+    if (session && !(await confirmDialog(`Discard the local edit copy for ${session.remotePath}?`))) return;
     const res = await window.cofinder.remote.editClose({ sessionId, discardLocal: true });
     if (!res.ok) {
       setQueueError(res.error.message);
@@ -2696,7 +2697,7 @@ export function App(props: AppProps = {}) {
   async function handleSiteManagerDelete(tabId: string): Promise<void> {
     const sm = siteManagerRef.current[tabId];
     if (!sm?.open || !sm.draft.id) return;
-    if (!window.confirm("Delete this saved site and its stored password?")) return;
+    if (!(await confirmDialog("Delete this saved site and its stored password?"))) return;
     setSiteManagerByTab((prev) => ({
       ...prev,
       [tabId]: { ...sm, busy: "delete", modalError: "" }
@@ -4542,7 +4543,7 @@ export function App(props: AppProps = {}) {
     if (!tab || !targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
     const entry = tab.localPane.entries.find((item) => item.fullPath === targetPath);
     if (entry?.type !== "file" || !isSupportedCompressedPath(targetPath)) {
-      window.alert("Selected item is not a supported compressed file.");
+      await alertDialog("Selected item is not a supported compressed file.");
       return;
     }
     const result = await window.cofinder.transfer.enqueueDecompress({ tabId, pane: "local", path: targetPath });
@@ -4557,7 +4558,7 @@ export function App(props: AppProps = {}) {
     if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
     const entry = tab.remotePane.entries.find((item) => item.fullPath === targetPath);
     if (entry?.type !== "file" || !isSupportedCompressedPath(targetPath)) {
-      window.alert("Selected item is not a supported compressed file.");
+      await alertDialog("Selected item is not a supported compressed file.");
       return;
     }
     const result = await window.cofinder.transfer.enqueueDecompress({
@@ -4577,7 +4578,7 @@ export function App(props: AppProps = {}) {
     if (!tab || !targetPath || tab.localPane.selectedFullPaths.length !== 1) return;
     const entry = tab.localPane.entries.find((item) => item.fullPath === targetPath);
     if (entry?.type !== "file") {
-      window.alert("Generate MD5 is available for files only.");
+      await alertDialog("Generate MD5 is available for files only.");
       return;
     }
     const result = await window.cofinder.transfer.enqueueMd5({ tabId, pane: "local", path: targetPath });
@@ -4592,7 +4593,7 @@ export function App(props: AppProps = {}) {
     if (!tab?.remotePane.connectionId || !targetPath || tab.remotePane.selectedFullPaths.length !== 1) return;
     const entry = tab.remotePane.entries.find((item) => item.fullPath === targetPath);
     if (entry?.type !== "file") {
-      window.alert("Generate MD5 is available for files only.");
+      await alertDialog("Generate MD5 is available for files only.");
       return;
     }
     const result = await window.cofinder.transfer.enqueueMd5({
@@ -5215,11 +5216,11 @@ export function App(props: AppProps = {}) {
         effectiveOpener === "text"
           ? `This remote file is ${formatSize(entry?.size ?? 0)}. Open it in the text editor anyway?`
           : `This remote file is ${formatSize(entry?.size ?? 0)} and will be downloaded before opening. Continue?`;
-      if (!window.confirm(message)) return;
+      if (!(await confirmDialog(message))) return;
       nextAllowances.allowLargeFile = true;
     }
     if (effectiveOpener === "default" && !nextAllowances.allowExecutable && remoteEntryLooksExecutable(entry)) {
-      if (!window.confirm("This remote file appears executable. Open it with the default app anyway?")) return;
+      if (!(await confirmDialog("This remote file appears executable. Open it with the default app anyway?"))) return;
       nextAllowances.allowExecutable = true;
     }
     const res = await window.cofinder.remote.editOpen({
@@ -5267,13 +5268,13 @@ export function App(props: AppProps = {}) {
     allowances: { allowBinaryText?: boolean; allowLargeFile?: boolean; allowExecutable?: boolean }
   ): Promise<{ allowBinaryText?: boolean; allowLargeFile?: boolean; allowExecutable?: boolean } | null> {
     if (opener === "text" && !allowances.allowBinaryText && /sniffed text files only/i.test(message)) {
-      return window.confirm("该文件为二进制，是否仍要打开？") ? { allowBinaryText: true } : null;
+      return (await confirmDialog("该文件为二进制，是否仍要打开？")) ? { allowBinaryText: true } : null;
     }
     if (!allowances.allowLargeFile && /without confirmation|about \d+ MB/i.test(message)) {
-      return window.confirm(`${message}\n\nContinue?`) ? { allowLargeFile: true } : null;
+      return (await confirmDialog(`${message}\n\nContinue?`)) ? { allowLargeFile: true } : null;
     }
     if (opener === "default" && !allowances.allowExecutable && /executable/i.test(message)) {
-      return window.confirm("This remote file appears executable. Open it with the default app anyway?") ? { allowExecutable: true } : null;
+      return (await confirmDialog("This remote file appears executable. Open it with the default app anyway?")) ? { allowExecutable: true } : null;
     }
     return null;
   }

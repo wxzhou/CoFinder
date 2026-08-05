@@ -6,6 +6,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
+mod menu;
+
 struct SidecarState {
     child: Mutex<Option<Child>>,
     stdin: Mutex<Option<ChildStdin>>,
@@ -178,6 +180,27 @@ async fn open_content_window_command(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Native message dialog (replaces the WKWebView's unsupported `window.alert`).
+#[tauri::command]
+async fn native_alert(app: AppHandle, message: String, title: Option<String>) -> Result<(), String> {
+    tauri_plugin_dialog::DialogExt::dialog(&app)
+        .message(message)
+        .title(title.unwrap_or_else(|| "CoFinder".to_string()))
+        .blocking_show();
+    Ok(())
+}
+
+/// Native yes/no dialog (replaces the WKWebView's unsupported `window.confirm`).
+#[tauri::command]
+async fn native_confirm(app: AppHandle, message: String, title: Option<String>) -> Result<bool, String> {
+    let confirmed = tauri_plugin_dialog::DialogExt::dialog(&app)
+        .message(message)
+        .title(title.unwrap_or_else(|| "CoFinder".to_string()))
+        .buttons(tauri_plugin_dialog::MessageDialogButtons::YesNo)
+        .blocking_show();
+    Ok(confirmed)
+}
+
 pub fn run() {
     let state = Arc::new(SidecarState {
         child: Mutex::new(None),
@@ -192,12 +215,22 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             cofinder_call,
             content_window_ready,
-            open_content_window_command
+            open_content_window_command,
+            native_alert,
+            native_confirm
         ])
         .setup(|app| {
             let handle = app.handle().clone();
             let state = app.state::<Arc<SidecarState>>();
             spawn_sidecar(&handle, &state)?;
+
+            let built = menu::build_menu(&handle)?;
+            app.set_menu(built)?;
+            let handle_clone = handle.clone();
+            app.on_menu_event(move |app_handle, event| {
+                let _ = &handle_clone;
+                menu::handle_menu_event(app_handle, event);
+            });
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -10,6 +10,8 @@ interface ImportMetaEnv {
 declare global {
   interface Window {
     cofinder: IpcApi;
+    /** Set by the Tauri host when loading the content-viewer webview. */
+    __COFINDER_CONTENT__?: boolean;
   }
 }
 
