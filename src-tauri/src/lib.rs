@@ -121,7 +121,7 @@ fn handle_sidecar_line(app: &AppHandle, state: &Arc<SidecarState>, msg: Value) {
     }
 }
 
-fn open_content_window(app: &AppHandle, state: &Arc<SidecarState>) {
+fn open_content_window(app: &AppHandle, _state: &Arc<SidecarState>) {
     let existing = app.get_webview_window(CONTENT_WINDOW_LABEL);
     if let Some(win) = existing {
         let _ = win.show();
