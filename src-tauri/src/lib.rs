@@ -35,11 +35,31 @@ fn sidecar_command() -> Result<(String, Vec<String>), String> {
     }
 }
 
+/// Resolves the app data directory passed to the sidecar as `COFINDER_USER_DATA`.
+///
+/// Prefers the legacy Electron userData directory
+/// (`~/Library/Application Support/cofinder`) so existing profiles, settings,
+/// and sidebar favorites carry over; falls back to the Tauri default
+/// (`~/Library/Application Support/com.wxzhou.cofinder`) on fresh installs.
+/// Saved passwords are NOT migrated (Electron `safeStorage` uses a different
+/// key); they must be re-entered once.
 fn app_data_dir(app: &AppHandle) -> Result<String, String> {
+    let legacy = home_dir_legacy_user_data();
+    if std::path::Path::new(&legacy).exists() {
+        return Ok(legacy);
+    }
     app.path()
         .app_data_dir()
         .map(|p| p.to_string_lossy().into_owned())
         .map_err(|e| e.to_string())
+}
+
+fn home_dir_legacy_user_data() -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    std::path::Path::new(&home)
+        .join("Library/Application Support/cofinder")
+        .to_string_lossy()
+        .into_owned()
 }
 
 fn spawn_sidecar(app: &AppHandle, state: &Arc<SidecarState>) -> Result<(), String> {

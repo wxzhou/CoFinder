@@ -84,7 +84,11 @@ export function AppShellV12(props: AppShellV12Props): ReactElement {
 
   return (
     <div className="cfv12-root v12m-root">
-      <header className="cfv12-titlestrip v12m-titlestrip" aria-label="Window title and tabs">
+      <header
+        className="cfv12-titlestrip v12m-titlestrip"
+        aria-label="Window title and tabs"
+        data-tauri-drag-region
+      >
         {/* Decorative traffic lights live only in `V12UiMockup` (?mockup=v12). Electron provides real lights. */}
         {props.titleLeading ? <div className="cfv12-title-leading">{props.titleLeading}</div> : null}
         <div className="cfv12-tabsHost v12m-titlebar-tabs">{props.titleTabs}</div>
