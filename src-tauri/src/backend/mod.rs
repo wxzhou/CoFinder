@@ -492,19 +492,25 @@ impl BackendState {
             if !is_safe_host_or_username(&username) {
                 return Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Username contains unsupported characters."));
             }
-            if req.get("authType").and_then(|v| v.as_str()) == Some("privateKey") {
-                return Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Private key authentication is not supported in this version."));
-            }
+            let auth_type = if req.get("authType").and_then(|v| v.as_str()) == Some("privateKey") {
+                "privateKey"
+            } else {
+                "password"
+            };
             let mut password = remote_optional_string(req, "password").unwrap_or_default();
             if password.is_empty() {
                 if let Some(profile_id) = remote_optional_string(req, "profileId") {
                     password = self.credentials.get(&profile_id).unwrap_or_default();
                 }
             }
-            if password.is_empty() {
+            let private_key_path = remote_optional_string(req, "privateKeyPath");
+            if auth_type == "password" && password.is_empty() {
                 return Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Password is required."));
             }
-            let data = self.remote.connect(&host, port, &username, &password)?;
+            if auth_type == "privateKey" && private_key_path.is_none() {
+                return Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Private key path is required."));
+            }
+            let data = self.remote.connect(&host, port, &username, &password, auth_type, private_key_path.as_deref())?;
             Ok(Some(ok(data)))
         }
         "remote:listDirectory" => {

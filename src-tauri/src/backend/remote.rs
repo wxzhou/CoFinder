@@ -66,27 +66,33 @@ impl RemoteService {
         self.runtime.block_on(future)
     }
 
-    fn get(&self, connection_id: &str) -> Result<ManagedSftp, CoFinderError> {
-        self.connections
-            .lock()
-            .unwrap()
-            .get(connection_id)
-            .cloned()
-            .ok_or_else(|| CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected."))
-    }
-
-    pub fn connect(&self, host: &str, port: u16, username: &str, password: &str) -> Result<Value, CoFinderError> {
+    pub fn connect(&self, host: &str, port: u16, username: &str, password: &str, auth_type: &str, private_key_path: Option<&str>) -> Result<Value, CoFinderError> {
         self.block(async {
             let config = Arc::new(SshConfig::default());
             let addr = format!("{host}:{port}");
             let mut session = russh::client::connect(config, &addr, SftpClientHandler)
                 .await
                 .map_err(|e| CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Connection failed: {e}")))?;
-            let auth = session
-                .authenticate_password(username, password)
-                .await
-                .map_err(|e| CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Authentication failed: {e}")))?;
-            if !auth.success() {
+            let auth_success = if auth_type == "privateKey" {
+                let key_path = private_key_path
+                    .filter(|p| !p.is_empty())
+                    .ok_or_else(|| CoFinderError::new("REMOTE_INVALID_INPUT", "Private key path is required."))?;
+                let key = russh::keys::load_secret_key(key_path, None)
+                    .map_err(|e| CoFinderError::new("REMOTE_AUTH_FAILED", format!("Failed to load private key: {e}")))?;
+                let pk = russh::keys::PrivateKeyWithHashAlg::new(Arc::new(key), None);
+                session
+                    .authenticate_publickey(username, pk)
+                    .await
+                    .map_err(|e| CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Authentication failed: {e}")))?
+                    .success()
+            } else {
+                session
+                    .authenticate_password(username, password)
+                    .await
+                    .map_err(|e| CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Authentication failed: {e}")))?
+                    .success()
+            };
+            if !auth_success {
                 return Err(CoFinderError::new("REMOTE_AUTH_FAILED", "Authentication failed. Check username and password."));
             }
             let channel = session
@@ -359,5 +365,25 @@ mod tests {
     fn mode_to_rwx_matches_ts() {
         assert_eq!(util_mode_to_rwx(0o644), "rw-r--r--");
         assert_eq!(util_mode_to_rwx(0o755), "rwxr-xr-x");
+    }
+
+    /// Live SFTP test against EP9 via public-key auth (read-only).
+    /// Run with: cargo test --lib -- remote_live -- --ignored --nocapture
+    #[test]
+    #[ignore = "requires live server and credentials"]
+    fn remote_live_ep9_publickey_read() {
+        let host = std::env::var("CF_TEST_HOST").unwrap_or("10.0.42.9".into());
+        let user = std::env::var("CF_TEST_USER").unwrap_or("cygnus".into());
+        let key = std::env::var("CF_TEST_KEY").unwrap_or("/Users/zwx/.ssh/codex_ep9_20260702_ed25519".into());
+        let dir = std::env::var("CF_TEST_DIR").unwrap_or("/data/01.project".into());
+        let svc = RemoteService::new();
+        let res = svc.connect(&host, 22, &user, "", "privateKey", Some(&key)).expect("connect");
+        let id = res["connectionId"].as_str().unwrap().to_string();
+        assert_eq!(res["homePath"].as_str().unwrap(), "/home/cygnus");
+        let listing = svc.list_directory(&id, &dir).expect("list");
+        assert!(!listing["entries"].as_array().unwrap().is_empty());
+        let info = svc.get_path_info(&id, &dir).expect("info");
+        assert_eq!(info["type"], "directory");
+        svc.disconnect(&id).unwrap();
     }
 }
