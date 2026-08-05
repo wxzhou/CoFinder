@@ -6,7 +6,7 @@ import { EventEmitter } from "node:events";
 
 const spawnMock = vi.hoisted(() => vi.fn());
 
-vi.mock("electron", () => ({
+vi.mock("../src/main/sidecar/electronShim", () => ({
   shell: {
     openPath: vi.fn(async () => "")
   }

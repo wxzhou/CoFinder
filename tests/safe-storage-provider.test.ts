@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 describe("SafeStorageCredentialProvider", () => {
   it("throws CREDENTIAL_UNAVAILABLE when safeStorage is unavailable", async () => {
     vi.resetModules();
-    vi.doMock("electron", () => ({
+    vi.doMock("../src/main/sidecar/electronShim", () => ({
       safeStorage: {
         isEncryptionAvailable: () => false,
         encryptString: (text: string) => Buffer.from(text),
