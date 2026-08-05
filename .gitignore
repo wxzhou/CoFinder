@@ -1,8 +1,10 @@
 node_modules
 dist
 dist-electron
+dist-sidecar
 release
 *.log
 .DS_Store
 *.ai
 .cargo/
+*.dmg

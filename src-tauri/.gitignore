@@ -2,3 +2,6 @@
 # will have compiled files and executables
 /target/
 /gen/schemas
+
+# Node sidecar build artifacts (rebuilt by scripts/build-sidecar-sea.mjs)
+/binaries/
