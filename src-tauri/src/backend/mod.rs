@@ -7,6 +7,7 @@
 
 pub mod error;
 pub mod local_files;
+pub mod profiles;
 pub mod settings;
 pub mod util;
 
@@ -20,6 +21,8 @@ use error::CoFinderError;
 pub struct BackendState {
     pub settings: Mutex<settings::SettingsService>,
     pub local_files: local_files::LocalFileService,
+    pub profiles: Mutex<profiles::ProfileRepository>,
+    pub credentials: profiles::CredentialService,
 }
 
 impl BackendState {
@@ -29,6 +32,8 @@ impl BackendState {
         Self {
             settings: Mutex::new(settings::SettingsService::new(settings::default_settings_path(user_data_dir))),
             local_files: local_files::LocalFileService,
+            profiles: Mutex::new(profiles::ProfileRepository::new(profiles::default_profiles_path(user_data_dir))),
+            credentials: profiles::CredentialService::new(),
         }
     }
 }
@@ -131,6 +136,40 @@ fn local_paths_array(value: &Value) -> Result<Vec<String>, CoFinderError> {
             .collect::<Result<Vec<String>, _>>(),
         _ => Err(CoFinderError::new("LOCAL_INVALID_INPUT", "Select at least one local path.")),
     }
+}
+
+fn profile_required_string(value: &Value, field: &str) -> Result<String, CoFinderError> {
+    match value.get(field) {
+        Some(Value::String(s)) => {
+            let out = s.trim();
+            if out.is_empty() {
+                Err(CoFinderError::new("PROFILE_INVALID", format!("{field} is required.")))
+            } else {
+                Ok(out.to_string())
+            }
+        }
+        _ => Err(CoFinderError::new("PROFILE_INVALID", format!("{field} must be a string."))),
+    }
+}
+
+fn profile_optional_string(value: &Value, field: &str) -> Option<String> {
+    match value.get(field) {
+        Some(Value::String(s)) if !s.trim().is_empty() => Some(s.trim().to_string()),
+        _ => None,
+    }
+}
+
+fn profile_required_id(value: &Value, field: &str) -> Result<String, CoFinderError> {
+    profile_required_string(value, field)
+}
+
+fn normalize_remote_path(value: &Value, field: &str) -> Result<String, CoFinderError> {
+    let source = profile_required_string(value, field)?;
+    if source.contains('\u{0}') || source.contains('\n') || source.contains('\r') {
+        return Err(CoFinderError::new("PROFILE_INVALID", format!("{field} contains unsupported characters.")));
+    }
+    let normalized = profiles::normalize_remote_posix_path(&source);
+    Ok(normalized)
 }
 
 impl BackendState {
@@ -236,6 +275,65 @@ impl BackendState {
             let max_matches = optional_u64(req, "maxMatches")?;
             let data = self.local_files.search_text(&path, &query, max_matches).map_err(|e| local_error(&e))?;
             Ok(Some(ok(data)))
+        }
+        "profiles:list" => {
+            let repo = self.profiles.lock().unwrap();
+            let data = profiles::list_profiles_with_credential_flags(&repo, &self.credentials);
+            Ok(Some(ok(json!(data))))
+        }
+        "profiles:save" | "profiles:update" => {
+            let repo = self.profiles.lock().unwrap();
+            let data = profiles::upsert_profile(&repo, &self.credentials, req)
+                .map_err(|e| CoFinderError { code: "PROFILE_SAVE_FAILED".to_string(), message: e.message, detail: e.detail })?;
+            Ok(Some(ok(data)))
+        }
+        "profiles:delete" => {
+            let repo = self.profiles.lock().unwrap();
+            let id = profile_required_id(req, "id")?;
+            repo.delete(&id).map_err(|e| CoFinderError { code: "PROFILE_DELETE_FAILED".to_string(), message: e.message, detail: e.detail })?;
+            self.credentials.delete(&id).ok();
+            Ok(Some(ok(json!({ "deleted": true }))))
+        }
+        "profiles:addRemoteFavorite" => {
+            let repo = self.profiles.lock().unwrap();
+            let profile_id = profile_required_id(req, "profileId")?;
+            let remote_path = normalize_remote_path(req, "path")?;
+            let data = profiles::add_remote_favorite(&repo, &profile_id, &remote_path)
+                .map_err(|e| CoFinderError { code: "PROFILE_SAVE_FAILED".to_string(), message: e.message, detail: e.detail })?;
+            Ok(Some(ok(data)))
+        }
+        "profiles:removeRemoteFavorite" => {
+            let repo = self.profiles.lock().unwrap();
+            let profile_id = profile_required_id(req, "profileId")?;
+            let favorite_id = profile_required_id(req, "favoriteId")?;
+            let data = profiles::remove_remote_favorite(&repo, &profile_id, &favorite_id)
+                .map_err(|e| CoFinderError { code: "PROFILE_SAVE_FAILED".to_string(), message: e.message, detail: e.detail })?;
+            Ok(Some(ok(data)))
+        }
+        "profiles:renameRemoteFavorite" => {
+            let repo = self.profiles.lock().unwrap();
+            let profile_id = profile_required_id(req, "profileId")?;
+            let favorite_id = profile_required_id(req, "favoriteId")?;
+            let label = profile_required_string(req, "label")?;
+            let data = profiles::rename_remote_favorite(&repo, &profile_id, &favorite_id, &label)
+                .map_err(|e| CoFinderError { code: "PROFILE_SAVE_FAILED".to_string(), message: e.message, detail: e.detail })?;
+            Ok(Some(ok(data)))
+        }
+        "profiles:reorderRemoteFavorite" => {
+            let repo = self.profiles.lock().unwrap();
+            let profile_id = profile_required_id(req, "profileId")?;
+            let favorite_id = profile_required_id(req, "favoriteId")?;
+            let direction = match req.get("direction").and_then(|v| v.as_str()) {
+                Some("up") => "up",
+                Some("down") => "down",
+                _ => return Err(CoFinderError::new("PROFILE_INVALID", "Direction must be up or down.")),
+            };
+            let data = profiles::reorder_remote_favorite(&repo, &profile_id, &favorite_id, direction)
+                .map_err(|e| CoFinderError { code: "PROFILE_SAVE_FAILED".to_string(), message: e.message, detail: e.detail })?;
+            Ok(Some(ok(data)))
+        }
+        "credentials:isAvailable" => {
+            Ok(Some(ok(json!({ "available": self.credentials.is_storage_available() }))))
         }
         _ => Ok(None),
     }
