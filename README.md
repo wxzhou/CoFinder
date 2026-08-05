@@ -74,7 +74,7 @@ npm run tauri:build      # renderer build + sidecar SEA + `tauri build`
 Build artifacts are generated under the flash-card target dir:
 `/Volumes/CoFinderTarget/target/release/bundle/` (`CoFinder.app` and `CoFinder_1.9.10_aarch64.dmg`).
 
-The classic Electron packaging commands (`npm run package` / `npm run dist`) are retained but no longer the primary path.
+The Electron runtime and packaging tooling (electron, electron-builder, electronmon, wait-on, concurrently) have been removed; `tauri:build` is the only packaging path.
 
 Local builds may be unsigned. Public distribution should state signing/notarization status honestly.
 

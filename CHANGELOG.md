@@ -15,6 +15,9 @@
 - Content viewer is a second Tauri webview (content window) with buffered `content:openRequest` routing; the classic `?mode=content` path is still honored.
 - Dev and packaged flows both verified: local browse, settings, profiles, favorites, transfers queue, search, gzip, touch, and input-validation channels round-trip through the sidecar; the packaged `.app`/`.dmg` boots with window + sidecar + WebKit render process.
 - Saved-password encryption moved off Electron `safeStorage` to a Keychain-backed key (login Keychain preferred, 0600 key-file fallback); previously saved Electron credentials are not decryptable and must be re-saved.
+- Existing server profiles, settings, and sidebar favorites now carry over from the Electron install: the sidecar reads `~/Library/Application Support/cofinder` (legacy Electron userData) instead of a fresh Tauri data dir. Host/user/port are preserved; saved passwords still need one-time re-entry.
+- Restored title-bar behavior in the Tauri shell: the title strip is draggable again and double-clicking it toggles maximized state (macOS double-click-to-zoom), which the Overlay title bar had suppressed.
+- Removed the Electron runtime and build tooling (electron, electron-builder, electronmon, wait-on, concurrently) plus the Electron entry/preload files; `tauri:build` is now the only packaging path.
 - Build target lives on an external flash card (APFS sparse image at `/Volumes/CoFinderTarget`) via `.cargo/config.toml`; see `scripts/attach-cofinder-target.sh`.
 
 ## Unreleased / v1.9.10 development

@@ -33,10 +33,13 @@ Tauri (Rust) shell  ──  spawns + relays JSON-lines over stdio  ──►  No
 
 ## Behavior notes / deviations
 
+- Existing Electron user data migrates: the sidecar uses `~/Library/Application Support/cofinder` (legacy Electron userData) when present, so profiles (host/user/port), settings, and sidebar favorites carry over. Saved passwords do not (Electron `safeStorage` uses a different key) and require one-time re-entry.
 - `window.confirm` / `window.alert` use native macOS dialogs via `native_confirm` / `native_alert` commands (WKWebView does not implement those JS dialogs); the 13 renderer call sites were converted to `await confirmDialog` / `await alertDialog`.
-- Saved-password encryption moved from Electron `safeStorage` to a Keychain-backed key (login Keychain preferred, 0600 key-file fallback). Previously saved Electron credentials are not decryptable and must be re-saved.
+- Saved-password encryption moved from Electron `safeStorage` to a Keychain-backed key (login Keychain preferred, 0600 key-file fallback).
+- The title strip uses `data-tauri-drag-region`, restoring window dragging and macOS double-click-to-maximize that the Overlay title bar suppressed.
 - `system:resume` (sleep/wake auto-refresh) is not wired; `powerMonitor` has no Tauri equivalent in this spike.
 - Remote gzip percentage progress remains intentionally unsupported (unchanged decision).
+- The Electron runtime and tooling have been removed (`electron`, `electron-builder`, `electronmon`, `wait-on`, `concurrently`; `src/main/main.ts`, `src/preload/`, `electron-builder.yml`).
 
 ## Build / target dir
 
