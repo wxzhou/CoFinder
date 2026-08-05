@@ -432,6 +432,86 @@ impl LocalFileService {
             .and_then(|f| f.set_times(std::fs::FileTimes::new().set_accessed(system_time).set_modified(system_time)))
             .map_err(|e| map_fs_error(&e, &normalized, "TOUCH_FAILED", "Failed to touch path"))
     }
+
+    /// Port of `renamePath`.
+    pub fn rename_path(&self, target_path: &str, new_name: &str) -> Result<String, CoFinderError> {
+        let normalized = util::normalize_local_path(target_path);
+        let trimmed = new_name.trim();
+        if trimmed.is_empty() || trimmed == "." || trimmed == ".." {
+            return Err(CoFinderError::new("RENAME_FAILED", "New name is invalid."));
+        }
+        if trimmed.contains('/') || trimmed.contains('\\') {
+            return Err(CoFinderError::new("RENAME_FAILED", "New name cannot contain path separators."));
+        }
+        let parent = Path::new(&normalized).parent().unwrap_or(Path::new("/"));
+        let destination = util::normalize_local_path(&parent.join(trimmed).to_string_lossy());
+        if destination == normalized {
+            return Ok(normalized);
+        }
+        // Target must not already exist.
+        match fs::symlink_metadata(&destination) {
+            Ok(_) => return Err(CoFinderError::new("RENAME_FAILED", "A file or folder with the same name already exists.")),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(map_fs_error(&e, &normalized, "RENAME_FAILED", "Failed to rename path")),
+        }
+        fs::rename(&normalized, &destination).map_err(|e| map_fs_error(&e, &normalized, "RENAME_FAILED", "Failed to rename path"))?;
+        Ok(destination)
+    }
+
+    /// Port of `deletePaths`.
+    pub fn delete_paths(&self, paths: &[String]) -> Result<u64, CoFinderError> {
+        if paths.is_empty() {
+            return Err(CoFinderError::new("DELETE_FAILED", "Select at least one local path to delete."));
+        }
+        let mut seen = std::collections::HashSet::new();
+        let mut deleted = 0u64;
+        for raw in paths {
+            let target = util::normalize_local_path(raw);
+            if !seen.insert(target.clone()) {
+                continue;
+            }
+            let result = match fs::symlink_metadata(&target) {
+                Ok(meta) => {
+                    if meta.is_dir() {
+                        fs::remove_dir_all(&target)
+                    } else {
+                        fs::remove_file(&target)
+                    }
+                }
+                Err(_) => fs::remove_file(&target), // missing -> NotFound handled below
+            };
+            match result {
+                Ok(_) => deleted += 1,
+                Err(e) => return Err(map_fs_error(&e, &target, "DELETE_FAILED", "Failed to delete path")),
+            }
+        }
+        Ok(deleted)
+    }
+
+    /// Port of `makeDirectory`.
+    pub fn make_directory(&self, parent_path: &str, name: &str) -> Result<String, CoFinderError> {
+        let parent = util::normalize_local_path(parent_path);
+        let child_name = validate_new_child_name(name)?;
+        let target = util::normalize_local_path(&Path::new(&parent).join(&child_name).to_string_lossy());
+        fs::create_dir(&target).map_err(|e| map_fs_error(&e, &target, "UNKNOWN", "Failed to create path"))?;
+        Ok(target)
+    }
+
+    /// Port of `createTextFile` (empty file, wx semantics; auto-names Untitled.txt).
+    pub fn create_text_file(&self, parent_path: &str, name: Option<&str>) -> Result<String, CoFinderError> {
+        let parent = util::normalize_local_path(parent_path);
+        let target = match name {
+            Some(n) if !n.trim().is_empty() => {
+                let child_name = validate_new_child_name(n)?;
+                util::normalize_local_path(&Path::new(&parent).join(&child_name).to_string_lossy())
+            }
+            _ => next_available_text_file(&parent)?,
+        };
+        let mut opts = fs::OpenOptions::new();
+        opts.write(true).create_new(true);
+        opts.open(&target).map_err(|e| map_fs_error(&e, &target, "UNKNOWN", "Failed to create path"))?;
+        Ok(target)
+    }
 }
 
 mod base64_engine {
@@ -439,6 +519,31 @@ mod base64_engine {
         use base64::Engine;
         base64::engine::general_purpose::STANDARD.encode(data)
     }
+}
+
+fn validate_new_child_name(name: &str) -> Result<String, CoFinderError> {
+    let trimmed = name.trim();
+    if trimmed.is_empty()
+        || trimmed == "."
+        || trimmed == ".."
+        || trimmed.contains('/')
+        || trimmed.contains('\\')
+        || trimmed.chars().any(|c| matches!(c, '\u{0}' | '\r' | '\n'))
+    {
+        return Err(CoFinderError::new("UNKNOWN", "Name is invalid."));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn next_available_text_file(parent: &str) -> Result<String, CoFinderError> {
+    for i in 1..1000u32 {
+        let name = if i == 1 { "Untitled.txt".to_string() } else { format!("Untitled {i}.txt") };
+        let candidate = util::normalize_local_path(&Path::new(parent).join(&name).to_string_lossy());
+        if fs::symlink_metadata(&candidate).is_err() {
+            return Ok(candidate);
+        }
+    }
+    Err(CoFinderError::new("UNKNOWN", "Could not find an available text file name."))
 }
 
 #[cfg(test)]
@@ -580,5 +685,91 @@ mod tests {
         assert_eq!(local.year(), 2020);
         assert_eq!(local.month(), 1);
         assert_eq!(local.day(), 2);
+    }
+
+    #[test]
+    fn rename_path_basic() {
+        let dir = temp_dir("rename");
+        let f = dir.join("a.txt");
+        std::fs::write(&f, "x").unwrap();
+        let svc = LocalFileService;
+        let new_path = svc.rename_path(f.to_str().unwrap(), "b.txt").unwrap();
+        assert!(new_path.ends_with("b.txt"));
+        assert!(std::fs::metadata(&new_path).is_ok());
+        assert!(std::fs::metadata(dir.join("a.txt")).is_err());
+    }
+
+    #[test]
+    fn rename_path_rejects_invalid_names() {
+        let dir = temp_dir("rename-invalid");
+        let f = dir.join("a.txt");
+        std::fs::write(&f, "x").unwrap();
+        let svc = LocalFileService;
+        let err = svc.rename_path(f.to_str().unwrap(), "a/b").unwrap_err();
+        assert_eq!(err.code, "RENAME_FAILED");
+        let err2 = svc.rename_path(f.to_str().unwrap(), "..").unwrap_err();
+        assert_eq!(err2.code, "RENAME_FAILED");
+    }
+
+    #[test]
+    fn rename_path_conflict_rejected() {
+        let dir = temp_dir("rename-conflict");
+        std::fs::write(dir.join("a.txt"), "x").unwrap();
+        std::fs::write(dir.join("b.txt"), "y").unwrap();
+        let svc = LocalFileService;
+        let err = svc.rename_path(dir.join("a.txt").to_str().unwrap(), "b.txt").unwrap_err();
+        assert_eq!(err.code, "RENAME_FAILED");
+    }
+
+    #[test]
+    fn delete_paths_removes_file_and_dir() {
+        let dir = temp_dir("delete");
+        std::fs::write(dir.join("f.txt"), "x").unwrap();
+        std::fs::create_dir(dir.join("sub")).unwrap();
+        let svc = LocalFileService;
+        let deleted = svc
+            .delete_paths(&[dir.join("f.txt").to_string_lossy().into_owned(), dir.join("sub").to_string_lossy().into_owned()])
+            .unwrap();
+        assert_eq!(deleted, 2);
+        assert!(std::fs::metadata(dir.join("f.txt")).is_err());
+        assert!(std::fs::metadata(dir.join("sub")).is_err());
+    }
+
+    #[test]
+    fn delete_paths_empty_is_error() {
+        let svc = LocalFileService;
+        let err = svc.delete_paths(&[]).unwrap_err();
+        assert_eq!(err.code, "DELETE_FAILED");
+    }
+
+    #[test]
+    fn make_directory_creates() {
+        let dir = temp_dir("mkdir");
+        let svc = LocalFileService;
+        let created = svc.make_directory(dir.to_str().unwrap(), "newdir").unwrap();
+        assert!(created.ends_with("newdir"));
+        assert!(std::fs::metadata(&created).unwrap().is_dir());
+    }
+
+    #[test]
+    fn make_directory_rejects_bad_names() {
+        let dir = temp_dir("mkdir-bad");
+        let svc = LocalFileService;
+        let err = svc.make_directory(dir.to_str().unwrap(), "../escape").unwrap_err();
+        assert_eq!(err.code, "UNKNOWN");
+    }
+
+    #[test]
+    fn create_text_file_named_and_auto() {
+        let dir = temp_dir("create");
+        let svc = LocalFileService;
+        let named = svc.create_text_file(dir.to_str().unwrap(), Some("hello.txt")).unwrap();
+        assert!(named.ends_with("hello.txt"));
+        assert!(std::fs::metadata(&named).unwrap().is_file());
+        // Auto-name produces Untitled.txt then Untitled 2.txt
+        let auto1 = svc.create_text_file(dir.to_str().unwrap(), None).unwrap();
+        assert!(auto1.ends_with("Untitled.txt"));
+        let auto2 = svc.create_text_file(dir.to_str().unwrap(), None).unwrap();
+        assert!(auto2.ends_with("Untitled 2.txt"));
     }
 }

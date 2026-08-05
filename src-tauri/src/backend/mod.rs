@@ -102,6 +102,37 @@ fn optional_i64(value: &Value, field: &str) -> Result<Option<i64>, CoFinderError
     }
 }
 
+fn optional_string(value: &Value, field: &str) -> Option<String> {
+    match value.get(field) {
+        Some(Value::String(s)) if !s.trim().is_empty() => Some(s.trim().to_string()),
+        _ => None,
+    }
+}
+
+fn required_string_field(value: &Value, field: &str) -> Result<String, CoFinderError> {
+    match value.get(field) {
+        Some(Value::String(s)) => {
+            let out = s.trim();
+            if out.is_empty() {
+                Err(CoFinderError::new("LOCAL_INVALID_INPUT", format!("{field} is required.")))
+            } else {
+                Ok(out.to_string())
+            }
+        }
+        _ => Err(CoFinderError::new("LOCAL_INVALID_INPUT", format!("{field} must be a string."))),
+    }
+}
+
+fn local_paths_array(value: &Value) -> Result<Vec<String>, CoFinderError> {
+    match value.get("paths") {
+        Some(Value::Array(arr)) if !arr.is_empty() => arr
+            .iter()
+            .map(|item| validate_local_path(item))
+            .collect::<Result<Vec<String>, _>>(),
+        _ => Err(CoFinderError::new("LOCAL_INVALID_INPUT", "Select at least one local path.")),
+    }
+}
+
 impl BackendState {
     /// Try to handle a channel in Rust. Returns `Ok(Some(response))` when
     /// handled, `Ok(None)` when the channel is not implemented in Rust yet
@@ -175,6 +206,29 @@ impl BackendState {
             };
             self.local_files.touch_path(&path, timestamp.as_deref()).map_err(|e| local_error(&e))?;
             Ok(Some(ok(json!({ "touched": true }))))
+        }
+        "local:rename" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            let new_name = required_string_field(req, "newName")?;
+            let new_path = self.local_files.rename_path(&path, &new_name).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(json!({ "renamed": true, "newPath": new_path }))))
+        }
+        "local:delete" => {
+            let paths = local_paths_array(req)?;
+            let deleted = self.local_files.delete_paths(&paths).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(json!({ "deleted": deleted }))))
+        }
+        "local:mkdir" => {
+            let parent = validate_local_path(req.get("parentPath").unwrap_or(&Value::Null))?;
+            let name = required_string_field(req, "name")?;
+            let created_path = self.local_files.make_directory(&parent, &name).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(json!({ "created": true, "path": created_path }))))
+        }
+        "local:createTextFile" => {
+            let parent = validate_local_path(req.get("parentPath").unwrap_or(&Value::Null))?;
+            let name = optional_string(req, "name");
+            let created_path = self.local_files.create_text_file(&parent, name.as_deref()).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(json!({ "created": true, "path": created_path }))))
         }
         _ => Ok(None),
     }
