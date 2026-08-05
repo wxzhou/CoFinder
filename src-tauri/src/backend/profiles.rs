@@ -12,6 +12,7 @@ pub fn default_profiles_path(user_data: &str) -> String {
     Path::new(user_data).join("profiles.json").to_string_lossy().into_owned()
 }
 
+#[allow(dead_code)]
 pub fn default_credentials_path(user_data: &str) -> String {
     Path::new(user_data).join("credentials.enc.json").to_string_lossy().into_owned()
 }

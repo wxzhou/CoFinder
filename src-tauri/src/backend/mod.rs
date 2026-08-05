@@ -168,6 +168,7 @@ fn profile_required_string(value: &Value, field: &str) -> Result<String, CoFinde
     }
 }
 
+#[allow(dead_code)]
 fn profile_optional_string(value: &Value, field: &str) -> Option<String> {
     match value.get(field) {
         Some(Value::String(s)) if !s.trim().is_empty() => Some(s.trim().to_string()),
