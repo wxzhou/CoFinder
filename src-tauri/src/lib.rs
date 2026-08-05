@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
+mod backend;
 mod menu;
 
 struct SidecarState {
@@ -171,9 +172,18 @@ fn open_content_window(app: &AppHandle, _state: &Arc<SidecarState>) {
 #[tauri::command]
 async fn cofinder_call(
     state: State<'_, Arc<SidecarState>>,
+    backend: State<'_, Arc<backend::BackendState>>,
     channel: String,
     request: Option<Value>,
 ) -> Result<Value, String> {
+    // Rust-native dispatch first; only fall back to the sidecar for channels
+    // the Rust backend does not implement yet.
+    match backend.dispatch(&channel, request.as_ref()) {
+        Ok(Some(response)) => return Ok(response),
+        Ok(None) => {}
+        Err(err) => return Ok(backend::fail(&err)),
+    }
+
     let id = state.next_id.fetch_add(1, Ordering::SeqCst);
     let (tx, rx) = tokio::sync::oneshot::channel();
     state.pending.lock().unwrap().insert(id, tx);
@@ -253,6 +263,10 @@ pub fn run() {
             let handle = app.handle().clone();
             let state = app.state::<Arc<SidecarState>>();
             spawn_sidecar(&handle, &state)?;
+
+            // Rust-native backend lives in the same user-data directory.
+            let data_dir = app_data_dir(&handle)?;
+            app.manage(Arc::new(backend::BackendState::new(&data_dir)));
 
             let built = menu::build_menu(&handle)?;
             app.set_menu(built)?;
