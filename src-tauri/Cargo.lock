@@ -336,6 +336,7 @@ dependencies = [
  "base64 0.23.1",
  "chrono",
  "rand",
+ "regex",
  "serde",
  "serde_json",
  "tauri",

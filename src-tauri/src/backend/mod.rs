@@ -10,6 +10,7 @@ pub mod favorites;
 pub mod local_files;
 pub mod profiles;
 pub mod settings;
+pub mod system;
 pub mod util;
 
 use serde_json::{json, Value};
@@ -25,6 +26,7 @@ pub struct BackendState {
     pub profiles: Mutex<profiles::ProfileRepository>,
     pub credentials: profiles::CredentialService,
     pub favorites: Mutex<favorites::LocalSidebarFavoritesRepository>,
+    pub system: system::SystemService,
 }
 
 impl BackendState {
@@ -47,6 +49,7 @@ impl BackendState {
                 favorites::default_local_sidebar_favorites_path(user_data_dir),
                 well_known,
             )),
+            system: system::SystemService::new(env!("CARGO_PKG_VERSION").to_string(), user_data_dir.to_string()),
         }
     }
 }
@@ -386,6 +389,37 @@ impl BackendState {
             let repo = self.favorites.lock().unwrap();
             let favorites = repo.reset_default_locations().map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
             Ok(Some(ok(json!({ "favorites": favorites }))))
+        }
+        "system:getAppVersion" => {
+            Ok(Some(ok(json!({ "version": self.system.version }))))
+        }
+        "system:copyText" => {
+            let text = required_string_field(req, "text")?;
+            system::copy_text(&text).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "copied": true }))))
+        }
+        "system:copyDiagnostics" => {
+            let text = self.system.build_clipboard_text();
+            let diagnostics = self.system.build_diagnostics_bundle();
+            system::copy_text(&text).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "copied": true, "diagnostics": diagnostics }))))
+        }
+        "system:checkForUpdates" => {
+            Ok(Some(ok(json!({
+                "available": false,
+                "message": "Auto-update install is not enabled in this build. Use the documented release checklist and GitHub Releases artifacts."
+            }))))
+        }
+        "system:openLogFolder" => {
+            std::fs::create_dir_all(&self.system.user_data_path).ok();
+            system::open_path(&self.system.user_data_path).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "opened": true, "path": self.system.user_data_path }))))
+        }
+        "system:openLogFile" => {
+            std::fs::create_dir_all(&self.system.user_data_path).ok();
+            std::fs::OpenOptions::new().append(true).create(true).open(&self.system.log_file_path).ok();
+            system::open_path(&self.system.log_file_path).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "opened": true, "path": self.system.log_file_path }))))
         }
         _ => Ok(None),
     }
