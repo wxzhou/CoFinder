@@ -1,8 +1,8 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "CoFinder",
-  "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "version": "1.9.10",
+  "identifier": "com.wxzhou.cofinder",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
@@ -12,11 +12,16 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "CoFinder",
-        "width": 800,
-        "height": 600,
+        "width": 1360,
+        "height": 860,
+        "minWidth": 1024,
+        "minHeight": 680,
+        "center": true,
         "resizable": true,
-        "fullscreen": false
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
@@ -25,16 +30,18 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app", "dmg"],
+    "category": "Productivity",
+    "shortDescription": "CoFinder - macOS remote file explorer",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
+      "icons/icon.icns"
     ],
-    "android": {
-      "debugApplicationIdSuffix": ".debug"
+    "externalBin": ["binaries/cofinder-sidecar"],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
     }
   }
 }
