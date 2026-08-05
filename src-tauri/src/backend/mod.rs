@@ -230,6 +230,13 @@ impl BackendState {
             let created_path = self.local_files.create_text_file(&parent, name.as_deref()).map_err(|e| local_error(&e))?;
             Ok(Some(ok(json!({ "created": true, "path": created_path }))))
         }
+        "local:searchText" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            let query = required_string_field(req, "query")?;
+            let max_matches = optional_u64(req, "maxMatches")?;
+            let data = self.local_files.search_text(&path, &query, max_matches).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(data)))
+        }
         _ => Ok(None),
     }
 }
