@@ -210,6 +210,17 @@ class ContentWindowShim {
   }
 }
 
+// Single content window shared across the content-window code path and the
+// sidecar's `contentReady` handling, so buffered requests flush correctly.
+let sharedContentWindow: ContentWindowShim | null = null;
+
+function getOrCreateContentWindow(): ContentWindowShim {
+  if (!sharedContentWindow || sharedContentWindow.isDestroyed()) {
+    sharedContentWindow = new ContentWindowShim();
+  }
+  return sharedContentWindow;
+}
+
 type ShimBrowserWindowInstance = ContentWindowShim;
 
 interface BrowserWindowConstructorOptions {
@@ -226,10 +237,10 @@ class ShimBrowserWindow {
     return createBroadcastWindow();
   }
   static createContentWindow(): ShimBrowserWindowInstance {
-    return new ContentWindowShim();
+    return getOrCreateContentWindow();
   }
   constructor(_options?: BrowserWindowConstructorOptions) {
-    return new ContentWindowShim() as unknown as ShimBrowserWindow;
+    return getOrCreateContentWindow() as unknown as ShimBrowserWindow;
   }
   // Instance surface matching ContentWindowShim (the object actually returned).
   // Present so the service layer can typecheck against the real BrowserWindow API.
@@ -447,7 +458,11 @@ export type IpcMainInvokeEvent = { sender: unknown };
 export type BrowserWindowInstance = ShimBrowserWindow;
 
 export function createContentWindowShim(): ContentWindowShim {
-  return new ContentWindowShim();
+  return getOrCreateContentWindow();
+}
+
+export function fireContentWindowFinishLoad(): void {
+  getOrCreateContentWindow().fireFinishLoad();
 }
 
 export function flushContentWindow(callback: () => void): void {

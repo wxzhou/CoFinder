@@ -89,6 +89,16 @@ fn write_sidecar_line(state: &Arc<SidecarState>, payload: &Value) -> Result<(), 
     Ok(())
 }
 
+fn shutdown_sidecar(state: &Arc<SidecarState>) {
+    // Ask the sidecar to run its cleanup (close SFTP sessions, etc.).
+    let _ = write_sidecar_line(state, &json!({ "type": "sys", "action": "shutdown" }));
+    std::thread::sleep(std::time::Duration::from_millis(300));
+    if let Some(mut child) = state.child.lock().unwrap().take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+}
+
 fn handle_sidecar_line(app: &AppHandle, state: &Arc<SidecarState>, msg: Value) {
     // Response to a pending request
     if let Some(id) = msg.get("id").and_then(|v| v.as_u64()) {
@@ -233,6 +243,12 @@ pub fn run() {
             });
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::ExitRequested { .. } = event {
+                let state = app_handle.state::<Arc<SidecarState>>();
+                shutdown_sidecar(&state);
+            }
+        });
 }

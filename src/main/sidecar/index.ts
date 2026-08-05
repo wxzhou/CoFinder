@@ -15,7 +15,7 @@
  *   stdin:  {"type": "sys", "action": "contentReady"}
  */
 import { registerIpcHandlers, shutdownMainProcessResources } from "../ipc/registerIpcHandlers";
-import { setSidecarWriter, getIpcHandler, createContentWindowShim } from "./electronShim";
+import { setSidecarWriter, getIpcHandler, fireContentWindowFinishLoad } from "./electronShim";
 import readline from "node:readline";
 
 type IncomingMessage = {
@@ -30,22 +30,15 @@ function writeLine(payload: Record<string, unknown>): void {
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 }
 
-let contentWindowShim: ReturnType<typeof createContentWindowShim> | null = null;
-
-function openContentWindow(): void {
-  if (!contentWindowShim) contentWindowShim = createContentWindowShim();
-  contentWindowShim.show();
-  contentWindowShim.focus();
-}
-
 function handleContentReady(): void {
-  contentWindowShim?.fireFinishLoad();
+  fireContentWindowFinishLoad();
 }
 
 async function dispatch(msg: IncomingMessage): Promise<void> {
   if (msg.id === undefined || typeof msg.channel !== "string") {
     if (msg.type === "sys") {
       if (msg.action === "contentReady") handleContentReady();
+      if (msg.action === "shutdown") await shutdown();
     }
     return;
   }
@@ -97,6 +90,19 @@ function waitForIdle(): Promise<void> {
   return flushWait;
 }
 
+let shutdownStarted = false;
+
+async function shutdown(): Promise<void> {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  try {
+    await waitForIdle();
+    await shutdownMainProcessResources();
+  } finally {
+    process.exit(0);
+  }
+}
+
 async function main(): Promise<void> {
   setSidecarWriter({ writeLine });
 
@@ -113,15 +119,6 @@ async function main(): Promise<void> {
     }
     trackDispatch(dispatch(msg));
   });
-
-  const shutdown = async (): Promise<void> => {
-    try {
-      await waitForIdle();
-      await shutdownMainProcessResources();
-    } finally {
-      process.exit(0);
-    }
-  };
 
   rl.on("close", () => {
     void shutdown();
