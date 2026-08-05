@@ -9,6 +9,7 @@ pub mod error;
 pub mod favorites;
 pub mod local_files;
 pub mod profiles;
+pub mod remote;
 pub mod settings;
 pub mod system;
 pub mod util;
@@ -27,6 +28,7 @@ pub struct BackendState {
     pub credentials: profiles::CredentialService,
     pub favorites: Mutex<favorites::LocalSidebarFavoritesRepository>,
     pub system: system::SystemService,
+    pub remote: remote::RemoteService,
 }
 
 impl BackendState {
@@ -50,6 +52,7 @@ impl BackendState {
                 well_known,
             )),
             system: system::SystemService::new(env!("CARGO_PKG_VERSION").to_string(), user_data_dir.to_string()),
+            remote: remote::RemoteService::new(),
         }
     }
 }
@@ -178,6 +181,63 @@ fn profile_optional_string(value: &Value, field: &str) -> Option<String> {
 
 fn profile_required_id(value: &Value, field: &str) -> Result<String, CoFinderError> {
     profile_required_string(value, field)
+}
+
+fn remote_required_string(value: &Value, field: &str) -> Result<String, CoFinderError> {
+    match value.get(field) {
+        Some(Value::String(s)) => {
+            let out = s.trim();
+            if out.is_empty() {
+                Err(CoFinderError::new("REMOTE_INVALID_INPUT", format!("{field} is required.")))
+            } else {
+                Ok(out.to_string())
+            }
+        }
+        _ => Err(CoFinderError::new("REMOTE_INVALID_INPUT", format!("{field} must be a string."))),
+    }
+}
+
+fn remote_required_id(value: &Value, field: &str) -> Result<String, CoFinderError> {
+    remote_required_string(value, field)
+}
+
+fn remote_required_port(value: &Value) -> Result<u16, CoFinderError> {
+    let n = value.get("port").and_then(|v| v.as_i64()).or_else(|| value.get("port").and_then(|v| v.as_f64()).map(|f| f as i64));
+    match n {
+        Some(n) if n > 0 && n <= 65535 => Ok(n as u16),
+        _ => Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Port must be between 1 and 65535.")),
+    }
+}
+
+fn is_safe_host_or_username(input: &str) -> bool {
+    !input.is_empty() && input.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+}
+
+fn remote_optional_string(value: &Value, field: &str) -> Option<String> {
+    match value.get(field) {
+        Some(Value::String(s)) if !s.trim().is_empty() => Some(s.trim().to_string()),
+        _ => None,
+    }
+}
+
+fn remote_paths_array(value: &Value) -> Result<Vec<String>, CoFinderError> {
+    match value.get("paths") {
+        Some(Value::Array(arr)) if !arr.is_empty() => arr
+            .iter()
+            .map(|item| match item.as_str() {
+                Some(s) => {
+                    let out = s.trim().to_string();
+                    if out.is_empty() {
+                        Err(CoFinderError::new("REMOTE_INVALID_INPUT", "path is required."))
+                    } else {
+                        Ok(out)
+                    }
+                }
+                None => Err(CoFinderError::new("REMOTE_INVALID_INPUT", "path must be a string.")),
+            })
+            .collect::<Result<Vec<String>, _>>(),
+        _ => Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Select at least one remote path.")),
+    }
 }
 
 fn normalize_remote_path(value: &Value, field: &str) -> Result<String, CoFinderError> {
@@ -422,6 +482,81 @@ impl BackendState {
             system::open_path(&self.system.log_file_path).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
             Ok(Some(ok(json!({ "opened": true, "path": self.system.log_file_path }))))
         }
+        "remote:connect" => {
+            let host = remote_required_string(req, "host")?;
+            let port = remote_required_port(req)?;
+            let username = remote_required_string(req, "username")?;
+            if !is_safe_host_or_username(&host) {
+                return Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Host contains unsupported characters."));
+            }
+            if !is_safe_host_or_username(&username) {
+                return Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Username contains unsupported characters."));
+            }
+            if req.get("authType").and_then(|v| v.as_str()) == Some("privateKey") {
+                return Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Private key authentication is not supported in this version."));
+            }
+            let mut password = remote_optional_string(req, "password").unwrap_or_default();
+            if password.is_empty() {
+                if let Some(profile_id) = remote_optional_string(req, "profileId") {
+                    password = self.credentials.get(&profile_id).unwrap_or_default();
+                }
+            }
+            if password.is_empty() {
+                return Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Password is required."));
+            }
+            let data = self.remote.connect(&host, port, &username, &password)?;
+            Ok(Some(ok(data)))
+        }
+        "remote:listDirectory" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_optional_string(req, "path").unwrap_or_else(|| "/".to_string());
+            let data = self.remote.list_directory(&connection_id, &path)?;
+            Ok(Some(ok(data)))
+        }
+        "remote:getHomeDirectory" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let home_path = self.remote.get_home_directory(&connection_id)?;
+            Ok(Some(ok(json!({ "homePath": home_path }))))
+        }
+        "remote:disconnect" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            self.remote.disconnect(&connection_id)?;
+            Ok(Some(ok(json!({ "disconnected": true }))))
+        }
+        "remote:rename" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let new_name = remote_required_string(req, "newName")?;
+            let new_path = self.remote.rename_path(&connection_id, &path, &new_name)?;
+            Ok(Some(ok(json!({ "renamed": true, "newPath": new_path }))))
+        }
+        "remote:delete" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let paths = remote_paths_array(req)?;
+            let deleted = self.remote.delete_paths(&connection_id, &paths)?;
+            Ok(Some(ok(json!({ "deleted": deleted }))))
+        }
+        "remote:mkdir" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let parent = remote_required_string(req, "parentPath")?;
+            let name = remote_required_string(req, "name")?;
+            let created = self.remote.make_directory(&connection_id, &parent, &name)?;
+            Ok(Some(ok(json!({ "created": true, "path": created }))))
+        }
+        "remote:readText" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let byte_offset = optional_u64(req, "byteOffset")?;
+            let max_bytes = optional_u64(req, "maxBytes")?;
+            let data = self.remote.read_text_file(&connection_id, &path, byte_offset, max_bytes)?;
+            Ok(Some(ok(data)))
+        }
+        "remote:getInfo" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let info = self.remote.get_path_info(&connection_id, &path)?;
+            Ok(Some(ok(json!({ "info": info }))))
+        }
         _ => Ok(None),
     }
 }
@@ -467,7 +602,15 @@ mod tests {
     #[test]
     fn dispatch_unknown_channel_returns_none() {
         let state = temp_state();
-        let res = state.dispatch("remote:listDirectory", None).unwrap();
+        let res = state.dispatch("transfer:list", None).unwrap();
         assert!(res.is_none());
+    }
+
+    #[test]
+    fn dispatch_remote_list_without_connection_is_error_not_none() {
+        let state = temp_state();
+        let req = serde_json::json!({ "connectionId": "missing", "path": "/" });
+        let res = state.dispatch("remote:listDirectory", Some(&req)).unwrap_err();
+        assert_eq!(res.code, "REMOTE_DISCONNECTED");
     }
 }

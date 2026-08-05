@@ -36,6 +36,14 @@ impl CoFinderError {
     }
 }
 
+impl std::fmt::Display for CoFinderError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.message)
+    }
+}
+
+impl std::error::Error for CoFinderError {}
+
 /// Convenience constructors for common error codes.
 #[allow(dead_code)]
 impl CoFinderError {
