@@ -1,7 +1,24 @@
-import type { ReactElement, ReactNode } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactElement, ReactNode } from "react";
 import "./v12-shell.css";
 import "./v12-production-mock-parity.css";
 import { V12DefaultSidebar, V12TbIcon } from "./shared/V12Icons";
+
+/** Window helpers used by the custom title bar (manual drag + double-click). */
+function startWindowDrag(): void {
+  void import("@tauri-apps/api/webviewWindow")
+    .then(({ getCurrentWebviewWindow }) => getCurrentWebviewWindow().startDragging())
+    .catch(() => {
+      /* not running under Tauri */
+    });
+}
+
+function toggleMaximize(): void {
+  void import("@tauri-apps/api/webviewWindow")
+    .then(({ getCurrentWebviewWindow }) => getCurrentWebviewWindow().toggleMaximize())
+    .catch(() => {
+      /* not running under Tauri */
+    });
+}
 
 /** M5: wire each control to real handlers; until then all buttons stay `disabled` (no dead clicks). */
 function mockToolbar(): ReactElement {
@@ -87,10 +104,27 @@ export function AppShellV12(props: AppShellV12Props): ReactElement {
       <header
         className="cfv12-titlestrip v12m-titlestrip"
         aria-label="Window title and tabs"
-        data-tauri-drag-region
+        onMouseDown={(event: ReactMouseEvent) => {
+          // Manual drag: Tauri's drag-region script intercepts mousedown and
+          // blocks click/dblclick, so we drive dragging ourselves for left
+          // single-clicks on empty title space (not tabs/buttons).
+          if (event.button !== 0 || event.detail !== 1) return;
+          const target = event.target as HTMLElement;
+          if (target.closest(".tab-item, .tab-add, .tab-close")) return;
+          startWindowDrag();
+        }}
+        onDoubleClick={(event) => {
+          // Maximize when double-clicking empty title space, not a tab.
+          const target = event.target as HTMLElement;
+          if (target.closest(".tab-item, .tab-add, .tab-close")) return;
+          toggleMaximize();
+        }}
       >
         {/* Decorative traffic lights live only in `V12UiMockup` (?mockup=v12). Electron provides real lights. */}
         {props.titleLeading ? <div className="cfv12-title-leading">{props.titleLeading}</div> : null}
+        {/* The tabs host fills the remaining title width; the tab-bar and tab
+            items are interactive (buttons), so the empty area to the right of
+            the tabs stays draggable via the header handlers above. */}
         <div className="cfv12-tabsHost v12m-titlebar-tabs">{props.titleTabs}</div>
       </header>
 
