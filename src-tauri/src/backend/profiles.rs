@@ -271,8 +271,10 @@ impl CredentialService {
     }
 
     pub fn is_storage_available(&self) -> bool {
-        // `security` CLI presence is a good availability signal on macOS.
-        Command::new("security").arg("--help").output().map(|o| o.status.success()).unwrap_or(false)
+        // macOS always ships the `security` CLI; treat availability as "the
+        // command exists and responds" (a failed lookup means item missing,
+        // not secure storage disabled). `security -h` exits 0.
+        Command::new("security").arg("-h").output().map(|o| o.status.success()).unwrap_or(false)
     }
 
     fn account(profile_id: &str) -> String {
