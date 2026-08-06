@@ -619,4 +619,30 @@ mod tests {
         let res = state.dispatch("remote:listDirectory", Some(&req)).unwrap_err();
         assert_eq!(res.code, "REMOTE_DISCONNECTED");
     }
+
+    /// Live dispatch-level SFTP test against sge via public-key auth (read-only).
+    /// Run with: cargo test --lib -- --ignored dispatch_remote_live_sge --nocapture
+    #[test]
+    #[ignore = "requires live server and credentials"]
+    fn dispatch_remote_live_sge_publickey_read() {
+        let state = BackendState::new(std::env::temp_dir().to_string_lossy().as_ref());
+        let host = std::env::var("CF_TEST_HOST").unwrap_or("10.0.32.10".into());
+        let user = std::env::var("CF_TEST_USER").unwrap_or("zhouwenxiong".into());
+        let key = std::env::var("CF_TEST_KEY").unwrap_or("/Users/zwx/.ssh/id_ed25519".into());
+        let connect_req = json!({
+            "host": host, "port": 22, "username": user,
+            "authType": "privateKey", "privateKeyPath": key
+        });
+        let res = state.dispatch("remote:connect", Some(&connect_req)).unwrap().unwrap();
+        assert_eq!(res["ok"], true);
+        let id = res["data"]["connectionId"].as_str().unwrap().to_string();
+        assert_eq!(res["data"]["homePath"].as_str().unwrap(), "/home/zhouwenxiong");
+        let list_req = json!({ "connectionId": id, "path": "/home/zhouwenxiong" });
+        let listing = state.dispatch("remote:listDirectory", Some(&list_req)).unwrap().unwrap();
+        assert_eq!(listing["ok"], true);
+        assert!(!listing["data"]["entries"].as_array().unwrap().is_empty());
+        let disc_req = json!({ "connectionId": id });
+        let disc = state.dispatch("remote:disconnect", Some(&disc_req)).unwrap().unwrap();
+        assert_eq!(disc["ok"], true);
+    }
 }
