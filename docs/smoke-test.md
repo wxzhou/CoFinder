@@ -4,16 +4,16 @@ Use this checklist before a release candidate. Prefer an isolated test workspace
 
 ## Tauri migration spike (opencode/tauri-spike)
 
-**Acceptance:** `npm run tauri:dev` and the packaged app boot the V12 shell with the Tauri (Rust) host + Node sidecar; core file operations behave the same as the Electron build.
+**Acceptance:** `npm run tauri:dev` and the packaged app boot the V12 shell with the Tauri (Rust) host + native Rust backend (no Node sidecar); core file operations behave the same as the Electron build.
 
-- **Boot:** app window opens; `CoFinder` main process, `cofinder-sidecar`, and a WebKit render process are running; no crash within 30s.
+- **Boot:** app window opens; the `cofinder` main process and a WebKit render process are running; no crash within 30s. No `cofinder-sidecar` process exists.
 - **Local browse:** local pane lists and navigates directories; breadcrumbs, refresh, Home, and Copy Path work.
-- **Remote connect:** embedded connect + Site Manager; a successful SFTP login lists the remote home; failure surfaces in-pane. (Requires an SFTP server; the sidecar uses the same `ssh2-sftp-client` code as before.)
+- **Remote connect:** embedded connect + Site Manager; a successful SFTP login lists the remote home; failure surfaces in-pane. (Requires an SFTP server; the Rust `russh`/`russh-sftp` backend, public-key auth supported.)
 - **Settings:** Preferences opens via the app menu (About → Preferences or `Cmd+,`) and persists.
 - **Native dialogs:** a delete confirmation shows a native macOS alert (WKWebView has no `window.confirm`).
-- **Jobs:** enqueue upload/download/delete; drawer shows live tasks and updates arrive via the `transfer:onUpdate` event.
+- **Jobs:** enqueue upload/download/delete; drawer shows live tasks and updates arrive via the `transfer:onUpdate` event. rsync path falls back to SFTP when BatchMode SSH cannot authenticate.
 - **Content viewer:** `View Text...` / `Search Contents...` open the content window with buffered request delivery.
-- **Quit:** app quits cleanly; `cofinder-sidecar` exits (no orphaned process).
+- **Quit:** app quits cleanly; no orphaned processes.
 
 ## V1.2 Finder shell (default) — M6
 

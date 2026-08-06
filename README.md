@@ -1,6 +1,6 @@
 # CoFinder
 
-CoFinder is a macOS-only Tauri file manager inspired by WinSCP. It provides a Finder-like dual-pane interface for local and SFTP remote browsing, rsync-based transfers, remote text editing, and personal daily file-management workflows. The React renderer and the Node main-process services from the original Electron build are preserved; Electron is replaced by a Tauri (Rust) shell that runs the services as a bundled Node sidecar.
+CoFinder is a macOS-only Tauri file manager inspired by WinSCP. It provides a Finder-like dual-pane interface for local and SFTP remote browsing, rsync-based transfers, remote text editing, and personal daily file-management workflows. The React renderer is preserved from the original Electron build, but the entire backend is now implemented natively in Rust (russh/russh-sftp, rsync subprocess); the Electron shell and its Node main-process sidecar have been fully removed.
 
 Current development version: **v1.9.10** (`package.json` version `1.9.10`). Latest published release: **v1.9.0**.
 
@@ -42,11 +42,10 @@ Remote browsing uses SFTP password authentication. Transfers use rsync over SSH 
 
 ```bash
 npm install
-npm run build:sidecar   # compiles the TypeScript services + electron shim
 npm run tauri:dev       # vite dev server + `tauri dev`
 ```
 
-The Tauri shell spawns the Node sidecar (`dist-electron/main/sidecar/index.js` in dev, a bundled SEA executable in release) and bridges the renderer to it. Build artifacts (Rust `target/`) are kept on an external flash card via `.cargo/config.toml`; run `scripts/attach-cofinder-target.sh` to mount the APFS sparse image if cargo reports a missing target dir.
+The Rust backend (`src-tauri/src/backend`) implements every IPC channel; the React renderer talks to it through Tauri `invoke` via the `window.cofinder` bridge. Build artifacts (Rust `target/`) are kept on an external flash card via `.cargo/config.toml`; run `scripts/attach-cofinder-target.sh` to mount the APFS sparse image if cargo reports a missing target dir.
 
 Default UI is the V12 production shell. Legacy classic UI is still available for comparison with `?ui=v11`, `?legacy=1`, `COFINDER_LEGACY_UI=1`, or `VITE_COFINDER_LEGACY_UI=1`.
 
@@ -63,18 +62,19 @@ Useful focused commands:
 npm run test:unit
 npm run typecheck
 npm run check:secrets
+cd src-tauri && cargo test
 ```
 
 ## Packaging
 
 ```bash
-npm run tauri:build      # renderer build + sidecar SEA + `tauri build`
+npm run tauri:build      # renderer build + `tauri build`
 ```
 
 Build artifacts are generated under the flash-card target dir:
 `/Volumes/CoFinderTarget/target/release/bundle/` (`CoFinder.app` and `CoFinder_1.9.10_aarch64.dmg`).
 
-The Electron runtime and packaging tooling (electron, electron-builder, electronmon, wait-on, concurrently) have been removed; `tauri:build` is the only packaging path.
+The Electron runtime and its Node sidecar have been removed entirely; `tauri:build` is the only packaging path.
 
 Local builds may be unsigned. Public distribution should state signing/notarization status honestly.
 
@@ -101,11 +101,10 @@ More detail: [docs/security.md](docs/security.md).
 
 ```text
 src/
-  main/      main-process services (run as a Node sidecar under Tauri)
-  preload/   legacy Electron preload (kept for reference)
+  main/      legacy TypeScript main-process services (kept as behavior reference, not packaged)
   renderer/  React UI (window.cofinder bridge in cofinderBridge.ts)
   shared/    shared models and IPC contracts
-src-tauri/   Tauri (Rust) shell: window, menu, sidecar spawn, IPC relay
+src-tauri/   Tauri (Rust) shell + native Rust backend for every IPC channel
 docs/
   dev/       milestone plans and development notes
 ```
@@ -116,9 +115,9 @@ docs/
 - **SFTP connects but rsync cannot authenticate:** verify `ssh -o BatchMode=yes -p <port> user@host true` works in Terminal if you want the faster rsync path. Uploads and downloads fall back to SFTP when this non-interactive rsync SSH path cannot authenticate.
 - **Credential storage unavailable:** password saving is disabled, but session password input can still connect.
 - **Packaged app blank:** rebuild with the current Vite config (`base: './'`) and repackage.
-- **Sidecar not running / requests time out:** confirm `node` is on `PATH` in dev, and that the packaged `cofinder-sidecar` binary exists next to the app executable (`CoFinder.app/Contents/MacOS/cofinder-sidecar`).
+- **Remote connects hang or IPC calls time out:** the Rust backend logs every `cofinder_call` to `/tmp/cofinder-rs-calls.log`; remote-connect stage traces go to stderr.
 - **Cargo target dir missing:** run `scripts/attach-cofinder-target.sh` to mount the build-target sparse image from the flash card.
-- **Main log:** `~/Library/Application Support/cofinder/main.log` (sidecar boot log); renderer console is visible via the View → Toggle Developer Tools menu.
+- **Renderer console:** visible via the View → Toggle Developer Tools menu.
 
 ## License
 

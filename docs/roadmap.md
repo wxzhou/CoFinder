@@ -48,11 +48,11 @@ For the canonical **product milestone ↔ semver** table, see **README.md → Ve
 | V2.10 M6 | v1.9.7 | Complete on feature branch |
 | V2.10 M7 | v1.9.8 | Complete on feature branch |
 | V2.10 M8 | v1.9.9 | In progress on feature branch; includes Group by Type |
-| Tauri migration spike | opencode/tauri-spike | Spike: Electron → Tauri shell + Node sidecar; installable app built; not yet merged to dev |
+| Tauri migration spike | opencode/tauri-spike | Spike: Electron → Tauri (Rust) + Node sidecar; now every channel is native Rust and the sidecar is removed (~101 MB → ~11 MB); not yet merged to dev |
 
 ## Tauri migration spike
 
-The `opencode/tauri-spike` branch replaces the Electron shell with Tauri (Rust) while keeping the React renderer and the existing main-process services, which run as a bundled Node sidecar. See `CHANGELOG.md` (Unreleased / Tauri migration spike) for scope. The spike is not merged to `dev`; follow-up work should decide whether to keep the sidecar long-term or progressively port services to Rust.
+The `opencode/tauri-spike` branch replaced the Electron shell with Tauri (Rust) and then moved every IPC channel into the native Rust backend (`src-tauri/src/backend/`): settings, local file ops, profiles + Keychain credentials, sidebar favorites, system channels, the SFTP remote core, the transfer queue (rsync + SFTP fallback), remote edit/preview, directory-size jobs, and content-window routing. The bundled Node sidecar has been removed from runtime and packaging; the app bundle dropped from ~101 MB to ~11 MB. See `CHANGELOG.md` (Unreleased / Tauri migration spike) for the milestone breakdown. The spike is not merged to `dev`. `src/main/` TS services remain as behavior reference (vitest-covered), not packaged.
 
 ## Shipped phases (summary)
 

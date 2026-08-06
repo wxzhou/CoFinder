@@ -1,9 +1,8 @@
-//! Rust backend for CoFinder.
+//! Rust backend for CoFinder — the sole implementation of every IPC channel.
 //!
-//! Progressively replaces the Node sidecar. `dispatch` handles a channel
-//! natively and returns `Some(response)` when implemented; otherwise `None`
-//! tells the caller to fall back to the sidecar. Response shape always matches
-//! the shared IPC contract: `{ ok: true, data }` or `{ ok: false, error }`.
+//! `dispatch` returns `Some(response)` when a channel is handled and `None`
+//! for unhandled channels. Response shape always matches the shared IPC
+//! contract: `{ ok: true, data }` or `{ ok: false, error }`.
 
 pub mod error;
 pub mod favorites;

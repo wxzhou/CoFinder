@@ -3,7 +3,7 @@
 //!
 //! Handles connect/list/getHome/rename/delete/mkdir/getInfo/readText. The
 //! remaining remote channels (window reads, previews, chmod, duplicate, touch,
-//! transfers) still fall back to the sidecar.
+//! transfers).
 
 use serde_json::{json, Value};
 use std::collections::HashMap;

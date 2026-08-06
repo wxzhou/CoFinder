@@ -92,7 +92,7 @@ async fn cofinder_call(
 }
 
 /// Open the content viewer window and forward the request to it. Port of the
-/// sidecar's `openContentWindow` + `content:openRequest` flow.
+/// the legacy `openContentWindow` + `content:openRequest` flow.
 fn handle_content_open(app: &AppHandle, request: Option<&Value>) -> Result<Value, String> {
     let req = request.ok_or_else(|| "content:openWindow requires a request".to_string())?;
     // Validate kind/pane/path minimally (renderer re-validates on read).
