@@ -10,6 +10,7 @@ pub mod favorites;
 pub mod local_files;
 pub mod profiles;
 pub mod remote;
+pub mod remote_edit;
 pub mod settings;
 pub mod system;
 pub mod transfer;
@@ -31,6 +32,7 @@ pub struct BackendState {
     pub system: system::SystemService,
     pub remote: Arc<remote::RemoteService>,
     pub transfer: Arc<transfer::TransferQueue>,
+    pub remote_edit: Arc<remote_edit::RemoteEditService>,
 }
 
 impl BackendState {
@@ -56,6 +58,10 @@ impl BackendState {
             system: system::SystemService::new(env!("CARGO_PKG_VERSION").to_string(), user_data_dir.to_string()),
             remote: Arc::new(remote::RemoteService::new()),
             transfer: Arc::new(transfer::TransferQueue::new(Arc::new(remote::RemoteService::new()))),
+            remote_edit: Arc::new(remote_edit::RemoteEditService::new(
+                Arc::new(remote::RemoteService::new()),
+                std::env::temp_dir().to_string_lossy().into_owned(),
+            )),
         }
     }
 }
@@ -657,6 +663,70 @@ impl BackendState {
             let context_after = optional_u64(req, "contextAfter")?;
             let data = self.remote.read_text_window(&connection_id, &path, target_line, context_before, context_after)?;
             Ok(Some(ok(data)))
+        }
+        "remote:readPreview" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let data = self.remote.read_preview(&connection_id, &path)?;
+            Ok(Some(ok(data)))
+        }
+        "remote:editOpen" => {
+            let tab_id = remote_required_id(req, "tabId")?;
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let opener = match req.get("opener").and_then(|v| v.as_str()) {
+                Some("default") => "default",
+                _ => "text",
+            };
+            let text_editor = req.get("textEditor").and_then(|v| v.as_str()).map(|s| s.to_string());
+            let allow_binary_text = req.get("allowBinaryText").and_then(|v| v.as_bool()).unwrap_or(false);
+            let allow_large_file = req.get("allowLargeFile").and_then(|v| v.as_bool()).unwrap_or(false);
+            let allow_executable = req.get("allowExecutable").and_then(|v| v.as_bool()).unwrap_or(false);
+            let session = self.remote_edit.open(&tab_id, &connection_id, &path, opener, text_editor.as_deref(), allow_binary_text, allow_large_file, allow_executable)?;
+            Ok(Some(ok(json!({ "session": session }))))
+        }
+        "remote:editList" => {
+            let sessions = self.remote_edit.list();
+            Ok(Some(ok(json!({ "sessions": sessions }))))
+        }
+        "remote:editSyncNow" => {
+            let session_id = remote_required_id(req, "sessionId")?;
+            let session = self.remote_edit.sync_now(&session_id)?;
+            Ok(Some(ok(json!({ "session": session }))))
+        }
+        "remote:editRevealLocal" => {
+            let session_id = remote_required_id(req, "sessionId")?;
+            let session = self.remote_edit.find_session(&session_id)?;
+            crate::backend::system::reveal_path(&session.local_path).map_err(|e| CoFinderError::new("REMOTE_PREVIEW_FAILED", e.message))?;
+            Ok(Some(ok(json!({ "revealed": true, "localPath": session.local_path }))))
+        }
+        "remote:editRedownload" => {
+            let session_id = remote_required_id(req, "sessionId")?;
+            let session = self.remote_edit.redownload(&session_id)?;
+            Ok(Some(ok(json!({ "session": session }))))
+        }
+        "remote:editForceUpload" => {
+            let session_id = remote_required_id(req, "sessionId")?;
+            let session = self.remote_edit.force_upload(&session_id)?;
+            Ok(Some(ok(json!({ "session": session }))))
+        }
+        "remote:editDownloadConflictCopy" => {
+            let session_id = remote_required_id(req, "sessionId")?;
+            let (session, remote_copy_path) = self.remote_edit.download_conflict_copy(&session_id)?;
+            Ok(Some(ok(json!({ "session": session, "remoteCopyPath": remote_copy_path }))))
+        }
+        "remote:editCopyConflictPaths" => {
+            let session_id = remote_required_id(req, "sessionId")?;
+            let session = self.remote_edit.find_session(&session_id)?;
+            let text = format!("Local edit: {}\nRemote copy: {}", session.local_path, session.conflict_remote_copy_path.unwrap_or_default());
+            crate::backend::system::copy_text(&text).map_err(|e| CoFinderError::new("REMOTE_PREVIEW_FAILED", e.message))?;
+            Ok(Some(ok(json!({ "copied": true, "text": text }))))
+        }
+        "remote:editClose" => {
+            let session_id = remote_required_id(req, "sessionId")?;
+            let discard_local = req.get("discardLocal").and_then(|v| v.as_bool()).unwrap_or(true);
+            self.remote_edit.close(&session_id, discard_local)?;
+            Ok(Some(ok(json!({ "closed": true }))))
         }
         "transfer:list" => {
             let tasks = self.transfer.list();

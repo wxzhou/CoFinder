@@ -135,6 +135,19 @@ pub fn copy_text(text: &str) -> Result<(), CoFinderError> {
     Ok(())
 }
 
+/// Reveal a path in Finder (`open -R`).
+pub fn reveal_path(target: &str) -> Result<(), CoFinderError> {
+    let status = Command::new("open")
+        .args(["-R", target])
+        .status()
+        .map_err(|e| CoFinderError::new("SYSTEM_INVALID_INPUT", format!("Failed to reveal path: {e}")))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(CoFinderError::new("SYSTEM_INVALID_INPUT", format!("Failed to reveal path (exit {status:?}).")))
+    }
+}
+
 /// Open a path in Finder via `open` (port of `shell.openPath`).
 pub fn open_path(target: &str) -> Result<(), CoFinderError> {
     let status = Command::new("open").arg(target).status()

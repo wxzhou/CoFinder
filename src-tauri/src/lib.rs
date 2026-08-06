@@ -295,6 +295,14 @@ pub fn run() {
                     let _ = emitter.emit("cofinder:event", event);
                 }));
             }
+            {
+                // Push remote:editUpdate sessions to the renderer.
+                let emitter = handle.clone();
+                backend.remote_edit.set_on_session_change(Box::new(move |session| {
+                    let event = json!({ "channel": "remote:editUpdate", "payload": session });
+                    let _ = emitter.emit("cofinder:event", event);
+                }));
+            }
             app.manage(backend);
 
             let built = menu::build_menu(&handle)?;

@@ -320,6 +320,80 @@ impl RemoteService {
         })
     }
 
+    /// Preview a remote file (text or image) — port of `readPreviewFile`.
+    pub fn read_preview(&self, connection_id: &str, target_path: &str) -> Result<Value, CoFinderError> {
+        let normalized = normalize_remote_path(target_path);
+        let max_text_bytes = 256 * 1024;
+        let max_image_bytes = 50 * 1024 * 1024;
+        let sniff_bytes = 8192usize;
+        let (size, etype) = self.block(async {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+                CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
+            })?;
+            let meta = conn.sftp.metadata(&normalized).await.map_err(|e| {
+                CoFinderError::new("REMOTE_CONTENT_FAILED", format!("Failed to preview remote file: {e}"))
+            })?;
+            if !meta.file_type().is_file() {
+                return Err(CoFinderError::new("REMOTE_CONTENT_FAILED", "Preview supports files only."));
+            }
+            Ok((meta.size.unwrap_or(0), "file".to_string()))
+        })?;
+        let _ = etype;
+        let initial_bytes = (sniff_bytes as u64).max(max_text_bytes as u64).min(size.max(0));
+        let chunk = self.read_remote_bytes(connection_id, &normalized, 0, initial_bytes)?;
+        let sample = &chunk[..chunk.len().min(sniff_bytes)];
+        let kind = crate::backend::remote_edit::sniff_preview_kind_pub(sample);
+        match kind {
+            Some("text") => {
+                let content_bytes = chunk[..chunk.len().min(max_text_bytes)].to_vec();
+                let content = String::from_utf8_lossy(&content_bytes).into_owned();
+                Ok(json!({
+                    "path": normalized, "kind": "text", "size": size,
+                    "content": content, "truncated": (max_text_bytes as u64) < size
+                }))
+            }
+            Some("image") => {
+                if size > max_image_bytes {
+                    return Err(CoFinderError::new("REMOTE_CONTENT_FAILED", format!("Image preview supports files up to {} MB.", max_image_bytes / (1024 * 1024))));
+                }
+                let full = self.read_remote_bytes(connection_id, &normalized, 0, size)?;
+                let mime = crate::backend::remote_edit::sniff_image_mime_type_pub(&full[..full.len().min(8192)]).unwrap_or("application/octet-stream").to_string();
+                use base64::Engine;
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&full);
+                Ok(json!({
+                    "path": normalized, "kind": "image", "size": size, "mimeType": mime,
+                    "imageDataUrl": format!("data:{mime};base64,{b64}"), "truncated": false
+                }))
+            }
+            _ => Err(CoFinderError::new("REMOTE_CONTENT_FAILED", "Selected remote file does not look like previewable text or image.")),
+        }
+    }
+
+    fn read_remote_bytes(&self, connection_id: &str, path: &str, offset: u64, len: u64) -> Result<Vec<u8>, CoFinderError> {
+        self.block(async {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+                CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
+            })?;
+            let mut file = conn.sftp.open_with_flags(path, OpenFlags::READ).await.map_err(|e| {
+                CoFinderError::new("REMOTE_CONTENT_FAILED", format!("Failed to read remote file: {e}"))
+            })?;
+            use tokio::io::AsyncReadExt;
+            use tokio::io::AsyncSeekExt;
+            if offset > 0 {
+                file.seek(std::io::SeekFrom::Start(offset)).await.map_err(|e| {
+                    CoFinderError::new("REMOTE_CONTENT_FAILED", format!("Failed to read remote file: {e}"))
+                })?;
+            }
+            let mut buf = vec![0u8; len as usize];
+            let n = file.read(&mut buf).await.map_err(|e| {
+                CoFinderError::new("REMOTE_CONTENT_FAILED", format!("Failed to read remote file: {e}"))
+            })?;
+            buf.truncate(n);
+            let _ = file.close().await;
+            Ok(buf)
+        })
+    }
+
     /// Run a remote shell command over the SSH session and capture stdout.
     /// Used by touch/gzip/search/window-read operations (parity with the TS
     /// `client.exec` path).
