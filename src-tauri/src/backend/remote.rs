@@ -45,16 +45,30 @@ impl russh::client::Handler for SftpClientHandler {
     }
 }
 
+/// A global tokio runtime used for SFTP operations.
+///
+/// `RemoteService` runs inside the Tauri async context (`cofinder_call` is an
+/// async command). Holding a `tokio::runtime::Runtime` here and calling
+/// `block_on` would be dropped inside that async context, which tokio forbids
+/// ("Cannot drop a runtime in a context where blocking is not allowed"). A
+/// process-wide runtime that lives for the whole app avoids that: it is never
+/// dropped, so `block_on` works from both sync tests and Tauri async commands.
+static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+
+fn runtime() -> &'static tokio::runtime::Runtime {
+    RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime")
+    })
+}
+
 pub struct RemoteService {
-    runtime: tokio::runtime::Runtime,
     connections: Mutex<HashMap<String, ManagedSftp>>,
 }
 
 impl RemoteService {
     pub fn new() -> Self {
-        let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime");
+        let _ = runtime();
         Self {
-            runtime,
             connections: Mutex::new(HashMap::new()),
         }
     }
@@ -63,7 +77,7 @@ impl RemoteService {
     where
         F: std::future::Future<Output = Result<T, CoFinderError>>,
     {
-        self.runtime.block_on(future)
+        runtime().block_on(future)
     }
 
     pub fn connect(&self, host: &str, port: u16, username: &str, password: &str, auth_type: &str, private_key_path: Option<&str>) -> Result<Value, CoFinderError> {

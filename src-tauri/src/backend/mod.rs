@@ -645,4 +645,55 @@ mod tests {
         let disc = state.dispatch("remote:disconnect", Some(&disc_req)).unwrap().unwrap();
         assert_eq!(disc["ok"], true);
     }
+
+    /// Reproduce the app's async path: drive dispatch from inside a tokio
+    /// runtime (Tauri commands run on one). Run:
+    /// cargo test --lib -- --ignored dispatch_async_live_sge --nocapture
+    #[tokio::test]
+    #[ignore = "requires live server and credentials"]
+    async fn dispatch_async_live_sge_publickey_read() {
+        let state = std::sync::Arc::new(BackendState::new(std::env::temp_dir().to_string_lossy().as_ref()));
+        let host = std::env::var("CF_TEST_HOST").unwrap_or("10.0.32.10".into());
+        let user = std::env::var("CF_TEST_USER").unwrap_or("zhouwenxiong".into());
+        let key = std::env::var("CF_TEST_KEY").unwrap_or("/Users/zwx/.ssh/id_ed25519".into());
+        let state2 = std::sync::Arc::clone(&state);
+        let host2 = host.clone();
+        let user2 = user.clone();
+        let key2 = key.clone();
+        // Mimic `cofinder_call`: run dispatch on the current async runtime.
+        let res = tokio::task::spawn_blocking(move || {
+            let connect_req = json!({
+                "host": host2, "port": 22, "username": user2,
+                "authType": "privateKey", "privateKeyPath": key2
+            });
+            state2.dispatch("remote:connect", Some(&connect_req))
+        })
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+        assert_eq!(res["ok"], true);
+        let id = res["data"]["connectionId"].as_str().unwrap().to_string();
+        let state3 = std::sync::Arc::clone(&state);
+        let list_req = json!({ "connectionId": id, "path": "/home/zhouwenxiong" });
+        let listing = tokio::task::spawn_blocking(move || {
+            state3.dispatch("remote:listDirectory", Some(&list_req))
+        })
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+        assert_eq!(listing["ok"], true);
+        assert!(!listing["data"]["entries"].as_array().unwrap().is_empty());
+        let state4 = std::sync::Arc::clone(&state);
+        let disc_req = json!({ "connectionId": id });
+        let disc = tokio::task::spawn_blocking(move || {
+            state4.dispatch("remote:disconnect", Some(&disc_req))
+        })
+        .await
+        .unwrap()
+        .unwrap()
+        .unwrap();
+        assert_eq!(disc["ok"], true);
+    }
 }
