@@ -7,7 +7,7 @@
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "npm run build:main && npm run dev:renderer",
-    "beforeBuildCommand": "npm run build:renderer && node scripts/build-sidecar-sea.mjs"
+    "beforeBuildCommand": "npm run build:renderer"
   },
   "app": {
     "windows": [
@@ -39,7 +39,7 @@
       "icons/128x128@2x.png",
       "icons/icon.icns"
     ],
-    "externalBin": ["binaries/cofinder-sidecar"],
+    "externalBin": [],
     "macOS": {
       "minimumSystemVersion": "11.0"
     }

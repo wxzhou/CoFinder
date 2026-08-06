@@ -1,42 +1,13 @@
 use serde_json::{json, Value};
-use std::collections::HashMap;
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 mod backend;
 mod menu;
 
-struct SidecarState {
-    child: Mutex<Option<Child>>,
-    stdin: Mutex<Option<ChildStdin>>,
-    next_id: AtomicU64,
-    pending: Mutex<HashMap<u64, tokio::sync::oneshot::Sender<Value>>>,
-}
-
 const CONTENT_WINDOW_LABEL: &str = "content";
 
-fn sidecar_command() -> Result<(String, Vec<String>), String> {
-    if cfg!(debug_assertions) {
-        // Dev: spawn `node <project>/dist-electron/main/sidecar/index.js`
-        let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?;
-        let script = std::path::Path::new(&manifest_dir).join("../dist-electron/main/sidecar/index.js");
-        let script = script
-            .canonicalize()
-            .map_err(|e| format!("sidecar script not built: {e}"))?;
-        Ok(("node".to_string(), vec![script.to_string_lossy().into_owned()]))
-    } else {
-        // Release: bundled sidecar binary sits next to the app executable.
-        let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-        let dir = exe.parent().ok_or_else(|| "no exe parent".to_string())?;
-        let bin = dir.join("cofinder-sidecar");
-        Ok((bin.to_string_lossy().into_owned(), vec![]))
-    }
-}
-
-/// Resolves the app data directory passed to the sidecar as `COFINDER_USER_DATA`.
+/// Resolves the app data directory.
 ///
 /// Prefers the legacy Electron userData directory
 /// (`~/Library/Application Support/cofinder`) so existing profiles, settings,
@@ -63,97 +34,6 @@ fn home_dir_legacy_user_data() -> String {
         .into_owned()
 }
 
-fn spawn_sidecar(app: &AppHandle, state: &Arc<SidecarState>) -> Result<(), String> {
-    let (program, args) = sidecar_command()?;
-    let mut cmd = Command::new(&program);
-    cmd.args(&args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit());
-    let data_dir = app_data_dir(app)?;
-    cmd.env("COFINDER_USER_DATA", &data_dir);
-    cmd.env("COFINDER_APP_DATA", &data_dir);
-    cmd.env("COFINDER_APP_VERSION", app.package_info().version.to_string());
-    cmd.env("COFINDER_PACKAGED", if cfg!(debug_assertions) { "0" } else { "1" });
-
-    let mut child = cmd.spawn().map_err(|e| format!("failed to spawn sidecar {program}: {e}"))?;
-    let stdin = child.stdin.take().ok_or_else(|| "no sidecar stdin".to_string())?;
-    let stdout = child.stdout.take().ok_or_else(|| "no sidecar stdout".to_string())?;
-
-    *state.child.lock().unwrap() = Some(child);
-    *state.stdin.lock().unwrap() = Some(stdin);
-
-    let handle = app.clone();
-    let state_clone = Arc::clone(state);
-    std::thread::spawn(move || {
-        let reader = BufReader::new(stdout);
-        for line in reader.lines() {
-            let Ok(line) = line else { break };
-            if line.trim().is_empty() {
-                continue;
-            }
-            let Ok(msg) = serde_json::from_str::<Value>(&line) else { continue };
-            handle_sidecar_line(&handle, &state_clone, msg);
-        }
-    });
-
-    Ok(())
-}
-
-fn write_sidecar_line(state: &Arc<SidecarState>, payload: &Value) -> Result<(), String> {
-    let mut guard = state.stdin.lock().unwrap();
-    let stdin = guard.as_mut().ok_or_else(|| "sidecar stdin closed".to_string())?;
-    stdin
-        .write_all(format!("{payload}\n").as_bytes())
-        .map_err(|e| format!("sidecar write failed: {e}"))?;
-    stdin.flush().map_err(|e| format!("sidecar flush failed: {e}"))?;
-    Ok(())
-}
-
-fn shutdown_sidecar(state: &Arc<SidecarState>) {
-    // Ask the sidecar to run its cleanup (close SFTP sessions, etc.).
-    let _ = write_sidecar_line(state, &json!({ "type": "sys", "action": "shutdown" }));
-    std::thread::sleep(std::time::Duration::from_millis(300));
-    if let Some(mut child) = state.child.lock().unwrap().take() {
-        let _ = child.kill();
-        let _ = child.wait();
-    }
-}
-
-fn handle_sidecar_line(app: &AppHandle, state: &Arc<SidecarState>, msg: Value) {
-    // Response to a pending request
-    if let Some(id) = msg.get("id").and_then(|v| v.as_u64()) {
-        let sender = state.pending.lock().unwrap().remove(&id);
-        if let Some(sender) = sender {
-            let response = msg.get("response").cloned().unwrap_or(Value::Null);
-            let _ = sender.send(response);
-        }
-        return;
-    }
-    // Event broadcast to the renderer
-    if msg.get("type").and_then(|v| v.as_str()) == Some("event") {
-        let channel = msg.get("channel").and_then(|v| v.as_str()).unwrap_or("");
-        let payload = msg.get("payload").cloned().unwrap_or(Value::Null);
-        let event = json!({ "channel": channel, "payload": payload });
-        if channel == "content:openRequest" {
-            // Route content viewer requests to the content window only.
-            if let Some(win) = app.get_webview_window(CONTENT_WINDOW_LABEL) {
-                let _ = win.emit("cofinder:event", event);
-            }
-        } else {
-            let _ = app.emit("cofinder:event", event);
-        }
-        return;
-    }
-    // System signal: open the content window
-    if msg.get("type").and_then(|v| v.as_str()) == Some("sys") {
-        if msg.get("action").and_then(|v| v.as_str()) == Some("openContentWindow") {
-            open_content_window(app);
-        }
-        return;
-    }
-}
-
 fn open_content_window(app: &AppHandle) {
     let existing = app.get_webview_window(CONTENT_WINDOW_LABEL);
     if let Some(win) = existing {
@@ -169,10 +49,10 @@ fn open_content_window(app: &AppHandle) {
         .build();
 }
 
+/// Single IPC entry point: every channel is handled by the Rust backend.
 #[tauri::command]
 async fn cofinder_call(
     app: AppHandle,
-    state: State<'_, Arc<SidecarState>>,
     backend: State<'_, Arc<backend::BackendState>>,
     channel: String,
     request: Option<Value>,
@@ -185,10 +65,16 @@ async fn cofinder_call(
         use std::io::Write;
         let _ = f.write_all(line.as_bytes());
     }
-    // Rust-native dispatch first. `dispatch` may block (e.g. RemoteService
-    // calls block_on on its own tokio runtime for SFTP). Running it on a
-    // blocking thread avoids deadlocking Tauri's async worker pool, which
-    // would make remote connects hang forever.
+
+    // `content:openWindow` needs the AppHandle to open/show the content window
+    // and to forward the request to it — handled here, outside dispatch.
+    if channel == "content:openWindow" {
+        return handle_content_open(&app, request.as_ref());
+    }
+
+    // `dispatch` may block (e.g. RemoteService calls block_on on its own tokio
+    // runtime for SFTP). Running it on a blocking thread avoids deadlocking
+    // Tauri's async worker pool, which would make remote connects hang forever.
     let backend_clone = backend.inner().clone();
     let channel2 = channel.clone();
     let request2 = request.clone();
@@ -198,32 +84,11 @@ async fn cofinder_call(
     .await
     .map_err(|e| format!("backend task join failed: {e}"))?;
 
-    // `content:openWindow` needs the AppHandle to open/show the content window
-    // and to forward the request to it — handled here, outside dispatch.
-    if channel == "content:openWindow" {
-        return handle_content_open(&app, request.as_ref());
-    }
-
     match handled {
-        Ok(Some(response)) => return Ok(response),
-        Ok(None) => {}
-        Err(err) => return Ok(backend::fail(&err)),
+        Ok(Some(response)) => Ok(response),
+        Ok(None) => Err(format!("unhandled channel: {channel}")),
+        Err(err) => Ok(backend::fail(&err)),
     }
-
-    let id = state.next_id.fetch_add(1, Ordering::SeqCst);
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    state.pending.lock().unwrap().insert(id, tx);
-
-    write_sidecar_line(&state, &json!({ "id": id, "channel": channel, "request": request }))?;
-
-    let result = tokio::time::timeout(std::time::Duration::from_secs(300), rx)
-        .await
-        .map_err(|_| {
-            state.pending.lock().unwrap().remove(&id);
-            "sidecar request timed out".to_string()
-        })?
-        .map_err(|_| "sidecar closed the channel".to_string())?;
-    Ok(result)
 }
 
 /// Open the content viewer window and forward the request to it. Port of the
@@ -256,10 +121,9 @@ fn handle_content_open(app: &AppHandle, request: Option<&Value>) -> Result<Value
 }
 
 /// Called by the content window after its renderer subscribes to
-/// `content:onOpenRequest`. Tells the sidecar to flush buffered requests.
+/// `content:onOpenRequest`.
 #[tauri::command]
-async fn content_window_ready(app: AppHandle, state: State<'_, Arc<SidecarState>>) -> Result<(), String> {
-    write_sidecar_line(&state, &json!({ "type": "sys", "action": "contentReady" }))?;
+async fn content_window_ready(app: AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window(CONTENT_WINDOW_LABEL) {
         let _ = win.show();
         let _ = win.set_focus();
@@ -267,7 +131,7 @@ async fn content_window_ready(app: AppHandle, state: State<'_, Arc<SidecarState>
     Ok(())
 }
 
-/// Manually opens the content window (used if the sidecar sys signal was lost).
+/// Manually opens the content window.
 #[tauri::command]
 async fn open_content_window_command(app: AppHandle) -> Result<(), String> {
     open_content_window(&app);
@@ -296,16 +160,8 @@ async fn native_confirm(app: AppHandle, message: String, title: Option<String>) 
 }
 
 pub fn run() {
-    let state = Arc::new(SidecarState {
-        child: Mutex::new(None),
-        stdin: Mutex::new(None),
-        next_id: AtomicU64::new(1),
-        pending: Mutex::new(HashMap::new()),
-    });
-
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .manage(state)
         .invoke_handler(tauri::generate_handler![
             cofinder_call,
             content_window_ready,
@@ -315,15 +171,12 @@ pub fn run() {
         ])
         .setup(|app| {
             let handle = app.handle().clone();
-            let state = app.state::<Arc<SidecarState>>();
-            spawn_sidecar(&handle, &state)?;
 
             // Rust-native backend lives in the same user-data directory.
             let data_dir = app_data_dir(&handle)?;
             let backend = Arc::new(backend::BackendState::new(&data_dir));
             {
-                // Push transfer:onUpdate events to the renderer (mirrors the
-                // sidecar's `cofinder:event` broadcast contract).
+                // Push transfer:onUpdate events to the renderer.
                 let emitter = handle.clone();
                 backend.transfer.set_on_update(Box::new(move |tasks| {
                     let event = json!({ "channel": "transfer:onUpdate", "payload": { "tasks": tasks } });
@@ -359,10 +212,5 @@ pub fn run() {
         })
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| {
-            if let tauri::RunEvent::ExitRequested { .. } = event {
-                let state = app_handle.state::<Arc<SidecarState>>();
-                shutdown_sidecar(&state);
-            }
-        });
+        .run(|_app_handle, _event| {});
 }
