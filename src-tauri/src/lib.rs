@@ -285,7 +285,17 @@ pub fn run() {
 
             // Rust-native backend lives in the same user-data directory.
             let data_dir = app_data_dir(&handle)?;
-            app.manage(Arc::new(backend::BackendState::new(&data_dir)));
+            let backend = Arc::new(backend::BackendState::new(&data_dir));
+            {
+                // Push transfer:onUpdate events to the renderer (mirrors the
+                // sidecar's `cofinder:event` broadcast contract).
+                let emitter = handle.clone();
+                backend.transfer.set_on_update(Box::new(move |tasks| {
+                    let event = json!({ "channel": "transfer:onUpdate", "payload": { "tasks": tasks } });
+                    let _ = emitter.emit("cofinder:event", event);
+                }));
+            }
+            app.manage(backend);
 
             let built = menu::build_menu(&handle)?;
             app.set_menu(built)?;

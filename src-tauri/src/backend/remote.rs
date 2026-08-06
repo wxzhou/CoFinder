@@ -62,16 +62,24 @@ pub fn runtime() -> &'static tokio::runtime::Runtime {
     })
 }
 
+/// Global connection registry shared by all `RemoteService` instances, so the
+/// transfer queue (which holds its own `RemoteService`) sees connections made
+/// by the remote pane.
+static CONNECTIONS: std::sync::OnceLock<Mutex<HashMap<String, ManagedSftp>>> = std::sync::OnceLock::new();
+
+fn global_connections() -> &'static Mutex<HashMap<String, ManagedSftp>> {
+    CONNECTIONS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
 pub struct RemoteService {
-    connections: Mutex<HashMap<String, ManagedSftp>>,
+    // Connections live in the global CONNECTIONS registry so every instance
+    // (remote pane + transfer queue) shares the same live SFTP sessions.
 }
 
 impl RemoteService {
     pub fn new() -> Self {
         let _ = runtime();
-        Self {
-            connections: Mutex::new(HashMap::new()),
-        }
+        Self {}
     }
 
     fn block<F, T>(&self, future: F) -> Result<T, CoFinderError>
@@ -146,7 +154,7 @@ impl RemoteService {
             };
             let home_path = sftp.canonicalize(".").await.unwrap_or_else(|_| "/".to_string());
             let id = uuid::Uuid::new_v4().to_string();
-            self.connections.lock().unwrap().insert(id.clone(), ManagedSftp {
+            global_connections().lock().unwrap().insert(id.clone(), ManagedSftp {
                 session: Arc::new(session), sftp: Arc::new(sftp), home_path: home_path.clone()
             });
             Ok(json!({ "connectionId": id, "homePath": home_path }))
@@ -156,12 +164,12 @@ impl RemoteService {
     }
 
     pub fn disconnect(&self, connection_id: &str) -> Result<(), CoFinderError> {
-        self.connections.lock().unwrap().remove(connection_id);
+        global_connections().lock().unwrap().remove(connection_id);
         Ok(())
     }
 
     pub fn get_home_directory(&self, connection_id: &str) -> Result<String, CoFinderError> {
-        let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+        let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
             CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
         })?;
         Ok(conn.home_path)
@@ -170,7 +178,7 @@ impl RemoteService {
     pub fn list_directory(&self, connection_id: &str, input_path: &str) -> Result<Value, CoFinderError> {
         let normalized = normalize_remote_path(input_path);
         let entries = self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             let dir = conn.sftp.read_dir(&normalized).await.map_err(map_sftp_list_error)?;
@@ -212,7 +220,7 @@ impl RemoteService {
         let parent = parent_dir(&normalized);
         let destination = format!("{parent}/{trimmed}");
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             conn.sftp.rename(&normalized, &destination).await.map_err(|e| {
@@ -230,7 +238,7 @@ impl RemoteService {
         for raw in paths {
             let normalized = normalize_remote_path(raw);
             let result = self.block(async {
-                let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+                let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                     CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
                 })?;
                 let meta = conn.sftp.symlink_metadata(&normalized).await;
@@ -259,7 +267,7 @@ impl RemoteService {
         }
         let target = if parent == "/" { format!("/{trimmed}") } else { format!("{parent}/{trimmed}") };
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             conn.sftp.create_dir(&target).await.map_err(|e| {
@@ -274,7 +282,7 @@ impl RemoteService {
         let byte_offset = byte_offset.unwrap_or(0);
         let max_bytes = max_bytes.unwrap_or(256 * 1024).min(256 * 1024);
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             let meta = conn.sftp.metadata(&normalized).await.map_err(|e| {
@@ -317,7 +325,7 @@ impl RemoteService {
     /// `client.exec` path).
     pub fn exec_command(&self, connection_id: &str, command: &str) -> Result<String, CoFinderError> {
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             let mut channel = conn
@@ -350,7 +358,7 @@ impl RemoteService {
         }
         let normalized = normalize_remote_path(target_path);
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             let mut attrs = russh_sftp::protocol::FileAttributes::empty();
@@ -416,7 +424,7 @@ impl RemoteService {
             return Err(CoFinderError::new("REMOTE_CREATE_FILE_FAILED", "A file with the same name already exists."));
         }
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             let file = conn
@@ -439,7 +447,7 @@ impl RemoteService {
         }
         let destination = self.next_duplicate_path(connection_id, &normalized)?;
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             // read source
@@ -468,7 +476,7 @@ impl RemoteService {
 
     fn path_exists(&self, connection_id: &str, path: &str) -> Result<bool, CoFinderError> {
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             match conn.sftp.symlink_metadata(path).await {
@@ -480,7 +488,7 @@ impl RemoteService {
 
     fn remote_file_size(&self, connection_id: &str, path: &str) -> Result<u64, CoFinderError> {
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             let meta = conn
@@ -584,7 +592,7 @@ impl RemoteService {
     pub fn get_path_info(&self, connection_id: &str, target_path: &str) -> Result<Value, CoFinderError> {
         let normalized = normalize_remote_path(target_path);
         self.block(async {
-            let conn = self.connections.lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
                 CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
             })?;
             let meta = conn.sftp.symlink_metadata(&normalized).await.map_err(|e| {
@@ -603,6 +611,252 @@ impl RemoteService {
                 "group": meta.gid.map(|g| g.to_string())
             }))
         })
+    }
+
+    /// Recursively upload a local file/dir to a remote path over SFTP.
+    pub fn upload_path_to_remote(&self, connection_id: &str, local_path: &str, remote_path: &str) -> Result<(), CoFinderError> {
+        let local = std::path::PathBuf::from(local_path);
+        let meta = std::fs::symlink_metadata(&local)
+            .map_err(|e| CoFinderError::new("REMOTE_UPLOAD_FAILED", format!("Failed to access local path: {e}")))?;
+        if meta.is_dir() {
+            self.upload_dir_to_remote(connection_id, &local, remote_path)
+        } else {
+            self.upload_file_to_remote(connection_id, &local, remote_path)
+        }
+    }
+
+    fn upload_dir_to_remote(&self, connection_id: &str, local_dir: &std::path::Path, remote_dir: &str) -> Result<(), CoFinderError> {
+        let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+            CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
+        })?;
+        // Ensure the destination directory exists (create if missing).
+        let _ = self.block(async {
+            let conn2 = global_connections().lock().unwrap().get(connection_id).cloned().unwrap();
+            if conn2.sftp.symlink_metadata(remote_dir).await.is_err() {
+                let _ = conn2.sftp.create_dir(remote_dir).await;
+            }
+            Ok::<_, CoFinderError>(())
+        });
+        let _ = &conn;
+        for entry in std::fs::read_dir(local_dir).map_err(|e| CoFinderError::new("REMOTE_UPLOAD_FAILED", format!("Failed to read local directory: {e}")))? {
+            let entry = entry.map_err(|e| CoFinderError::new("REMOTE_UPLOAD_FAILED", format!("Failed to read local directory: {e}")))?;
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let remote_child = if remote_dir == "/" { format!("/{name}") } else { format!("{remote_dir}/{name}") };
+            let entry_meta = entry.metadata().map_err(|e| CoFinderError::new("REMOTE_UPLOAD_FAILED", format!("Failed to stat local file: {e}")))?;
+            if entry_meta.is_dir() {
+                self.upload_dir_to_remote(connection_id, &entry.path(), &remote_child)?;
+            } else {
+                self.upload_file_to_remote(connection_id, &entry.path(), &remote_child)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn upload_file_to_remote(&self, connection_id: &str, local_file: &std::path::Path, remote_path: &str) -> Result<(), CoFinderError> {
+        self.block(async {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+                CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
+            })?;
+            let data = std::fs::read(local_file)
+                .map_err(|e| CoFinderError::new("REMOTE_UPLOAD_FAILED", format!("Failed to read local file: {e}")))?;
+            let mut file = conn
+                .sftp
+                .open_with_flags(remote_path, OpenFlags::CREATE | OpenFlags::WRITE | OpenFlags::TRUNCATE)
+                .await
+                .map_err(|e| CoFinderError::new("REMOTE_UPLOAD_FAILED", format!("Failed to open remote file: {e}")))?;
+            use tokio::io::AsyncWriteExt;
+            file.write_all(&data).await.map_err(|e| CoFinderError::new("REMOTE_UPLOAD_FAILED", format!("Failed to write remote file: {e}")))?;
+            let _ = file.close().await;
+            Ok(())
+        })
+    }
+
+    /// Recursively download a remote file/dir to a local path over SFTP.
+    pub fn download_path_to_local(&self, connection_id: &str, remote_path: &str, local_path: &str) -> Result<(), CoFinderError> {
+        let remote_type = self.remote_path_type(connection_id, remote_path)?;
+        if remote_type == "directory" {
+            self.download_dir_to_local(connection_id, remote_path, local_path)
+        } else {
+            self.download_file_to_local(connection_id, remote_path, local_path)
+        }
+    }
+
+    fn remote_path_type(&self, connection_id: &str, remote_path: &str) -> Result<String, CoFinderError> {
+        self.block(async {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+                CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
+            })?;
+            let meta = conn.sftp.symlink_metadata(remote_path).await.map_err(|e| {
+                CoFinderError::new("REMOTE_DOWNLOAD_FAILED", format!("Failed to stat remote path: {e}"))
+            })?;
+            Ok(if meta.file_type().is_dir() { "directory" } else { "file" }.to_string())
+        })
+    }
+
+    fn download_dir_to_local(&self, connection_id: &str, remote_dir: &str, local_dir: &str) -> Result<(), CoFinderError> {
+        std::fs::create_dir_all(local_dir)
+            .map_err(|e| CoFinderError::new("REMOTE_DOWNLOAD_FAILED", format!("Failed to create local directory: {e}")))?;
+        let entries = self.remote_list_names(connection_id, remote_dir)?;
+        for name in entries {
+            let remote_child = if remote_dir == "/" { format!("/{name}") } else { format!("{remote_dir}/{name}") };
+            let local_child = std::path::Path::new(local_dir).join(&name).to_string_lossy().into_owned();
+            let child_type = self.remote_path_type(connection_id, &remote_child)?;
+            if child_type == "directory" {
+                self.download_dir_to_local(connection_id, &remote_child, &local_child)?;
+            } else {
+                self.download_file_to_local(connection_id, &remote_child, &local_child)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn remote_list_names(&self, connection_id: &str, remote_dir: &str) -> Result<Vec<String>, CoFinderError> {
+        self.block(async {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+                CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
+            })?;
+            let dir = conn.sftp.read_dir(remote_dir).await.map_err(|e| {
+                CoFinderError::new("REMOTE_DOWNLOAD_FAILED", format!("Failed to read remote directory: {e}"))
+            })?;
+            Ok(dir.map(|e| e.file_name()).collect())
+        })
+    }
+
+    fn download_file_to_local(&self, connection_id: &str, remote_path: &str, local_path: &str) -> Result<(), CoFinderError> {
+        if let Some(parent) = std::path::Path::new(local_path).parent() {
+            std::fs::create_dir_all(parent).ok();
+        }
+        self.block(async {
+            let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+                CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
+            })?;
+            let mut src = conn
+                .sftp
+                .open_with_flags(remote_path, OpenFlags::READ)
+                .await
+                .map_err(|e| CoFinderError::new("REMOTE_DOWNLOAD_FAILED", format!("Failed to open remote file: {e}")))?;
+            use tokio::io::AsyncReadExt;
+            let mut data = Vec::new();
+            src.read_to_end(&mut data).await.map_err(|e| CoFinderError::new("REMOTE_DOWNLOAD_FAILED", format!("Failed to read remote file: {e}")))?;
+            let _ = src.close().await;
+            std::fs::write(local_path, &data)
+                .map_err(|e| CoFinderError::new("REMOTE_DOWNLOAD_FAILED", format!("Failed to write local file: {e}")))?;
+            Ok(())
+        })
+    }
+
+    /// Generate a remote MD5 via `md5sum`.
+    pub fn remote_md5(&self, connection_id: &str, path: &str) -> Result<String, CoFinderError> {
+        let normalized = normalize_remote_path(path);
+        let cmd = format!("md5sum {} 2>/dev/null | awk '{{print $1}}'", shell_single_quote(&normalized));
+        let out = self.exec_command(connection_id, &cmd).map_err(|e| CoFinderError::new("REMOTE_MD5_FAILED", e.message))?;
+        Ok(out.trim().to_string())
+    }
+
+    /// Decompress a remote .tar.gz/.tgz/.gz archive.
+    pub fn remote_decompress(&self, connection_id: &str, path: &str) -> Result<String, CoFinderError> {
+        let normalized = normalize_remote_path(path);
+        let dest = if let Some(stripped) = normalized.strip_suffix(".tar.gz") {
+            format!("{stripped}.untar.gz_dir")
+        } else if let Some(stripped) = normalized.strip_suffix(".tgz") {
+            format!("{stripped}.untar.gz_dir")
+        } else if let Some(stripped) = normalized.strip_suffix(".gz") {
+            stripped.to_string()
+        } else {
+            return Err(CoFinderError::new("REMOTE_DECOMPRESS_FAILED", "Selected item is not a supported compressed file."));
+        };
+        let cmd = if normalized.ends_with(".gz") && !normalized.ends_with(".tar.gz") && !normalized.ends_with(".tgz") {
+            format!("gunzip -k {} 2>/dev/null", shell_single_quote(&normalized))
+        } else {
+            let outdir = format!("{dest}.cofinder");
+            format!("mkdir -p {} && tar -xzf {} -C {} 2>/dev/null", shell_single_quote(&outdir), shell_single_quote(&normalized), shell_single_quote(&outdir))
+        };
+        let _ = self.exec_command(connection_id, &cmd).map_err(|e| CoFinderError::new("REMOTE_DECOMPRESS_FAILED", e.message))?;
+        Ok(dest)
+    }
+
+    /// Compress a remote file (.gz) or directory (.tar.gz) via gzip/tar.
+    pub fn remote_gzip(&self, connection_id: &str, path: &str, delete_source: bool) -> Result<String, CoFinderError> {
+        let normalized = normalize_remote_path(path);
+        let dest = format!("{normalized}.gz");
+        let cmd = if normalized.ends_with(".tar.gz") {
+            format!("tar -czf {} -C {} . 2>/dev/null", shell_single_quote(&dest), shell_single_quote(&normalized))
+        } else {
+            format!("gzip -c {} > {} 2>/dev/null", shell_single_quote(&normalized), shell_single_quote(&dest))
+        };
+        self.exec_command(connection_id, &cmd).map_err(|e| CoFinderError::new("REMOTE_GZIP_FAILED", e.message))?;
+        if delete_source {
+            let _ = self.exec_command(connection_id, &format!("rm -rf {}", shell_single_quote(&normalized)));
+        }
+        Ok(dest)
+    }
+
+    /// Remote copy/move with conflict policy.
+    pub fn remote_copy(&self, connection_id: &str, source: &str, destination: &str, conflict_policy: &str, force_dir: bool) -> Result<String, CoFinderError> {
+        let src = normalize_remote_path(source);
+        let dest_input = normalize_remote_path(destination);
+        let (dest_path, base) = if force_dir {
+            let base = src.rsplit('/').next().unwrap_or(&src).to_string();
+            let p = if dest_input == "/" { base.clone() } else { format!("{dest_input}/{base}") };
+            (p.clone(), base)
+        } else {
+            (dest_input.clone(), src.rsplit('/').next().unwrap_or(&src).to_string())
+        };
+        let _ = base;
+        if conflict_policy == "rename" {
+            let final_path = self.next_copy_path(connection_id, &dest_path)?;
+            let cmd = format!("cp -r {} {}", shell_single_quote(&src), shell_single_quote(&final_path));
+            self.exec_command(connection_id, &cmd).map_err(|e| CoFinderError::new("REMOTE_COPY_FAILED", e.message))?;
+            Ok(final_path)
+        } else {
+            // fail on existing
+            if self.path_exists(connection_id, &dest_path)? {
+                return Err(CoFinderError::new("REMOTE_COPY_FAILED", "Destination already exists."));
+            }
+            let cmd = format!("cp -r {} {}", shell_single_quote(&src), shell_single_quote(&dest_path));
+            self.exec_command(connection_id, &cmd).map_err(|e| CoFinderError::new("REMOTE_COPY_FAILED", e.message))?;
+            Ok(dest_path)
+        }
+    }
+
+    pub fn remote_move(&self, connection_id: &str, source: &str, destination: &str, conflict_policy: &str, force_dir: bool) -> Result<String, CoFinderError> {
+        let src = normalize_remote_path(source);
+        let dest_input = normalize_remote_path(destination);
+        let (dest_path, base) = if force_dir {
+            let base = src.rsplit('/').next().unwrap_or(&src).to_string();
+            let p = if dest_input == "/" { base.clone() } else { format!("{dest_input}/{base}") };
+            (p.clone(), base)
+        } else {
+            (dest_input.clone(), src.rsplit('/').next().unwrap_or(&src).to_string())
+        };
+        let _ = base;
+        if conflict_policy == "rename" {
+            let final_path = self.next_copy_path(connection_id, &dest_path)?;
+            let cmd = format!("mv {} {}", shell_single_quote(&src), shell_single_quote(&final_path));
+            self.exec_command(connection_id, &cmd).map_err(|e| CoFinderError::new("REMOTE_MOVE_FAILED", e.message))?;
+            Ok(final_path)
+        } else {
+            if self.path_exists(connection_id, &dest_path)? {
+                return Err(CoFinderError::new("REMOTE_MOVE_FAILED", "Destination already exists."));
+            }
+            let cmd = format!("mv {} {}", shell_single_quote(&src), shell_single_quote(&dest_path));
+            self.exec_command(connection_id, &cmd).map_err(|e| CoFinderError::new("REMOTE_MOVE_FAILED", e.message))?;
+            Ok(dest_path)
+        }
+    }
+
+    fn next_copy_path(&self, connection_id: &str, path: &str) -> Result<String, CoFinderError> {
+        for i in 1..1000u32 {
+            let candidate = if i == 1 {
+                format!("{path}.copy")
+            } else {
+                format!("{path}.copy-{i}")
+            };
+            if !self.path_exists(connection_id, &candidate)? {
+                return Ok(candidate);
+            }
+        }
+        Err(CoFinderError::new("REMOTE_COPY_FAILED", "Could not find an available name."))
     }
 }
 

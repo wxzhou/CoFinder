@@ -511,6 +511,86 @@ impl LocalFileService {
         Ok(deleted)
     }
 
+    /// Port of `LocalFileService.computeMd5`.
+    pub fn local_md5(&self, path: &str) -> Result<String, CoFinderError> {
+        let target = util::normalize_local_path(path);
+        let digest = std::process::Command::new("md5")
+            .arg("-q")
+            .arg(&target)
+            .output()
+            .map_err(|e| CoFinderError::new("MD5_FAILED", format!("Failed to compute MD5: {e}")))?;
+        if !digest.status.success() {
+            return Err(CoFinderError::new("MD5_FAILED", "Failed to compute MD5."));
+        }
+        Ok(String::from_utf8_lossy(&digest.stdout).trim().to_string())
+    }
+
+    /// Port of `LocalFileService.decompressFile` (tar.gz/tgz/gz).
+    pub fn local_decompress(&self, path: &str) -> Result<String, CoFinderError> {
+        let target = util::normalize_local_path(path);
+        let status;
+        let output_path;
+        if let Some(stripped) = target.strip_suffix(".tar.gz") {
+            output_path = format!("{stripped}.untar.gz_dir");
+            std::fs::create_dir_all(&output_path).map_err(|e| CoFinderError::new("DECOMPRESS_FAILED", format!("Failed to decompress path: {e}")))?;
+            status = std::process::Command::new("tar").args(["-xzf", &target, "-C", &output_path]).status();
+        } else if let Some(stripped) = target.strip_suffix(".tgz") {
+            output_path = format!("{stripped}.untar.gz_dir");
+            std::fs::create_dir_all(&output_path).map_err(|e| CoFinderError::new("DECOMPRESS_FAILED", format!("Failed to decompress path: {e}")))?;
+            status = std::process::Command::new("tar").args(["-xzf", &target, "-C", &output_path]).status();
+        } else if let Some(stripped) = target.strip_suffix(".gz") {
+            output_path = stripped.to_string();
+            status = std::process::Command::new("gzip").args(["-dk", &target]).status();
+        } else {
+            return Err(CoFinderError::new("DECOMPRESS_FAILED", "Selected item is not a supported compressed file."));
+        };
+        match status.map_err(|e| CoFinderError::new("DECOMPRESS_FAILED", format!("Failed to decompress path: {e}")))? {
+            ok if ok.success() => Ok(output_path),
+            _ => Err(CoFinderError::new("DECOMPRESS_FAILED", "Failed to decompress path.")),
+        }
+    }
+
+    /// Port of `LocalFileService.compressFileGzip` with source-delete support.
+    pub fn local_gzip(&self, path: &str, delete_source: bool) -> Result<String, CoFinderError> {
+        let target = util::normalize_local_path(path);
+        let meta = fs::symlink_metadata(&target).map_err(|e| map_fs_error(&e, &target, "UNKNOWN", "Failed to compress path"))?;
+        let dest = if meta.is_dir() {
+            let d = format!("{target}.tar.gz");
+            let parent = Path::new(&target).parent().unwrap_or(Path::new("/")).to_string_lossy().into_owned();
+            let base = Path::new(&target).file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+            let st = std::process::Command::new("tar").args(["-czf", &d, "-C", &parent, &base]).status();
+            match st.map_err(|e| CoFinderError::new("COMPRESS_FAILED", format!("Failed to compress path: {e}")))? {
+                ok if ok.success() => d,
+                _ => return Err(CoFinderError::new("COMPRESS_FAILED", "Failed to compress path.")),
+            }
+        } else if meta.is_file() {
+            let d = format!("{target}.gz");
+            let out_file = fs::File::create(&d).map_err(|e| CoFinderError::new("COMPRESS_FAILED", format!("Failed to compress path: {e}")))?;
+            let st = std::process::Command::new("gzip")
+                .arg("-c")
+                .arg(&target)
+                .stdout(std::process::Stdio::from(out_file))
+                .status();
+            match st.map_err(|e| CoFinderError::new("COMPRESS_FAILED", format!("Failed to compress path: {e}")))? {
+                ok if ok.success() => d,
+                _ => {
+                    fs::remove_file(&d).ok();
+                    return Err(CoFinderError::new("COMPRESS_FAILED", "Failed to compress path."));
+                }
+            }
+        } else {
+            return Err(CoFinderError::new("COMPRESS_FAILED", "Only files and folders can be compressed."));
+        };
+        if delete_source {
+            if meta.is_dir() {
+                fs::remove_dir_all(&target).ok();
+            } else {
+                fs::remove_file(&target).ok();
+            }
+        }
+        Ok(dest)
+    }
+
     /// Port of `makeDirectory`.
     pub fn make_directory(&self, parent_path: &str, name: &str) -> Result<String, CoFinderError> {
         let parent = util::normalize_local_path(parent_path);

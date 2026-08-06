@@ -12,10 +12,11 @@ pub mod profiles;
 pub mod remote;
 pub mod settings;
 pub mod system;
+pub mod transfer;
 pub mod util;
 
 use serde_json::{json, Value};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use error::CoFinderError;
 
@@ -28,7 +29,8 @@ pub struct BackendState {
     pub credentials: profiles::CredentialService,
     pub favorites: Mutex<favorites::LocalSidebarFavoritesRepository>,
     pub system: system::SystemService,
-    pub remote: remote::RemoteService,
+    pub remote: Arc<remote::RemoteService>,
+    pub transfer: Arc<transfer::TransferQueue>,
 }
 
 impl BackendState {
@@ -52,7 +54,8 @@ impl BackendState {
                 well_known,
             )),
             system: system::SystemService::new(env!("CARGO_PKG_VERSION").to_string(), user_data_dir.to_string()),
-            remote: remote::RemoteService::new(),
+            remote: Arc::new(remote::RemoteService::new()),
+            transfer: Arc::new(transfer::TransferQueue::new(Arc::new(remote::RemoteService::new()))),
         }
     }
 }
@@ -199,6 +202,16 @@ fn remote_required_string(value: &Value, field: &str) -> Result<String, CoFinder
 
 fn remote_required_id(value: &Value, field: &str) -> Result<String, CoFinderError> {
     remote_required_string(value, field)
+}
+
+fn transfer_required_id(value: &Value, field: &str) -> Result<String, CoFinderError> {
+    value
+        .get(field)
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .ok_or_else(|| CoFinderError::new("TRANSFER_INVALID_REQUEST", format!("{field} is required.")))
 }
 
 fn remote_required_port(value: &Value) -> Result<u16, CoFinderError> {
@@ -645,6 +658,83 @@ impl BackendState {
             let data = self.remote.read_text_window(&connection_id, &path, target_line, context_before, context_after)?;
             Ok(Some(ok(data)))
         }
+        "transfer:list" => {
+            let tasks = self.transfer.list();
+            Ok(Some(ok(json!({ "tasks": tasks }))))
+        }
+        "transfer:enqueueUpload" => {
+            let task_ids = self.transfer.enqueue_upload(req)?;
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "queued": true, "taskIds": task_ids }))))
+        }
+        "transfer:enqueueDownload" => {
+            let task_ids = self.transfer.enqueue_download(req)?;
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "queued": true, "taskIds": task_ids }))))
+        }
+        "transfer:enqueueDelete" => {
+            let task_ids = self.transfer.enqueue_delete(req)?;
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "queued": true, "taskIds": task_ids }))))
+        }
+        "transfer:enqueueGzip" => {
+            let task_ids = self.transfer.enqueue_operation("gzip", req)?;
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "queued": true, "taskIds": task_ids }))))
+        }
+        "transfer:enqueueDecompress" => {
+            let task_ids = self.transfer.enqueue_operation("decompress", req)?;
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "queued": true, "taskIds": task_ids }))))
+        }
+        "transfer:enqueueMd5" => {
+            let task_ids = self.transfer.enqueue_operation("md5", req)?;
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "queued": true, "taskIds": task_ids }))))
+        }
+        "transfer:enqueueRemoteCopy" => {
+            let task_ids = self.transfer.enqueue_remote_copy_move("remoteCopy", req)?;
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "queued": true, "taskIds": task_ids }))))
+        }
+        "transfer:enqueueRemoteMove" => {
+            let task_ids = self.transfer.enqueue_remote_copy_move("remoteMove", req)?;
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "queued": true, "taskIds": task_ids }))))
+        }
+        "transfer:checkUploadConflicts" => {
+            let conflicts = self.transfer.check_upload_conflicts(req)?;
+            Ok(Some(ok(json!({ "conflicts": conflicts }))))
+        }
+        "transfer:checkDownloadConflicts" => {
+            let conflicts = self.transfer.check_download_conflicts(req)?;
+            Ok(Some(ok(json!({ "conflicts": conflicts }))))
+        }
+        "transfer:cancel" => {
+            let id = transfer_required_id(req, "taskId")?;
+            self.transfer.cancel(&id)?;
+            Ok(Some(ok(json!({ "canceled": true }))))
+        }
+        "transfer:stop" => {
+            let id = transfer_required_id(req, "taskId")?;
+            self.transfer.stop(&id)?;
+            Ok(Some(ok(json!({ "stopped": true }))))
+        }
+        "transfer:retry" => {
+            let id = transfer_required_id(req, "taskId")?;
+            self.transfer.retry(&id)?;
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "retried": true }))))
+        }
+        "transfer:retryFailed" => {
+            let retried = self.transfer.retry_failed();
+            self.transfer.pump_async();
+            Ok(Some(ok(json!({ "retried": retried }))))
+        }
+        "transfer:clearCompleted" => {
+            let cleared = self.transfer.clear_completed();
+            Ok(Some(ok(json!({ "cleared": cleared }))))
+        }
         _ => Ok(None),
     }
 }
@@ -690,7 +780,7 @@ mod tests {
     #[test]
     fn dispatch_unknown_channel_returns_none() {
         let state = temp_state();
-        let res = state.dispatch("transfer:list", None).unwrap();
+        let res = state.dispatch("content:openWindow", None).unwrap();
         assert!(res.is_none());
     }
 
