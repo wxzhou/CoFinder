@@ -509,6 +509,78 @@ impl RemoteService {
         Err(CoFinderError::new("REMOTE_DUPLICATE_FAILED", "Could not find an available duplicate name."))
     }
 
+    /// Search remote text via `rg`/`grep` over exec (port of `searchText`).
+    pub fn search_text(&self, connection_id: &str, target_path: &str, query: &str, max_matches: Option<u64>) -> Result<Value, CoFinderError> {
+        let normalized = normalize_remote_path(target_path);
+        let trimmed = query.trim();
+        let max_matches = max_matches.unwrap_or(200).min(200);
+        if trimmed.is_empty() {
+            return Err(CoFinderError::new("REMOTE_CONTENT_FAILED", "Search query is required."));
+        }
+        let line_limit = max_matches + 1;
+        let marker = shell_single_quote("__COFINDER_SEARCH_TOOL__:");
+        let needle = shell_single_quote(trimmed);
+        let root = shell_single_quote(&normalized);
+        let command = format!(
+            "set +e\nif command -v rg >/dev/null 2>&1; then\n  printf '%srg\\n' {marker}\n  rg --line-number --with-filename --fixed-strings --no-heading --color never -- {needle} {root} | head -n {line_limit}\n  exit 0\nfi\nif command -v grep >/dev/null 2>&1; then\n  printf '%sgrep\\n' {marker}\n  if [ -d {root} ]; then grep -R -n -H -F -- {needle} {root}; else grep -n -H -F -- {needle} {root}; fi | head -n {line_limit}\n  exit 0\nfi\nprintf '%s\\n' 'Neither rg nor grep is available on the remote server.' >&2\nexit 127"
+        );
+        let output = self
+            .exec_command(connection_id, &command)
+            .map_err(|e| CoFinderError::new("REMOTE_CONTENT_FAILED", e.message))?;
+        let tool = if output.starts_with("__COFINDER_SEARCH_TOOL__:rg") { "rg" } else { "grep" };
+        let body = output.lines().filter(|l| !l.starts_with("__COFINDER_SEARCH_TOOL__:")).collect::<Vec<_>>();
+        let mut matches: Vec<Value> = Vec::new();
+        for line in &body {
+            if let Some(m) = parse_search_line(line) {
+                matches.push(m);
+                if matches.len() as u64 >= max_matches {
+                    break;
+                }
+            }
+        }
+        Ok(json!({
+            "query": trimmed,
+            "rootPath": normalized,
+            "matches": matches,
+            "truncated": body.len() > matches.len(),
+            "tool": tool
+        }))
+    }
+
+    /// Read a remote text line window via awk over exec (port of `readTextWindow`).
+    pub fn read_text_window(&self, connection_id: &str, target_path: &str, target_line: u64, context_before: Option<u64>, context_after: Option<u64>) -> Result<Value, CoFinderError> {
+        let normalized = normalize_remote_path(target_path);
+        let target_line = if target_line == 0 { 1 } else { target_line };
+        let context_before = context_before.unwrap_or(80).min(500);
+        let context_after = context_after.unwrap_or(80).min(500);
+        let start_line = target_line.saturating_sub(context_before).max(1);
+        let end_line = target_line + context_after;
+        let target = shell_single_quote(&normalized);
+        let marker = shell_single_quote("__COFINDER_TEXT_WINDOW_MORE_AFTER__");
+        let command = format!(
+            "LC_ALL=C awk -v start={start_line} -v end={end_line} -v marker={marker} ' NR >= start && NR <= end {{ print }} NR > end {{ print marker; exit }} ' {target}"
+        );
+        let output = self
+            .exec_command(connection_id, &command)
+            .map_err(|e| CoFinderError::new("REMOTE_CONTENT_FAILED", e.message))?;
+        let mut lines: Vec<String> = output.replace("\r\n", "\n").split('\n').map(|s| s.to_string()).collect();
+        if lines.last().map(|s| s.is_empty()).unwrap_or(false) {
+            lines.pop();
+        }
+        let truncated_after = lines.last().map(|l| l == "__COFINDER_TEXT_WINDOW_MORE_AFTER__").unwrap_or(false);
+        if truncated_after {
+            lines.pop();
+        }
+        Ok(json!({
+            "path": normalized,
+            "content": lines.join("\n"),
+            "startLine": start_line,
+            "targetLine": target_line,
+            "truncatedBefore": start_line > 1,
+            "truncatedAfter": truncated_after
+        }))
+    }
+
     pub fn get_path_info(&self, connection_id: &str, target_path: &str) -> Result<Value, CoFinderError> {
         let normalized = normalize_remote_path(target_path);
         self.block(async {
@@ -580,6 +652,14 @@ fn timestamp_to_touch_stamp(value: &str) -> Option<String> {
     let date = chrono::NaiveDate::from_ymd_opt(y as i32, mo, d)?;
     let _ = date.and_hms_opt(h, mi, s)?;
     Some(format!("{y:04}{mo:02}{d:02}{h:02}{mi:02}.{s:02}"))
+}
+
+/// Parse a `path:line:preview` search result line.
+fn parse_search_line(line: &str) -> Option<Value> {
+    let (path, rest) = line.rsplit_once(':')?;
+    let (path2, line_no) = path.rsplit_once(':')?;
+    let line_num: u64 = line_no.parse().ok()?;
+    Some(json!({ "path": path2, "line": line_num, "preview": rest }))
 }
 
 fn parent_dir(path: &str) -> String {
@@ -699,6 +779,29 @@ mod tests {
         let id = res["connectionId"].as_str().unwrap().to_string();
         let out = svc.exec_command(&id, "echo hello-rust").expect("exec");
         assert!(out.contains("hello-rust"), "exec output was: {out}");
+        svc.disconnect(&id).unwrap();
+    }
+
+    /// Verify remote searchText over a live connection (read-only).
+    /// Run: cargo test --lib -- --ignored remote_live_search --nocapture
+    #[test]
+    #[ignore = "requires live server and credentials"]
+    fn remote_live_search_and_window() {
+        let host = std::env::var("CF_TEST_HOST").unwrap_or("10.0.32.10".into());
+        let user = std::env::var("CF_TEST_USER").unwrap_or("zhouwenxiong".into());
+        let key = std::env::var("CF_TEST_KEY").unwrap_or("/Users/zwx/.ssh/id_ed25519".into());
+        let svc = RemoteService::new();
+        let res = svc.connect(&host, 22, &user, "", "privateKey", Some(&key)).expect("connect");
+        let id = res["connectionId"].as_str().unwrap().to_string();
+        // Search a file we know exists
+        let target = std::env::var("CF_TEST_SEARCH_FILE").unwrap_or("/home/zhouwenxiong/.bashrc".into());
+        let search = svc.search_text(&id, &target, "bash", Some(50)).expect("search");
+        assert!(search["query"] == "bash");
+        assert!(!search["matches"].as_array().unwrap().is_empty(), "expected matches in {target}");
+        // Read a line window from the same file
+        let win = svc.read_text_window(&id, &target, 1, Some(2), Some(2)).expect("window");
+        assert_eq!(win["targetLine"], 1);
+        assert!(!win["content"].as_str().unwrap().is_empty());
         svc.disconnect(&id).unwrap();
     }
 }

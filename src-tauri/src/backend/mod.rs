@@ -628,6 +628,23 @@ impl BackendState {
             let new_path = self.remote.duplicate_file(&connection_id, &path)?;
             Ok(Some(ok(json!({ "duplicated": true, "newPath": new_path }))))
         }
+        "remote:searchText" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let query = remote_required_string(req, "query")?;
+            let max_matches = optional_u64(req, "maxMatches")?;
+            let data = self.remote.search_text(&connection_id, &path, &query, max_matches)?;
+            Ok(Some(ok(data)))
+        }
+        "remote:readTextWindow" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let target_line = optional_i64(req, "targetLine")?.unwrap_or(1).max(1) as u64;
+            let context_before = optional_u64(req, "contextBefore")?;
+            let context_after = optional_u64(req, "contextAfter")?;
+            let data = self.remote.read_text_window(&connection_id, &path, target_line, context_before, context_after)?;
+            Ok(Some(ok(data)))
+        }
         _ => Ok(None),
     }
 }
