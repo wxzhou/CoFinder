@@ -48,14 +48,14 @@ impl russh::client::Handler for SftpClientHandler {
 /// A global tokio runtime used for SFTP operations.
 ///
 /// `RemoteService` runs inside the Tauri async context (`cofinder_call` is an
-/// async command). Holding a `tokio::runtime::Runtime` here and calling
-/// `block_on` would be dropped inside that async context, which tokio forbids
-/// ("Cannot drop a runtime in a context where blocking is not allowed"). A
-/// process-wide runtime that lives for the whole app avoids that: it is never
-/// dropped, so `block_on` works from both sync tests and Tauri async commands.
+/// async command). Creating a `tokio::runtime::Runtime` lazily inside an async
+/// context panics ("Cannot start a runtime from within a runtime"), and holding
+/// one that is dropped there is also forbidden. A process-wide runtime that is
+/// initialized up front (see `RemoteService::new`, called during app setup on
+/// a non-async thread) avoids both problems.
 static RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
 
-fn runtime() -> &'static tokio::runtime::Runtime {
+pub fn runtime() -> &'static tokio::runtime::Runtime {
     RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread().enable_all().build().expect("tokio runtime")
     })
@@ -81,12 +81,20 @@ impl RemoteService {
     }
 
     pub fn connect(&self, host: &str, port: u16, username: &str, password: &str, auth_type: &str, private_key_path: Option<&str>) -> Result<Value, CoFinderError> {
-        self.block(async {
+        eprintln!("[cofinder-rs] connect start host={host} port={port} user={username} auth={auth_type}");
+        let result = self.block(async {
             let config = Arc::new(SshConfig::default());
             let addr = format!("{host}:{port}");
-            let mut session = russh::client::connect(config, &addr, SftpClientHandler)
-                .await
-                .map_err(|e| CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Connection failed: {e}")))?;
+            let mut session = match russh::client::connect(config, &addr, SftpClientHandler).await {
+                Ok(s) => {
+                    eprintln!("[cofinder-rs] connect: tcp+ssh ok");
+                    s
+                }
+                Err(e) => {
+                    eprintln!("[cofinder-rs] connect: tcp+ssh FAIL {e}");
+                    return Err(CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Connection failed: {e}")));
+                }
+            };
             let auth_success = if auth_type == "privateKey" {
                 let key_path = private_key_path
                     .filter(|p| !p.is_empty())
@@ -106,25 +114,42 @@ impl RemoteService {
                     .map_err(|e| CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Authentication failed: {e}")))?
                     .success()
             };
+            eprintln!("[cofinder-rs] connect: auth_success={auth_success}");
             if !auth_success {
                 return Err(CoFinderError::new("REMOTE_AUTH_FAILED", "Authentication failed. Check username and password."));
             }
-            let channel = session
-                .channel_open_session()
-                .await
-                .map_err(|e| CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Failed to open channel: {e}")))?;
-            channel
-                .request_subsystem(true, "sftp")
-                .await
-                .map_err(|e| CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Failed to open sftp subsystem: {e}")))?;
-            let sftp = SftpSession::new(channel.into_stream())
-                .await
-                .map_err(|e| CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Failed to initialize sftp: {e}")))?;
+            let channel = match session.channel_open_session().await {
+                Ok(c) => {
+                    eprintln!("[cofinder-rs] connect: channel ok");
+                    c
+                }
+                Err(e) => {
+                    eprintln!("[cofinder-rs] connect: channel FAIL {e}");
+                    return Err(CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Failed to open channel: {e}")));
+                }
+            };
+            if let Err(e) = channel.request_subsystem(true, "sftp").await {
+                eprintln!("[cofinder-rs] connect: subsystem FAIL {e}");
+                return Err(CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Failed to open sftp subsystem: {e}")));
+            }
+            eprintln!("[cofinder-rs] connect: subsystem ok");
+            let sftp = match SftpSession::new(channel.into_stream()).await {
+                Ok(s) => {
+                    eprintln!("[cofinder-rs] connect: sftp session ok");
+                    s
+                }
+                Err(e) => {
+                    eprintln!("[cofinder-rs] connect: sftp init FAIL {e}");
+                    return Err(CoFinderError::new("REMOTE_CONNECTION_FAILED", format!("Failed to initialize sftp: {e}")));
+                }
+            };
             let home_path = sftp.canonicalize(".").await.unwrap_or_else(|_| "/".to_string());
             let id = uuid::Uuid::new_v4().to_string();
             self.connections.lock().unwrap().insert(id.clone(), ManagedSftp { sftp: Arc::new(sftp), home_path: home_path.clone() });
             Ok(json!({ "connectionId": id, "homePath": home_path }))
-        })
+        });
+        eprintln!("[cofinder-rs] connect done: {:?}", result.as_ref().map(|v| v.get("connectionId")).ok());
+        result
     }
 
     pub fn disconnect(&self, connection_id: &str) -> Result<(), CoFinderError> {
@@ -399,5 +424,29 @@ mod tests {
         let info = svc.get_path_info(&id, &dir).expect("info");
         assert_eq!(info["type"], "directory");
         svc.disconnect(&id).unwrap();
+    }
+
+    /// Reproduce the pre-spawn_blocking hang: call block_on (as dispatch used
+    /// to) from inside a tokio async context, and assert it does not deadlock.
+    /// Run: cargo test --lib -- --ignored async_block_on_sftp_not_stuck --nocapture
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[ignore = "requires live server and credentials"]
+    async fn async_block_on_sftp_not_stuck() {
+        let host = std::env::var("CF_TEST_HOST").unwrap_or("10.0.32.10".into());
+        let user = std::env::var("CF_TEST_USER").unwrap_or("zhouwenxiong".into());
+        let key = std::env::var("CF_TEST_KEY").unwrap_or("/Users/zwx/.ssh/id_ed25519".into());
+        let started = std::time::Instant::now();
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+            // Building RemoteService initializes the global runtime. Calling
+            // connect() uses block_on on it from inside this async context,
+            // exactly as the old cofinder_call did before spawn_blocking.
+            let svc = RemoteService::new();
+            let res = svc.connect(&host, 22, &user, "", "privateKey", Some(&key));
+            eprintln!("connect elapsed={:?} result_ok={}", started.elapsed(), res.is_ok());
+            res.is_ok()
+        })
+        .await;
+        assert!(outcome.is_ok(), "block_on SFTP inside async context deadlocked after {:?}", started.elapsed());
+        assert!(outcome.unwrap_or(false), "SFTP connect failed");
     }
 }

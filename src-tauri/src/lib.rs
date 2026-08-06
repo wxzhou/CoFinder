@@ -176,9 +176,28 @@ async fn cofinder_call(
     channel: String,
     request: Option<Value>,
 ) -> Result<Value, String> {
-    // Rust-native dispatch first; only fall back to the sidecar for channels
-    // the Rust backend does not implement yet.
-    match backend.dispatch(&channel, request.as_ref()) {
+    // Debug tracing: record every IPC call to a log file so remote-connect
+    // hangs can be diagnosed from the packaged app.
+    let log_path = std::path::Path::new("/tmp/cofinder-rs-calls.log");
+    let line = format!("call {channel} req={}\n", request.clone().unwrap_or(Value::Null));
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(log_path) {
+        use std::io::Write;
+        let _ = f.write_all(line.as_bytes());
+    }
+    // Rust-native dispatch first. `dispatch` may block (e.g. RemoteService
+    // calls block_on on its own tokio runtime for SFTP). Running it on a
+    // blocking thread avoids deadlocking Tauri's async worker pool, which
+    // would make remote connects hang forever.
+    let backend_clone = backend.inner().clone();
+    let channel2 = channel.clone();
+    let request2 = request.clone();
+    let handled = tauri::async_runtime::spawn_blocking(move || {
+        backend_clone.dispatch(&channel2, request2.as_ref())
+    })
+    .await
+    .map_err(|e| format!("backend task join failed: {e}"))?;
+
+    match handled {
         Ok(Some(response)) => return Ok(response),
         Ok(None) => {}
         Err(err) => return Ok(backend::fail(&err)),

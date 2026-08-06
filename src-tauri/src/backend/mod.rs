@@ -696,4 +696,26 @@ mod tests {
         .unwrap();
         assert_eq!(disc["ok"], true);
     }
+
+    /// Diagnose whether calling dispatch directly (no spawn_blocking) inside an
+    /// async context hangs. Run:
+    /// cargo test --lib -- --ignored async_direct_block_on_check --nocapture
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    #[ignore = "diagnostic"]
+    async fn async_direct_block_on_check() {
+        // Build the shared backend so RemoteService's global runtime exists,
+        // then run a block_on from inside this async context (as dispatch would
+        // have done before the spawn_blocking fix) and assert it completes.
+        let state = std::sync::Arc::new(BackendState::new(std::env::temp_dir().to_string_lossy().as_ref()));
+        let req = json!({ "path": "/tmp" });
+        let started = std::time::Instant::now();
+        let outcome = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            // NOTE: this calls dispatch directly (no spawn_blocking), which uses
+            // RemoteService's global runtime -> block_on inside async ctx.
+            let _ = state.dispatch("local:listDirectory", Some(&req));
+        })
+        .await;
+        eprintln!("direct async block_on (local list) elapsed={:?} ok={}", started.elapsed(), outcome.is_ok());
+        assert!(outcome.is_ok(), "block_on inside async context appears stuck");
+    }
 }
