@@ -76,6 +76,13 @@ pub struct RemoteService {
     // (remote pane + transfer queue) shares the same live SFTP sessions.
 }
 
+static SIZE_ABORTS: std::sync::OnceLock<std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>>> =
+    std::sync::OnceLock::new();
+
+fn size_aborts() -> &'static std::sync::Mutex<std::collections::HashMap<String, Arc<std::sync::atomic::AtomicBool>>> {
+    SIZE_ABORTS.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
 impl RemoteService {
     pub fn new() -> Self {
         let _ = runtime();
@@ -796,6 +803,45 @@ impl RemoteService {
         })
     }
 
+    /// Recursively compute remote directory size + file count (port of
+    /// `RemoteFileService.calculateDirectorySize`). Returns (size_bytes, file_count).
+    pub fn calculate_directory_size(&self, connection_id: &str, path: &str, abort: &std::sync::atomic::AtomicBool) -> Result<(u64, u64), CoFinderError> {
+        fn walk(service: &RemoteService, connection_id: &str, dir: &str, abort: &std::sync::atomic::AtomicBool) -> Result<(u64, u64), CoFinderError> {
+            if abort.load(std::sync::atomic::Ordering::SeqCst) {
+                return Err(CoFinderError::new("REMOTE_SIZE_CANCELED", "Directory size calculation was canceled."));
+            }
+            let mut total = 0u64;
+            let mut files = 0u64;
+            let entries = service.block(async {
+                let conn = global_connections().lock().unwrap().get(connection_id).cloned().ok_or_else(|| {
+                    CoFinderError::new("REMOTE_DISCONNECTED", "Remote connection has been disconnected.")
+                })?;
+                let dir = conn.sftp.read_dir(dir).await.map_err(|e| {
+                    CoFinderError::new("REMOTE_CONTENT_FAILED", format!("Failed to read remote directory: {e}"))
+                })?;
+                let mut out = Vec::new();
+                for f in dir {
+                    let m = f.metadata();
+                    out.push((f.file_name(), f.file_type().is_dir(), m.size.unwrap_or(0)));
+                }
+                Ok(out)
+            })?;
+            for (name, is_dir, size) in entries {
+                if is_dir {
+                    let child = if dir == "/" { format!("/{name}") } else { format!("{dir}/{name}") };
+                    let (s, f) = walk(service, connection_id, &child, abort)?;
+                    total += s;
+                    files += f;
+                } else {
+                    total += size;
+                    files += 1;
+                }
+            }
+            Ok((total, files))
+        }
+        walk(self, connection_id, path, abort)
+    }
+
     fn download_file_to_local(&self, connection_id: &str, remote_path: &str, local_path: &str) -> Result<(), CoFinderError> {
         if let Some(parent) = std::path::Path::new(local_path).parent() {
             std::fs::create_dir_all(parent).ok();
@@ -1131,5 +1177,21 @@ mod tests {
         assert_eq!(win["targetLine"], 1);
         assert!(!win["content"].as_str().unwrap().is_empty());
         svc.disconnect(&id).unwrap();
+    }
+}
+
+impl RemoteService {
+    pub fn size_aborts_register(&self, job_id: &str, abort: Arc<std::sync::atomic::AtomicBool>) {
+        size_aborts().lock().unwrap().insert(job_id.to_string(), abort);
+    }
+
+    pub fn size_aborts_remove(&self, job_id: &str) {
+        size_aborts().lock().unwrap().remove(job_id);
+    }
+
+    pub fn size_aborts_cancel(&self, job_id: &str) {
+        if let Some(flag) = size_aborts().lock().unwrap().get(job_id) {
+            flag.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
     }
 }

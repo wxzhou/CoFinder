@@ -33,6 +33,8 @@ pub struct BackendState {
     pub remote: Arc<remote::RemoteService>,
     pub transfer: Arc<transfer::TransferQueue>,
     pub remote_edit: Arc<remote_edit::RemoteEditService>,
+    /// Generic push channel used by directory-size jobs etc. Injected in setup.
+    pub emit_event: Arc<Mutex<Option<Box<dyn Fn(&str, Value) + Send + Sync>>>>,
 }
 
 impl BackendState {
@@ -62,7 +64,19 @@ impl BackendState {
                 Arc::new(remote::RemoteService::new()),
                 std::env::temp_dir().to_string_lossy().into_owned(),
             )),
+            emit_event: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// Cloneable handle for pushing `cofinder:event` broadcasts from worker
+    /// threads (e.g. directory-size jobs). Returns a boxed closure.
+    pub fn emit_handle(&self) -> Box<dyn Fn(&str, Value) + Send + Sync> {
+        let arc = Arc::clone(&self.emit_event);
+        Box::new(move |channel: &str, payload: Value| {
+            if let Some(cb) = &*arc.lock().unwrap() {
+                cb(channel, payload);
+            }
+        })
     }
 }
 
@@ -218,6 +232,15 @@ fn transfer_required_id(value: &Value, field: &str) -> Result<String, CoFinderEr
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string())
         .ok_or_else(|| CoFinderError::new("TRANSFER_INVALID_REQUEST", format!("{field} is required.")))
+}
+
+fn job_id_like() -> String {
+    uuid::Uuid::new_v4().to_string()[..8].to_string()
+}
+
+fn sanitize_preview_name(name: &str) -> String {
+    let cleaned: String = name.chars().map(|c| if matches!(c, '/' | '\\' | ':' | '\u{0}' | '\r' | '\n') { '_' } else { c }).collect();
+    if cleaned.is_empty() { "remote-file".to_string() } else { cleaned }
 }
 
 fn remote_required_port(value: &Value) -> Result<u16, CoFinderError> {
@@ -727,6 +750,64 @@ impl BackendState {
             let discard_local = req.get("discardLocal").and_then(|v| v.as_bool()).unwrap_or(true);
             self.remote_edit.close(&session_id, discard_local)?;
             Ok(Some(ok(json!({ "closed": true }))))
+        }
+        "remote:compressGzip" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let delete_source = req.get("deleteSourceAfterSuccess").and_then(|v| v.as_bool()).unwrap_or(false);
+            let out = self.remote.remote_gzip(&connection_id, &path, delete_source)?;
+            Ok(Some(ok(json!({ "compressed": true, "path": out }))))
+        }
+        "remote:directorySizeStart" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let job_id = uuid::Uuid::new_v4().to_string();
+            let abort = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            self.remote.size_aborts_register(&job_id, Arc::clone(&abort));
+            // Fire running immediately
+            if let Some(cb) = &*self.emit_event.lock().unwrap() {
+                cb("remote:directorySizeUpdate", json!({ "jobId": job_id, "connectionId": connection_id, "path": path, "status": "running" }));
+            }
+            let remote_arc = Arc::clone(&self.remote);
+            let emit_arc = self.emit_handle();
+            let job_id_clone = job_id.clone();
+            let conn_clone = connection_id.clone();
+            let path_clone = path.clone();
+            std::thread::spawn(move || {
+                let result = remote_arc.calculate_directory_size(&conn_clone, &path_clone, &abort);
+                remote_arc.size_aborts_remove(&job_id_clone);
+                match result {
+                    Ok((size, file_count)) => {
+                        emit_arc("remote:directorySizeUpdate", json!({ "jobId": job_id_clone, "connectionId": conn_clone, "path": path_clone, "status": "success", "size": size, "fileCount": file_count }));
+                    }
+                    Err(e) => {
+                        emit_arc("remote:directorySizeUpdate", json!({ "jobId": job_id_clone, "connectionId": conn_clone, "path": path_clone, "status": "failed", "error": e.message }));
+                    }
+                }
+            });
+            Ok(Some(ok(json!({ "jobId": job_id }))))
+        }
+        "remote:directorySizeCancel" => {
+            let job_id = remote_required_id(req, "jobId")?;
+            self.remote.size_aborts_cancel(&job_id);
+            Ok(Some(ok(json!({ "canceled": true }))))
+        }
+        "remote:previewOpen" => {
+            let _tab_id = remote_required_id(req, "tabId")?;
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            // Download a local copy, then open it with the default editor.
+            let temp_dir = std::env::temp_dir().join("cofinder-preview");
+            std::fs::create_dir_all(&temp_dir).ok();
+            let base = path.rsplit('/').next().filter(|s| !s.is_empty()).unwrap_or("remote-file");
+            let local = temp_dir.join(format!("{}-{}", job_id_like(), sanitize_preview_name(base))).to_string_lossy().into_owned();
+            self.remote.download_path_to_local(&connection_id, &path, &local).map_err(|e| CoFinderError::new("REMOTE_PREVIEW_FAILED", e.message))?;
+            crate::backend::system::open_path(&local).map_err(|e| CoFinderError::new("REMOTE_PREVIEW_FAILED", e.message))?;
+            Ok(Some(ok(json!({ "opened": true, "localPath": local }))))
+        }
+        "remote:previewClearForConnection" | "remote:previewClearForTab" => {
+            // No persistent cache in the Rust backend; previews are ephemeral.
+            Ok(Some(ok(json!({ "cleared": 0 }))))
         }
         "transfer:list" => {
             let tasks = self.transfer.list();

@@ -148,13 +148,13 @@ fn handle_sidecar_line(app: &AppHandle, state: &Arc<SidecarState>, msg: Value) {
     // System signal: open the content window
     if msg.get("type").and_then(|v| v.as_str()) == Some("sys") {
         if msg.get("action").and_then(|v| v.as_str()) == Some("openContentWindow") {
-            open_content_window(app, state);
+            open_content_window(app);
         }
         return;
     }
 }
 
-fn open_content_window(app: &AppHandle, _state: &Arc<SidecarState>) {
+fn open_content_window(app: &AppHandle) {
     let existing = app.get_webview_window(CONTENT_WINDOW_LABEL);
     if let Some(win) = existing {
         let _ = win.show();
@@ -171,6 +171,7 @@ fn open_content_window(app: &AppHandle, _state: &Arc<SidecarState>) {
 
 #[tauri::command]
 async fn cofinder_call(
+    app: AppHandle,
     state: State<'_, Arc<SidecarState>>,
     backend: State<'_, Arc<backend::BackendState>>,
     channel: String,
@@ -197,6 +198,12 @@ async fn cofinder_call(
     .await
     .map_err(|e| format!("backend task join failed: {e}"))?;
 
+    // `content:openWindow` needs the AppHandle to open/show the content window
+    // and to forward the request to it — handled here, outside dispatch.
+    if channel == "content:openWindow" {
+        return handle_content_open(&app, request.as_ref());
+    }
+
     match handled {
         Ok(Some(response)) => return Ok(response),
         Ok(None) => {}
@@ -219,6 +226,35 @@ async fn cofinder_call(
     Ok(result)
 }
 
+/// Open the content viewer window and forward the request to it. Port of the
+/// sidecar's `openContentWindow` + `content:openRequest` flow.
+fn handle_content_open(app: &AppHandle, request: Option<&Value>) -> Result<Value, String> {
+    let req = request.ok_or_else(|| "content:openWindow requires a request".to_string())?;
+    // Validate kind/pane/path minimally (renderer re-validates on read).
+    let kind = req.get("kind").and_then(|v| v.as_str());
+    let pane = req.get("pane").and_then(|v| v.as_str());
+    let path = req.get("path").and_then(|v| v.as_str()).unwrap_or("");
+    let connection_id = req.get("connectionId").and_then(|v| v.as_str()).map(|s| s.to_string());
+    let title = req.get("title").and_then(|v| v.as_str()).map(|s| s.to_string());
+    if kind.is_none() || pane.is_none() || path.is_empty() {
+        return Err("Invalid content:openWindow request.".to_string());
+    }
+    // The renderer consumes the same openRequest shape it did before.
+    let open_request = json!({
+        "kind": kind.unwrap(),
+        "pane": pane.unwrap(),
+        "path": path,
+        "connectionId": connection_id,
+        "title": title,
+    });
+    open_content_window(app);
+    let event = json!({ "channel": "content:openRequest", "payload": open_request });
+    if let Some(win) = app.get_webview_window(CONTENT_WINDOW_LABEL) {
+        let _ = win.emit("cofinder:event", event);
+    }
+    Ok(serde_json::json!({ "ok": true, "data": { "opened": true } }))
+}
+
 /// Called by the content window after its renderer subscribes to
 /// `content:onOpenRequest`. Tells the sidecar to flush buffered requests.
 #[tauri::command]
@@ -234,8 +270,7 @@ async fn content_window_ready(app: AppHandle, state: State<'_, Arc<SidecarState>
 /// Manually opens the content window (used if the sidecar sys signal was lost).
 #[tauri::command]
 async fn open_content_window_command(app: AppHandle) -> Result<(), String> {
-    let state = app.state::<Arc<SidecarState>>();
-    open_content_window(&app, &state);
+    open_content_window(&app);
     Ok(())
 }
 
@@ -300,6 +335,14 @@ pub fn run() {
                 let emitter = handle.clone();
                 backend.remote_edit.set_on_session_change(Box::new(move |session| {
                     let event = json!({ "channel": "remote:editUpdate", "payload": session });
+                    let _ = emitter.emit("cofinder:event", event);
+                }));
+            }
+            {
+                // Generic push channel (directory-size updates, etc).
+                let emitter = handle.clone();
+                *backend.emit_event.lock().unwrap() = Some(Box::new(move |channel: &str, payload: Value| {
+                    let event = json!({ "channel": channel, "payload": payload });
                     let _ = emitter.emit("cofinder:event", event);
                 }));
             }
