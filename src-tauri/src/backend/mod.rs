@@ -597,6 +597,37 @@ impl BackendState {
             let info = self.remote.get_path_info(&connection_id, &path)?;
             Ok(Some(ok(json!({ "info": info }))))
         }
+        "remote:chmod" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let mode_text = remote_required_string(req, "mode")?;
+            if !mode_text.chars().all(|c| matches!(c, '0'..='7')) || mode_text.len() != 3 {
+                return Err(CoFinderError::new("REMOTE_INVALID_INPUT", "Mode must be three octal digits, for example 644."));
+            }
+            let mode = u32::from_str_radix(&mode_text, 8).map_err(|_| CoFinderError::new("REMOTE_INVALID_INPUT", "Mode must be three octal digits, for example 644."))?;
+            self.remote.chmod_path(&connection_id, &path, mode)?;
+            Ok(Some(ok(json!({ "changed": true }))))
+        }
+        "remote:touch" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let timestamp = remote_optional_string(req, "timestamp");
+            self.remote.touch_path(&connection_id, &path, timestamp.as_deref())?;
+            Ok(Some(ok(json!({ "touched": true }))))
+        }
+        "remote:createTextFile" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let parent = remote_required_string(req, "parentPath")?;
+            let name = remote_optional_string(req, "name");
+            let created = self.remote.create_text_file(&connection_id, &parent, name.as_deref())?;
+            Ok(Some(ok(json!({ "created": true, "path": created }))))
+        }
+        "remote:duplicate" => {
+            let connection_id = remote_required_id(req, "connectionId")?;
+            let path = remote_required_string(req, "path")?;
+            let new_path = self.remote.duplicate_file(&connection_id, &path)?;
+            Ok(Some(ok(json!({ "duplicated": true, "newPath": new_path }))))
+        }
         _ => Ok(None),
     }
 }
