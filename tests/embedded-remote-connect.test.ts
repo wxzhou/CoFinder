@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { validateEmbeddedRemoteConnectInput } from "../src/renderer/embeddedRemoteConnect";
 
 describe("validateEmbeddedRemoteConnectInput", () => {
-  it("rejects private key auth", () => {
+  it("requires a private key path for private key auth", () => {
     const r = validateEmbeddedRemoteConnectInput({
       authType: "privateKey",
       host: "h",
@@ -12,7 +12,21 @@ describe("validateEmbeddedRemoteConnectInput", () => {
       hasStoredPassword: false
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.message).toMatch(/not supported/i);
+    if (!r.ok) expect(r.message).toMatch(/Private key path is required/i);
+  });
+
+  it("allows private key auth when a key path is provided", () => {
+    expect(
+      validateEmbeddedRemoteConnectInput({
+        authType: "privateKey",
+        host: "h",
+        username: "u",
+        port: 22,
+        passwordTyped: "",
+        hasStoredPassword: false,
+        privateKeyPath: "/Users/me/.ssh/id_ed25519"
+      }).ok
+    ).toBe(true);
   });
 
   it("requires host and username", () => {

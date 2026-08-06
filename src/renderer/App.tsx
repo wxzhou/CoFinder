@@ -2322,7 +2322,8 @@ export function App(props: AppProps = {}) {
       username: attempt.username,
       port: attempt.port,
       passwordTyped: attempt.passwordTyped,
-      hasStoredPassword: attempt.hasStoredPassword
+      hasStoredPassword: attempt.hasStoredPassword,
+      privateKeyPath: attempt.privateKeyPath
     });
     if (!v.ok) return { ok: false, message: v.message };
 
@@ -2353,7 +2354,8 @@ export function App(props: AppProps = {}) {
       username: attempt.username.trim(),
       password: connectPassword,
       defaultRemotePath: attempt.defaultRemotePathTrimmed,
-      authType: "password"
+      authType: attempt.authType,
+      privateKeyPath: attempt.authType === "privateKey" ? attempt.privateKeyPath?.trim() || undefined : undefined
     };
 
     const connectResult = await window.cofinder.remote.connect(connectPayload);
@@ -2387,7 +2389,7 @@ export function App(props: AppProps = {}) {
       host: attempt.host.trim(),
       port: attempt.port,
       username: attempt.username.trim(),
-      authType: "password"
+      authType: attempt.authType
     });
     if (appSettings.general.restoreLocalPathOnConnect && pairedPaths?.localPath) {
       await restoreLocalPathOnRemoteConnect(tabId, pairedPaths.localPath);
@@ -2516,7 +2518,8 @@ export function App(props: AppProps = {}) {
       username,
       port,
       passwordTyped: pwd,
-      hasStoredPassword: hasStored
+      hasStoredPassword: hasStored,
+      privateKeyPath: draft.privateKeyPath
     });
     if (!pre.ok) {
       setSiteManagerByTab((prev) => ({
@@ -2553,6 +2556,7 @@ export function App(props: AppProps = {}) {
       port,
       username,
       authType: draft.authType,
+      privateKeyPath: draft.privateKeyPath?.trim() || undefined,
       passwordTyped: pwd,
       hasStoredPassword: hasStored,
       defaultRemotePathTrimmed: draft.defaultRemotePath?.trim() || undefined,

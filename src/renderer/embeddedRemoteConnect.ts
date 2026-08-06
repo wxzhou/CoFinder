@@ -10,14 +10,13 @@ export type EmbeddedRemoteConnectValidationInput = {
   passwordTyped: string;
   /** True when selected profile has a saved password in secure storage */
   hasStoredPassword: boolean;
+  /** Private key path, required when authType is privateKey */
+  privateKeyPath?: string;
 };
 
 export function validateEmbeddedRemoteConnectInput(
   input: EmbeddedRemoteConnectValidationInput
 ): { ok: true } | { ok: false; message: string } {
-  if (input.authType === "privateKey") {
-    return { ok: false, message: "Private key authentication is not supported yet." };
-  }
   const host = input.host.trim();
   const username = input.username.trim();
   if (!host) {
@@ -29,6 +28,12 @@ export function validateEmbeddedRemoteConnectInput(
   const port = input.port;
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     return { ok: false, message: "Port must be between 1 and 65535." };
+  }
+  if (input.authType === "privateKey") {
+    if (!input.privateKeyPath?.trim()) {
+      return { ok: false, message: "Private key path is required." };
+    }
+    return { ok: true };
   }
   const pwd = input.passwordTyped.trim();
   if (!pwd && !input.hasStoredPassword) {

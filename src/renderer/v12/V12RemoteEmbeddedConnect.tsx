@@ -14,6 +14,7 @@ export type V12EmbeddedRemoteConnectSubmit = {
   port: number;
   username: string;
   authType: "password" | "privateKey";
+  privateKeyPath?: string;
   passwordTyped: string;
   hasStoredPassword: boolean;
   defaultRemotePathTrimmed: string | undefined;
@@ -110,7 +111,8 @@ export function V12RemoteEmbeddedConnect(props: V12RemoteEmbeddedConnectProps): 
       username,
       port,
       passwordTyped: pwd,
-      hasStoredPassword: hasStored
+      hasStoredPassword: hasStored,
+      privateKeyPath: draft.privateKeyPath
     });
     if (!v.ok) {
       setLocalError(v.message);
@@ -143,6 +145,7 @@ export function V12RemoteEmbeddedConnect(props: V12RemoteEmbeddedConnectProps): 
         port,
         username,
         authType: draft.authType,
+        privateKeyPath: draft.privateKeyPath?.trim() || undefined,
         passwordTyped: pwd,
         hasStoredPassword: hasStored,
         defaultRemotePathTrimmed: draft.defaultRemotePath?.trim() || undefined,
@@ -235,39 +238,53 @@ export function V12RemoteEmbeddedConnect(props: V12RemoteEmbeddedConnectProps): 
                 onChange={(e) => setDraft((d) => ({ ...d, authType: e.target.value as ProfileUpsertPayload["authType"] }))}
               >
                 <option value="password">Password</option>
-                <option value="privateKey" disabled>
-                  Private key (not yet supported)
-                </option>
+                <option value="privateKey">Private key</option>
               </select>
             </label>
-            <label className="v12m-embedded-remote-label v12m-embedded-remote-span2">
-              <span>Password</span>
-              <input
-                type="password"
-                autoComplete="off"
-                disabled={connecting || draft.authType !== "password"}
-                placeholder={passwordPlaceholder}
-                value={draft.password ?? ""}
-                onChange={(e) => {
-                  setPasswordDirty(true);
-                  setDraft((d) => ({ ...d, password: e.target.value }));
-                }}
-              />
-            </label>
-            <label className="v12m-embedded-remote-check v12m-embedded-remote-span2">
-              <input
-                type="checkbox"
-                checked={draft.savePassword}
-                disabled={connecting || savePasswordDisabled}
-                onChange={(e) => setDraft((d) => ({ ...d, savePassword: e.target.checked }))}
-              />
-              <span>Save password</span>
-            </label>
-            {savePasswordDisabled ? (
-              <p className="v12m-embedded-remote-hint v12m-embedded-remote-span2">
-                Password saving is unavailable because system secure storage is not enabled for this app.
-              </p>
-            ) : null}
+            {draft.authType === "privateKey" ? (
+              <label className="v12m-embedded-remote-label v12m-embedded-remote-span2">
+                <span>Private key path</span>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  disabled={connecting}
+                  placeholder="/Users/me/.ssh/id_ed25519"
+                  value={draft.privateKeyPath ?? ""}
+                  onChange={(e) => setDraft((d) => ({ ...d, privateKeyPath: e.target.value }))}
+                />
+              </label>
+            ) : (
+              <>
+                <label className="v12m-embedded-remote-label v12m-embedded-remote-span2">
+                  <span>Password</span>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    disabled={connecting || draft.authType !== "password"}
+                    placeholder={passwordPlaceholder}
+                    value={draft.password ?? ""}
+                    onChange={(e) => {
+                      setPasswordDirty(true);
+                      setDraft((d) => ({ ...d, password: e.target.value }));
+                    }}
+                  />
+                </label>
+                <label className="v12m-embedded-remote-check v12m-embedded-remote-span2">
+                  <input
+                    type="checkbox"
+                    checked={draft.savePassword}
+                    disabled={connecting || savePasswordDisabled}
+                    onChange={(e) => setDraft((d) => ({ ...d, savePassword: e.target.checked }))}
+                  />
+                  <span>Save password</span>
+                </label>
+                {savePasswordDisabled ? (
+                  <p className="v12m-embedded-remote-hint v12m-embedded-remote-span2">
+                    Password saving is unavailable because system secure storage is not enabled for this app.
+                  </p>
+                ) : null}
+              </>
+            )}
             <label className="v12m-embedded-remote-label v12m-embedded-remote-span2">
               <span>Initial remote path (optional)</span>
               <input

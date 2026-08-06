@@ -133,36 +133,50 @@ export function SiteManagerModal(props: Props) {
                   onChange={(e) => props.onDraftPatch({ authType: e.target.value as ProfileUpsertPayload["authType"] })}
                 >
                   <option value="password">Password</option>
-                  <option value="privateKey" disabled>
-                    Private key (not yet supported)
-                  </option>
+                  <option value="privateKey">Private key</option>
                 </select>
               </label>
-              <label className="site-manager-span-2">
-                Password
-                <input
-                  type="password"
-                  autoComplete="off"
-                  disabled={disableForm || props.draft.authType !== "password"}
-                  placeholder={passwordPlaceholder}
-                  value={props.draft.password ?? ""}
-                  onChange={(e) => props.onPasswordChange(e.target.value)}
-                />
-              </label>
-              <label className="checkbox-row site-manager-span-2">
-                <input
-                  type="checkbox"
-                  checked={props.draft.savePassword}
-                  disabled={disableForm || savePasswordDisabled}
-                  onChange={(e) => props.onDraftPatch({ savePassword: e.target.checked })}
-                />
-                Save password
-              </label>
-              {savePasswordDisabled ? (
-                <p className="site-manager-hint site-manager-span-2">
-                  Password saving is unavailable because system secure storage is not enabled for this app.
-                </p>
-              ) : null}
+              {props.draft.authType === "privateKey" ? (
+                <label className="site-manager-span-2">
+                  Private key path
+                  <input
+                    type="text"
+                    autoComplete="off"
+                    disabled={disableForm}
+                    placeholder="/Users/me/.ssh/id_ed25519"
+                    value={props.draft.privateKeyPath ?? ""}
+                    onChange={(e) => props.onDraftPatch({ privateKeyPath: e.target.value })}
+                  />
+                </label>
+              ) : (
+                <>
+                  <label className="site-manager-span-2">
+                    Password
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      disabled={disableForm || props.draft.authType !== "password"}
+                      placeholder={passwordPlaceholder}
+                      value={props.draft.password ?? ""}
+                      onChange={(e) => props.onPasswordChange(e.target.value)}
+                    />
+                  </label>
+                  <label className="checkbox-row site-manager-span-2">
+                    <input
+                      type="checkbox"
+                      checked={props.draft.savePassword}
+                      disabled={disableForm || savePasswordDisabled}
+                      onChange={(e) => props.onDraftPatch({ savePassword: e.target.checked })}
+                    />
+                    Save password
+                  </label>
+                  {savePasswordDisabled ? (
+                    <p className="site-manager-hint site-manager-span-2">
+                      Password saving is unavailable because system secure storage is not enabled for this app.
+                    </p>
+                  ) : null}
+                </>
+              )}
               <label className="site-manager-span-2">
                 Initial remote path
                 <input
