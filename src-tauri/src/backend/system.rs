@@ -146,6 +146,60 @@ pub fn open_path(target: &str) -> Result<(), CoFinderError> {
     }
 }
 
+/// Launch macOS Quick Look on a local file (port of `QuickLookService`).
+pub fn quick_look(target: &str) -> Result<(), CoFinderError> {
+    let normalized = crate::backend::util::normalize_local_path(target);
+    let meta = std::fs::symlink_metadata(&normalized)
+        .map_err(|e| CoFinderError::new("SYSTEM_PREVIEW_FAILED", format!("Failed to inspect path for Quick Look: {e}")))?;
+    if !meta.is_file() {
+        return Err(CoFinderError::new("SYSTEM_PREVIEW_FAILED", "Quick Look currently supports local files only."));
+    }
+    let _ = Command::new("qlmanage").args(["-p", &normalized]).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn();
+    Ok(())
+}
+
+/// Open a path in Terminal.app (port of `open -a Terminal <path>`).
+pub fn open_terminal(target: &str) -> Result<(), CoFinderError> {
+    let normalized = crate::backend::util::normalize_local_path(target);
+    let status = Command::new("open")
+        .args(["-a", "Terminal", &normalized])
+        .status()
+        .map_err(|e| CoFinderError::new("SYSTEM_INVALID_INPUT", format!("Failed to open Terminal: {e}")))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(CoFinderError::new("SYSTEM_INVALID_INPUT", format!("Failed to open Terminal (exit {status:?}).")))
+    }
+}
+
+/// Build an ssh command like `buildSshTerminalCommand` in the TS service.
+pub fn build_ssh_terminal_command(username: &str, host: &str, port: u16, remote_path: Option<&str>) -> String {
+    let base = format!("ssh -p {port} {username}@{host}");
+    let Some(remote_path) = remote_path else { return base };
+    let quoted_path = shell_single_quote(remote_path);
+    let remote_command = format!("cd -- {quoted_path} && exec \"${{SHELL:-/bin/bash}}\" -i");
+    format!("{base} -t {}", shell_single_quote(&remote_command))
+}
+
+pub fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+/// Open an SSH terminal via osascript (port of `runDetached("osascript", ...)`).
+pub fn open_ssh_terminal(username: &str, host: &str, port: u16, remote_path: Option<&str>) -> Result<(), CoFinderError> {
+    let command = build_ssh_terminal_command(username, host, port, remote_path);
+    let script = format!("tell application \"Terminal\" to do script {}", serde_json::json!(command));
+    let status = Command::new("osascript")
+        .args(["-e", &script])
+        .status()
+        .map_err(|e| CoFinderError::new("SYSTEM_INVALID_INPUT", format!("Failed to open SSH terminal: {e}")))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(CoFinderError::new("SYSTEM_INVALID_INPUT", format!("Failed to open SSH terminal (exit {status:?}).")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -178,5 +232,19 @@ mod tests {
         assert_eq!(bundle["appVersion"], "1.9.10");
         assert_eq!(bundle["platform"], "darwin");
         assert!(bundle["tools"]["ssh"].is_object());
+    }
+
+    #[test]
+    fn ssh_terminal_command_basic() {
+        assert_eq!(build_ssh_terminal_command("user", "host", 22, None), "ssh -p 22 user@host");
+        let with_path = build_ssh_terminal_command("user", "host", 2222, Some("/data/x"));
+        assert!(with_path.starts_with("ssh -p 2222 user@host -t "));
+        assert!(with_path.contains("cd --"));
+    }
+
+    #[test]
+    fn shell_quote_escapes() {
+        assert_eq!(shell_single_quote("plain"), "'plain'");
+        assert_eq!(shell_single_quote("a'b"), "'a'\\''b'");
     }
 }

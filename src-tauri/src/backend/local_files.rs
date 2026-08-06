@@ -558,6 +558,73 @@ fn validate_new_child_name(name: &str) -> Result<String, CoFinderError> {
     Ok(trimmed.to_string())
 }
 
+/// Open a path in the default app (port of `shell.openPath`).
+pub fn open_local_path(target: &str) -> Result<(), CoFinderError> {
+    let normalized = util::normalize_local_path(target);
+    let status = Command::new("open")
+        .arg(&normalized)
+        .status()
+        .map_err(|e| CoFinderError::new("OPEN_FAILED", format!("Failed to open path: {e}")))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(CoFinderError::new("OPEN_FAILED", format!("Failed to open path (exit {status:?}).")))
+    }
+}
+
+/// Reveal a path in Finder (port of `shell.showItemInFolder`).
+pub fn reveal_local_path(target: &str) -> Result<(), CoFinderError> {
+    let normalized = util::normalize_local_path(target);
+    let status = Command::new("open")
+        .args(["-R", &normalized])
+        .status()
+        .map_err(|e| CoFinderError::new("OPEN_FAILED", format!("Failed to reveal path: {e}")))?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(CoFinderError::new("OPEN_FAILED", format!("Failed to reveal path (exit {status:?}).")))
+    }
+}
+
+/// Compress a local file (gzip) or directory (tar.gz) — port of
+/// `LocalFileService.compressFileGzip` without the source-delete option.
+pub fn compress_file_gzip(target: &str) -> Result<String, CoFinderError> {
+    use std::process::Stdio;
+    let normalized = util::normalize_local_path(target);
+    let meta = fs::symlink_metadata(&normalized)
+        .map_err(|e| map_fs_error(&e, &normalized, "COMPRESS_FAILED", "Failed to compress path"))?;
+    let destination = if meta.is_dir() {
+        let dest = util::normalize_local_path(&format!("{normalized}.tar.gz"));
+        let parent = Path::new(&normalized).parent().unwrap_or(Path::new("/")).to_string_lossy().into_owned();
+        let base = Path::new(&normalized).file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let status = Command::new("tar")
+            .args(["-czf", &dest, "-C", &parent, &base])
+            .status()
+            .map_err(|e| CoFinderError::new("COMPRESS_FAILED", format!("Failed to compress path: {e}")))?;
+        if !status.success() {
+            return Err(CoFinderError::new("COMPRESS_FAILED", format!("Failed to compress path (exit {status:?}).")));
+        }
+        dest
+    } else if meta.is_file() {
+        let dest = util::normalize_local_path(&format!("{normalized}.gz"));
+        let out = fs::File::create(&dest)
+            .map_err(|e| CoFinderError::new("COMPRESS_FAILED", format!("Failed to compress path: {e}")))?;
+        let status = Command::new("gzip")
+            .arg("-c")
+            .arg(&normalized)
+            .stdout(Stdio::from(out))
+            .status()
+            .map_err(|e| CoFinderError::new("COMPRESS_FAILED", format!("Failed to compress path: {e}")))?;
+        if !status.success() {
+            return Err(CoFinderError::new("COMPRESS_FAILED", format!("Failed to compress path (exit {status:?}).")));
+        }
+        dest
+    } else {
+        return Err(CoFinderError::new("COMPRESS_FAILED", "Only files and folders can be compressed."));
+    };
+    Ok(destination)
+}
+
 fn next_available_text_file(parent: &str) -> Result<String, CoFinderError> {
     for i in 1..1000u32 {
         let name = if i == 1 { "Untitled.txt".to_string() } else { format!("Untitled {i}.txt") };
@@ -894,5 +961,30 @@ mod tests {
         let svc = LocalFileService;
         let err = svc.search_text(dir.to_str().unwrap(), "   ", None).unwrap_err();
         assert_eq!(err.code, "CONTENT_FAILED");
+    }
+
+    #[test]
+    fn compress_gzip_file() {
+        let dir = temp_dir("gzip-file");
+        let f = dir.join("a.txt");
+        std::fs::write(&f, "hello gzip\n").unwrap();
+        let out = compress_file_gzip(f.to_str().unwrap()).unwrap();
+        assert!(out.ends_with(".gz"));
+        assert!(std::fs::metadata(&out).unwrap().is_file());
+    }
+
+    #[test]
+    fn compress_gzip_dir_makes_targz() {
+        let dir = temp_dir("gzip-dir");
+        std::fs::write(dir.join("inner.txt"), "x\n").unwrap();
+        let out = compress_file_gzip(dir.to_str().unwrap()).unwrap();
+        assert!(out.ends_with(".tar.gz"));
+        assert!(std::fs::metadata(&out).unwrap().is_file());
+    }
+
+    #[test]
+    fn compress_gzip_missing_is_error() {
+        let err = compress_file_gzip("/definitely/not/here/xyz").unwrap_err();
+        assert_eq!(err.code, "NOT_FOUND");
     }
 }

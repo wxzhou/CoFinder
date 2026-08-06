@@ -323,6 +323,21 @@ impl BackendState {
             self.local_files.touch_path(&path, timestamp.as_deref()).map_err(|e| local_error(&e))?;
             Ok(Some(ok(json!({ "touched": true }))))
         }
+        "local:openPath" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            local_files::open_local_path(&path).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(json!({ "opened": true }))))
+        }
+        "local:revealPath" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            local_files::reveal_local_path(&path).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(json!({ "revealed": true }))))
+        }
+        "local:compressGzip" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            let compressed = local_files::compress_file_gzip(&path).map_err(|e| local_error(&e))?;
+            Ok(Some(ok(json!({ "compressed": true, "path": compressed }))))
+        }
         "local:rename" => {
             let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
             let new_name = required_string_field(req, "newName")?;
@@ -481,6 +496,25 @@ impl BackendState {
             std::fs::OpenOptions::new().append(true).create(true).open(&self.system.log_file_path).ok();
             system::open_path(&self.system.log_file_path).map_err(|e| CoFinderError { code: e.code, message: e.message, detail: e.detail })?;
             Ok(Some(ok(json!({ "opened": true, "path": self.system.log_file_path }))))
+        }
+        "system:quickLook" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            system::quick_look(&path).map_err(|e| CoFinderError { code: "SYSTEM_PREVIEW_FAILED".to_string(), message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "opened": true }))))
+        }
+        "system:openTerminal" => {
+            let path = validate_local_path(req.get("path").unwrap_or(&Value::Null))?;
+            system::open_terminal(&path).map_err(|e| CoFinderError { code: "SYSTEM_INVALID_INPUT".to_string(), message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "opened": true }))))
+        }
+        "system:openSshTerminal" => {
+            let host = profile_required_string(req, "host")?;
+            let username = profile_required_string(req, "username")?;
+            let port = remote_required_port(req)?;
+            let remote_path = remote_optional_string(req, "remotePath");
+            system::open_ssh_terminal(&username, &host, port, remote_path.as_deref())
+                .map_err(|e| CoFinderError { code: "SYSTEM_INVALID_INPUT".to_string(), message: e.message, detail: e.detail })?;
+            Ok(Some(ok(json!({ "opened": true }))))
         }
         "remote:connect" => {
             let host = remote_required_string(req, "host")?;
